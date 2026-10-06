@@ -1,0 +1,26 @@
+name: github
+version: 0.1.0
+description: GitHub PRs / issues / releases via the gh CLI (session auth, no API key)
+triggers:
+  # Repo root (release/activity polling) + the /pulls, /issues, /releases
+  # surfaces only. Deliberately does NOT match /blob, /tree, /commit, etc. so a
+  # mis-pasted file URL is not silently claimed (spec-020 amendment 2026-06-08).
+  - type: url_pattern
+    pattern: "^https?://github\\.com/[^/]+/[^/]+(/(pulls?|issues?|releases?|tags)([/?].*)?)?/?$"
+entry_point: extractor.py
+preflight:
+  entry_point: preflight.py
+  timeout_seconds: 30
+default_value_tier: routine
+default_tier: basic
+schema_examples: few-shot.md
+source_id_from:
+  github_sources: url
+user_owned:
+  - sources.yaml
+extraction_timeout_seconds: 180
+
+# Auth is the host `gh` CLI session (`gh auth login`), NOT an env API key.
+# preflight.py runs `gh auth status` and fails the cycle closed if unauthenticated.
+authentication: none
+failure_policy: block_cycle

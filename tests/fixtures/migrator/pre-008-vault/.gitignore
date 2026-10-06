@@ -1,0 +1,7 @@
+# research-vault: track data_vault/ only; everything else is ephemeral.
+/*
+!.gitignore
+!data_vault/
+!data_vault/**
+# Pipeline state — regenerable, keep out of version history.
+_pipeline/sources.db

@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+"""Standalone vault maintenance entrypoint for {{ spec.name }}."""
+
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parent
+SCRIPTS = ROOT / "scripts"
+PIPELINE = ROOT / "_pipeline"
+DATA_VAULT = ROOT / "data_vault"
+
+
+def _run_python(script: str, *args: str) -> int:
+    path = SCRIPTS / script
+    if not path.exists():
+        print(f"ERROR: missing script: {path}", file=sys.stderr)
+        return 2
+    rc = subprocess.run([sys.executable, str(path), str(ROOT), *args]).returncode
+    # A negative code is a child killed by a signal (an OOM kill, a SIGTERM):
+    # an abort. Left negative, the max() over the codes below drops it and the
+    # killed script reads as a pass.
+    return rc if rc >= 0 else 2
+
+
+def _reindex() -> int:
+    notes_by_folder: dict[str, list[tuple[str, str]]] = {}
+    concepts: list[tuple[str, str]] = []
+    edges: list[tuple[str, str]] = []
+    type_counts: dict[str, int] = {}
+
+    try:
+        import yaml
+    except ImportError:
+        print("ERROR: PyYAML is required to rebuild index files", file=sys.stderr)
+        return 2
+
+    for note in sorted(DATA_VAULT.rglob("*.md")):
+        text = note.read_text(encoding="utf-8")
+        if not text.startswith("---"):
+            continue
+        # The closing delimiter is a `---` LINE. A `---` inside a value (a slug
+        # URL such as `kafka---a-guide`) is not one.
+        lines = text.split("\n")
+        close = next(
+            (i for i in range(1, len(lines)) if lines[i].rstrip() == "---"), None
+        )
+        if close is None:
+            continue
+        try:
+            fm = yaml.safe_load("\n".join(lines[1:close])) or {}
+        except yaml.YAMLError:
+            continue
+        if not isinstance(fm, dict):
+            continue
+
+        title = str(fm.get("title", note.stem))
+        summary = str(fm.get("summary", ""))
+        notes_by_folder.setdefault(note.parent.name, []).append((title, summary))
+
+        note_type = str(fm.get("type", "unknown"))
+        type_counts[note_type] = type_counts.get(note_type, 0) + 1
+        if note_type == "concept":
+            concepts.append((title, summary))
+
+        related = fm.get("related") or []
+        if isinstance(related, list):
+            for target in related:
+                target_name = str(target).strip("[]")
+                if target_name:
+                    edges.append((title, target_name))
+
+    index_lines = [f"# Index — {{ spec.name }}", ""]
+    for folder in sorted(notes_by_folder):
+        index_lines.append(f"## {folder}")
+        index_lines.append("")
+        for title, summary in sorted(notes_by_folder[folder]):
+            index_lines.append(f"- [[{title}]] — {summary}")
+        index_lines.append("")
+    (ROOT / "_index.md").write_text("\n".join(index_lines), encoding="utf-8")
+
+    concept_lines = [f"# Concepts — {{ spec.name }}", ""]
+    for title, summary in sorted(concepts):
+        concept_lines.append(f"- [[{title}]] — {summary}")
+    (ROOT / "_concepts.md").write_text("\n".join(concept_lines), encoding="utf-8")
+
+    graph_lines = [f"# Graph — {{ spec.name }}", "", "## Edges", ""]
+    for source, target in sorted(edges):
+        graph_lines.append(f"- [[{source}]] -> [[{target}]]")
+    (ROOT / "_graph.md").write_text("\n".join(graph_lines), encoding="utf-8")
+
+    agents_file = ROOT / "AGENTS.md"
+    if agents_file.exists():
+        text = agents_file.read_text(encoding="utf-8")
+        topic_lines = [
+            "## Topic Index",
+            "",
+            *[f"- {note_type}: {count}" for note_type, count in sorted(type_counts.items())],
+            "",
+        ]
+        topic_block = "\n".join(topic_lines)
+        if "## Topic Index" in text:
+            before, _, rest = text.partition("## Topic Index")
+            _, _, after = rest.partition("## ")
+            new_text = before + topic_block + ("## " + after if after else "")
+        else:
+            new_text = text.rstrip() + "\n\n" + topic_block
+        agents_file.write_text(new_text, encoding="utf-8")
+
+    print("[reindex] rebuilt _index.md, _concepts.md, _graph.md")
+    return 0
+
+
+def _cmd_validate(_: argparse.Namespace) -> int:
+    checks = [
+        "validate_vault.py",
+        "check_template_compliance.py",
+        "check_acronym_links.py",
+        "check_intent_drift.py",
+        "check_code_source_coverage.py",
+    ]
+    worst = 0
+    ran = 0
+    for script in checks:
+        path = SCRIPTS / script
+        if not path.exists():
+            continue
+        print(f"[validate] running {script}")
+        worst = max(worst, _run_python(script))
+        ran += 1
+    if ran == 0:
+        # Skipping every check is not a clean validation.
+        print(f"ERROR: no validator scripts found under {SCRIPTS}", file=sys.stderr)
+        return 2
+    return worst
+
+
+def _cmd_metrics(args: argparse.Namespace) -> int:
+    output = args.output or (PIPELINE / "vault-metrics.json")
+    return _run_python("vault_metrics.py", "--output", str(output))
+
+
+def _cmd_reindex(_: argparse.Namespace) -> int:
+    if not DATA_VAULT.exists():
+        print(f"ERROR: data_vault directory not found: {DATA_VAULT}", file=sys.stderr)
+        return 2
+    return _reindex()
+
+
+def _cmd_refresh(args: argparse.Namespace) -> int:
+    rc = _cmd_validate(args)
+    if rc == 2:
+        return 2
+    reindex_rc = _cmd_reindex(args)
+    if reindex_rc != 0:
+        return reindex_rc
+    metrics_rc = _cmd_metrics(args)
+    return max(rc, metrics_rc)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="update_vault.py",
+        description="Maintain the generated vault in place.",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    validate = sub.add_parser("validate", help="Run the vault validation suite")
+    validate.set_defaults(func=_cmd_validate)
+
+    reindex = sub.add_parser("reindex", help="Rebuild Layer 1 index files")
+    reindex.set_defaults(func=_cmd_reindex)
+
+    metrics = sub.add_parser("metrics", help="Refresh vault metrics JSON")
+    metrics.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Override metrics output path",
+    )
+    metrics.set_defaults(func=_cmd_metrics)
+
+    refresh = sub.add_parser(
+        "refresh",
+        help="Validate, rebuild indexes, and refresh metrics",
+    )
+    refresh.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Override metrics output path",
+    )
+    refresh.set_defaults(func=_cmd_refresh)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

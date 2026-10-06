@@ -1,0 +1,4 @@
+    2195 src/research_framework/pipeline/cycle_runner.py
+    1153 src/research_framework/cli.py
+     180 src/research_framework/pipeline/plan_narrator.py
+    3528 total

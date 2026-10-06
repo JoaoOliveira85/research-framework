@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "scaffold-manifest.schema.json",
+  "title": "Scaffold Manifest",
+  "description": "Authoritative list of scaffold files the currently installed generator produces, with their template versions. Generated at build time and committed to dist-templates/.",
+  "type": "object",
+  "required": ["framework_version", "generator_commit", "generated_at", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "framework_version": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Vault-wide infrastructure counter. Bumps only when infrastructure layer changes."
+    },
+    "generator_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$",
+      "description": "Git SHA of the generator at the time the manifest was built."
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp."
+    },
+    "entries": {
+      "type": "array",
+      "description": "Sorted by path, lexicographic.",
+      "items": {
+        "type": "object",
+        "required": ["path", "kind", "template_version", "rendered_sha256"],
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Vault-relative path."
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["markdown", "yaml", "json", "shell", "python", "other"]
+          },
+          "template_version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Independent per-file counter. Bumps only when this template's rendered output changes."
+          },
+          "rendered_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "SHA-256 of the normalised rendered content."
+          },
+          "is_user_owned_after_first_write": {
+            "type": "boolean",
+            "default": false,
+            "description": "When true, the migrator creates the file if missing but never upgrades it (user accretes content after creation, e.g. data_vault index files)."
+          }
+        }
+      }
+    }
+  }
+}

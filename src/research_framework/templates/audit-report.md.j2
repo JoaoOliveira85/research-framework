@@ -1,0 +1,62 @@
+# Audit Report: {{ vault_identity }}  {{ start }} → {{ end }}
+_rendered-at: {{ rendered_at }}  ·  commit range: {{ git_base }}..{{ git_head }}
+
+## Coverage Delta
+{% if coverage_delta -%}
+| category | start | end | Δ |
+| --- | ---: | ---: | ---: |
+{% for name, start_val, end_val, delta in coverage_delta -%}
+| {{ name }} | {{ format_progress_pct(start_val) }} | {{ format_progress_pct(end_val) }} | {{ format_progress_delta(delta) }} |
+{% endfor -%}
+{% else -%}
+No data in scope.
+{% endif %}
+
+## Top Discovered Sources
+{% if top_sources -%}
+{% for row in top_sources -%}
+- **{{ row.name }}** — {{ row.summary }} — {{ row.signal }}
+{% endfor -%}
+{% else -%}
+No data in scope.
+{% endif %}
+
+## Cost Summary
+{% if cost_summary.per_cycle -%}
+- **Total**: ${{ "%.2f" | format(cost_summary.total_usd) }}{% if budget_usd is not none %} / ${{ "%.2f" | format(budget_usd) }} cap ({{ "%.0f" | format(utilization_pct) }}% utilization){% endif %}
+{% for kind, amount in cost_summary.per_stage -%}
+- {{ kind }}: ${{ "%.2f" | format(amount) }}
+{% endfor -%}
+- Per-cycle: {{ cost_summary.sparkline }} ({% for num, val in cost_summary.per_cycle %}c{{ "%03d" | format(num) }}=${{ "%.2f" | format(val) }}{% if not loop.last %}, {% endif %}{% endfor %})
+{% else -%}
+No data in scope.
+{% endif %}
+
+{% if not omit_source_drift_section -%}
+## Source Quality Drift
+{% if source_drift -%}
+{% for row in source_drift -%}
+- **{{ row.name }}** — {{ row.signals | join('; ') }} — last cycle {{ row.last_cycle }}
+{% endfor -%}
+{% else -%}
+No data in scope.
+{% endif %}
+
+{% endif -%}
+## Flagged Issues
+{% if flagged_issues -%}
+| stage | identifier | severity | suggested step |
+| --- | --- | --- | --- |
+{% for row in flagged_issues -%}
+| {{ row.stage }} | {{ row.identifier }} | {{ row.severity }} | {{ row.suggested_step }} |
+{% endfor -%}
+{% else -%}
+No flagged issues this cycle.
+{% endif %}
+
+{% if footer_warnings -%}
+---
+{% for warn in footer_warnings -%}
+- ⚠ {{ warn }}
+{% endfor -%}
+{% endif %}

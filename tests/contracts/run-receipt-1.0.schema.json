@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/JoaoOliveira85/research-framework/schemas/run-receipt-1.0.schema.json",
+  "title": "Pipeline run receipt (spec 080 FR-007)",
+  "description": "`_pipeline/runs/<run_id>/run.json` — what one weekly-pipeline run did, how long it took, what it cost and where every artifact it produced is. Derived on every phase close as a pure function of `pipeline-state.json` plus what is on disk (FR-006). Evolution follows ADR-0013: additive within `1.x`, a new schema file per major, `schema_version` carried in the payload so a consumer can refuse a shape it does not know.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "vault",
+    "started_at",
+    "finished_at",
+    "framework_version",
+    "reconstructed",
+    "verbs",
+    "phases",
+    "artifacts",
+    "cost"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+$",
+      "description": "Refuse a 2.x payload; accept any 1.x, which is additive by ADR-0013."
+    },
+    "run_id": {
+      "type": ["string", "null"],
+      "description": "The join key to `pipeline-state.json`. Minute-granular with a `-2`, `-3`, … suffix on collision (FR-002)."
+    },
+    "vault": { "type": "string", "description": "Absolute path." },
+    "started_at": { "type": ["string", "null"] },
+    "finished_at": {
+      "type": ["string", "null"],
+      "description": "Null while the run is open — i.e. while any phase is not yet terminal."
+    },
+    "framework_version": {
+      "type": "string",
+      "description": "The package version string. Distinct from the state file's integer `framework_version`, which is a schema version."
+    },
+    "reconstructed": {
+      "type": "boolean",
+      "description": "True when the run directory was created after the run began — a state file written before spec 080 shipped (FR-004). Anything the earlier phases wrote is not under it."
+    },
+    "verbs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "The verbs that wrote into this run, in order."
+    },
+    "phases": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/phase" }
+    },
+    "artifacts": {
+      "type": "object",
+      "required": [
+        "scout_report",
+        "research_report",
+        "verify_report",
+        "latest_export",
+        "context_tree"
+      ],
+      "properties": {
+        "scout_report": { "type": ["string", "null"] },
+        "research_report": { "type": ["string", "null"] },
+        "verify_report": { "type": ["string", "null"] },
+        "latest_export": { "type": ["string", "null"] },
+        "context_tree": { "type": ["string", "null"] }
+      }
+    },
+    "cost": {
+      "type": "object",
+      "required": ["total_usd", "sidecars_read", "sidecars_missing"],
+      "properties": {
+        "total_usd": {
+          "type": "number",
+          "minimum": 0,
+          "description": "The sum over sidecars that could be read. A LOWER BOUND whenever `sidecars_missing` is above zero, and every rendering must say so (FR-013)."
+        },
+        "sidecars_read": { "type": "integer", "minimum": 0 },
+        "sidecars_missing": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sidecars a dispatch asked for and that could not be read. Never folded into the total as zero (spec 078 FR-015)."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "phase": {
+      "type": "object",
+      "required": [
+        "status",
+        "started_at",
+        "finished_at",
+        "duration_s",
+        "cost_usd",
+        "cost_source",
+        "sidecar",
+        "log",
+        "prompt",
+        "errors",
+        "summary"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in_progress", "waiting", "done", "skipped", "failed"]
+        },
+        "started_at": { "type": ["string", "null"] },
+        "finished_at": { "type": ["string", "null"] },
+        "duration_s": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Null when either timestamp is missing — a phase killed before writing `finished_at` has no duration, and that must read as unknown, not as zero."
+        },
+        "cost_usd": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Null when no sidecar was requested, or when the one requested could not be read."
+        },
+        "cost_source": { "type": ["string", "null"] },
+        "sidecar": { "type": ["string", "null"] },
+        "log": { "type": ["string", "null"] },
+        "prompt": { "type": ["string", "null"] },
+        "errors": { "type": "array", "items": { "type": "string" } },
+        "summary": { "type": ["object", "null"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://research-vault/contracts/raw-item.schema.json",
+  "title": "RawItem",
+  "description": "Shape of a raw pipeline item at <vault>/_pipeline/raw/<source_kind>/<id>.md. Frontmatter fields required by all processors.",
+  "type": "object",
+  "required": ["source_kind", "source_id", "collected_at"],
+  "properties": {
+    "source_kind": {
+      "type": "string",
+      "description": "Collector category, e.g. 'youtube', 'reddit', 'web'.",
+      "minLength": 1
+    },
+    "source_id": {
+      "type": "string",
+      "description": "Unique identifier within the source kind (e.g. video ID, post ID, URL slug).",
+      "minLength": 1
+    },
+    "collected_at": {
+      "type": "string",
+      "description": "ISO-8601 datetime when the item was collected.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}"
+    },
+    "original_url": {
+      "type": "string",
+      "description": "Canonical URL of the original content."
+    },
+    "content_hash": {
+      "type": "string",
+      "description": "SHA-256 hex digest of the raw body content (without frontmatter)."
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable title."
+    },
+    "source_url": {
+      "type": "string",
+      "description": "Alias for original_url; accepted for backward compatibility."
+    }
+  },
+  "additionalProperties": true
+}

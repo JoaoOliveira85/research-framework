@@ -1,0 +1,7 @@
+# The committed fixtures here are READ-ONLY inputs (sources.db, cycle-NNN-research.json,
+# cycle-NNN-scout.json, etc.). scripts/source_ledger.py writes these per-run artifacts
+# into the fixture tree during tests; they are regenerated every run and must not be
+# committed. (Writing outputs into the input tree is a known test-isolation smell —
+# proper tmp_path isolation is tracked by the deferred spec 026.)
+**/_pipeline/cycles/cycle-*-source-ledger.json
+**/_pipeline/source-ledger-run.md

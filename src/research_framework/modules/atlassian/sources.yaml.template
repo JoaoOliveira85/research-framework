@@ -1,0 +1,35 @@
+# Atlassian module sources template (spec 020).
+#
+# Two source kinds, both on the same Atlassian Cloud site. The `url` decides
+# the surface fetched:
+#   jira_projects:
+#     - .../jira/projects/<KEY>        -> recently-updated issues in <KEY>
+#     - .../browse/<KEY>-123           -> recently-updated issues in <KEY>
+#     - .../issues/?jql=<encoded>      -> the given JQL (advanced)
+#   confluence_spaces:
+#     - .../wiki/spaces/<SPACEKEY>     -> recently-modified pages in the space
+#
+# Auth (env only — NEVER commit these): export both before a cycle:
+#   export ATLASSIAN_EMAIL="you@example.com"
+#   export ATLASSIAN_API_TOKEN="<token from id.atlassian.com/manage-profile/security/api-tokens>"
+# The module sends Basic base64(email:token); the token is never written to
+# stdout/stderr. The module's preflight fails the cycle closed if either env
+# var is missing.
+#
+# Replace `your-site` with your <site>.atlassian.net and the KEYs with your
+# real Jira project keys / Confluence space keys. Copy to sources.yaml.
+jira_projects:
+  - url: https://your-site.atlassian.net/jira/projects/PROJ
+    label: Main delivery project
+    value_tier: important
+  - url: https://your-site.atlassian.net/jira/projects/PLAT
+    label: Platform project
+    value_tier: routine
+
+confluence_spaces:
+  - url: https://your-site.atlassian.net/wiki/spaces/ENG
+    label: Engineering space
+    value_tier: important
+  - url: https://your-site.atlassian.net/wiki/spaces/ARCH
+    label: Architecture decisions space
+    value_tier: routine

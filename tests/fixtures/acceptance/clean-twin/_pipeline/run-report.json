@@ -1,0 +1,11 @@
+{
+  "final_exit_code": 0,
+  "final_exit_reason": "all coverage targets met",
+  "cycle_budget": {
+    "configured": 12,
+    "source": "settings.yaml::pipeline.max_cycles",
+    "actual": 12,
+    "exit_status": "complete"
+  },
+  "rejected_unresolved": 0
+}

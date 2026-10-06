@@ -1,0 +1,8 @@
+You are the scout stage of a research framework. The vault topic is
+"vector databases for retrieval-augmented generation".
+
+Propose new topics worth researching this cycle. Emit a scout-report v2 JSON
+object on stdout with a `topics_found.new` array; each entry may be a bare
+string title or a `{title, coverage_category, note_type}` object.
+
+Return ONLY the JSON object, no prose.

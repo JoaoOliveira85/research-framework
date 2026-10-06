@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "research_vault/contracts/batch-report.schema.json",
+  "title": "Note-Writer Batch Report (Q2 sequential batching)",
+  "description": "Per-batch artifact written by pipeline/batch.py after each note-writer invocation. Filename pattern: cycle-NNN-batch-MMM.json. The batch is the cycle's commit boundary (Q3 incremental retry).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "cycle_number",
+    "batch_number",
+    "started_at",
+    "finished_at",
+    "topics",
+    "notes_written",
+    "skipped_topics",
+    "sg_gate_results",
+    "accepted",
+    "correction_directive_in"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1" },
+    "cycle_number": { "type": "integer", "minimum": 1 },
+    "batch_number": { "type": "integer", "minimum": 1 },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": "string", "format": "date-time" },
+    "topics": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 10,
+      "items": { "$ref": "#/$defs/prioritized_topic" }
+    },
+    "notes_written": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9_-]+\\.md$" }
+    },
+    "skipped_topics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["topic", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "topic": { "type": "string" },
+          "reason": { "enum": ["no_sources", "exclusion_match", "duplicate_filename", "agent_skipped", "context_overflow", "agent_chose_alternative"] },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "sg_gate_results": {
+      "type": "array",
+      "items": { "$ref": "cycle-quality-report.schema.json#/$defs/gate_result" }
+    },
+    "accepted": { "type": "boolean" },
+    "correction_directive_in": {
+      "type": "string",
+      "description": "Empty string if no correction directive was injected; otherwise a quoted markdown block from the previous batch's gate FAIL."
+    }
+  },
+  "$defs": {
+    "prioritized_topic": {
+      "type": "object",
+      "required": ["title", "category", "priority_score", "provenance"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "category": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
+        "priority_score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "source_hints": { "type": "array", "items": { "type": "string" } },
+        "provenance": { "enum": ["spec_gap", "harvest_orphan", "auto_promoted"] },
+        "citation_count": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

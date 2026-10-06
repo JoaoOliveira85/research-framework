@@ -1,0 +1,70 @@
+{
+  "baseline_commit": "fa01b996cb6ad8b38bd0ede232b114f7e448bed5",
+  "coverage_targets_hash": "sha256:3588524bbd482515b52b7db8518d97fdd945d4da3ac6cd21d873de03afd37420",
+  "fixture": "tech-lite",
+  "last_updated": "2026-09-06T04:40:44Z",
+  "last_updated_by": "fix/harness-telemetry-correctness",
+  "last_updated_reason": "Re-bless from a 3-cycle run (issue #268): the harness drove one cycle; cost_per_substantive_note double-counted notes (#294); step-gate verdicts are recorded (#269); metrics with no denominator now read unmeasured.",
+  "metrics": {
+    "cost_efficiency": {
+      "cost_per_substantive_note": 0.0,
+      "cost_sum_usd": 0.0,
+      "reason": "020_not_present",
+      "status": "na",
+      "substantive_notes": 54
+    },
+    "coverage": {
+      "coverage_pct": 1.0,
+      "notes_per_category": {
+        "concepts": 15,
+        "decisions": 6,
+        "flows": 12,
+        "services": 21
+      },
+      "spec_drift": 0.0
+    },
+    "cycle_health": {
+      "cycles_fail": 0,
+      "cycles_pass": 3,
+      "retry_once_rate": 0.0,
+      "sg002_trip_count": 0,
+      "verifier_reject_rate": 0.0
+    },
+    "note_quality": {
+      "acronym_link_pct": null,
+      "per_template_section_fill": {
+        "API Surface": 0.0,
+        "Consequences": 0.0,
+        "Context": 0.0,
+        "Decision": 0.0,
+        "Dependencies": 0.0,
+        "Failure Modes": 0.0,
+        "Mechanism": 0.0,
+        "Overview": 0.0,
+        "Related": 0.0,
+        "Steps": 0.0,
+        "Trade-offs": 0.0,
+        "Trigger": 0.0
+      },
+      "template_compliance_pct": 0.0,
+      "unmeasured": {
+        "acronym_link_pct": "no_acronym_occurrences_in_notes"
+      }
+    },
+    "source_health": {
+      "gate_passed": true,
+      "message": "source health gate passed",
+      "module_error_rates": {}
+    },
+    "source_quality": {
+      "broken_source_rate": 0.0,
+      "source_diversity_shannon": 4.1699,
+      "spec_source_utilization": 0.0,
+      "tier2_source_ratio": null,
+      "unmeasured": {
+        "tier2_source_ratio": "no_citation_with_resolvable_credibility"
+      }
+    }
+  },
+  "schema_version": "1.0"
+}

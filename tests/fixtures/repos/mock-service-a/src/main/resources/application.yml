@@ -1,0 +1,5 @@
+kafka:
+  producer:
+    topic: order.housekeeper.trigger.v1
+retries: 3
+timeout-ms: 500

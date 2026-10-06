@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://research-framework.dev/contracts/038/archive-snapshots",
+  "title": "ArchiveSnapshots",
+  "description": "Persistent archive.org fallback ledger (spec 038 FR-008, US5). Lives at <vault>/_pipeline/archive-snapshots.json. Fail-and-defer (Q2): vault_health --apply exits 0 even when snapshots are deferred. Accumulates across cycles.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "snapshots"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "updated_at": {
+      "type": "string",
+      "description": "ISO-8601 UTC of the last vault_health --apply pass."
+    },
+    "snapshots": {
+      "type": "object",
+      "description": "Map of original URL -> snapshot record.",
+      "additionalProperties": { "$ref": "#/$defs/Snapshot" }
+    }
+  },
+  "$defs": {
+    "Snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "snapshot_url": {
+          "type": ["string", "null"],
+          "description": "web.archive.org snapshot URL; null until archived."
+        },
+        "created_at": {
+          "type": ["string", "null"],
+          "description": "ISO-8601 UTC when the snapshot was created; null until archived."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["archived", "deferred", "unarchivable"],
+          "description": "archived = snapshot exists; deferred = rate-limited/failed, retry next cycle (fail-and-defer, Q2); unarchivable = robots.txt/paywall/media — will not retry."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable cause for deferred/unarchivable."
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many times archiving was attempted (for deferred backoff)."
+        }
+      }
+    }
+  }
+}

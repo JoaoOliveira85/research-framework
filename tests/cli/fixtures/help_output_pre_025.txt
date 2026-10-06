@@ -1,0 +1,62 @@
+usage: research-framework [-h] [--log-level {debug,info,warning,error}]
+                          {generate,coverage,validate,reindex,check-skills,cycle,inventory,onboard,regenerate-agents,prune,parse-spec,pipeline,quality-baseline-update,quality-fixture-init,refresh-sources,regenerate-shim,status,digest,acceptance,wikilinks,re-grade,pause,export}
+                          ...
+
+Knowledge vault generator.
+
+positional arguments:
+  {generate,coverage,validate,reindex,check-skills,cycle,inventory,onboard,regenerate-agents,prune,parse-spec,pipeline,quality-baseline-update,quality-fixture-init,refresh-sources,regenerate-shim,status,digest,acceptance,wikilinks,re-grade,pause,export}
+    generate            Generate a vault from a spec file
+    coverage            Show coverage target status
+    validate            Run full validation suite on a vault
+    reindex             Rebuild Layer 1 index files
+    check-skills        Validate .agents/skills/*/SKILL.md and auto-restore
+                        broken ones from the bundled wheel copies.
+    cycle               Run a single research cycle
+    inventory           Produce a read-only structured snapshot of a vault's
+                        contents
+    onboard             Adopt an existing vault under the research-framework
+                        framework (git init, corpus rename, draft spec, parse-
+                        spec).
+    regenerate-agents   Overwrite .claude/commands/<agent>.md from framework
+                        templates
+    prune               Remove vault-local scripts superseded by framework
+                        modules (with pre/post snapshot boundary for
+                        rollback).
+    parse-spec          Parse a research-framework spec file and (re)write the
+                        vault's _pipeline/spec-parse.json. Use this to recover
+                        a vault whose spec-parse.json was deleted or
+                        corrupted.
+    pipeline            Run the full research pipeline
+                        (collect→extract→scout→triage→research→verify→report)
+    quality-baseline-update
+                        Bless a new quality baseline for one harness fixture
+                        (spec 022; human-only, never auto-updated by the
+                        harness).
+    quality-fixture-init
+                        Reserved v2 helper for adding new quality fixtures
+                        (stub in v1).
+    refresh-sources     Run legacy scripts/collect_*.py collectors
+    regenerate-shim     Re-render the vault bash shim
+    status              Live vault cycle status (read-only)
+    digest              Cross-cycle markdown digest (read-only)
+    acceptance          Run the framework-generic acceptance gates (read-only;
+                        spec 063)
+    wikilinks           Deterministic acronym-wikilink repair sweep (spec 067;
+                        dry-run unless --fix)
+    re-grade            Re-grade quarantined notes against the current
+                        credibility model and reinstate the now-clean ones
+                        (spec 066)
+    pause               Inspect or abandon a pause marker without resuming
+                        (budget-marker.contract.md §5; issue #237)
+    export              Export the vault as a versioned, consumer-facing
+                        envelope (claims-export 1.0; ADR-0013; issue #189)
+
+options:
+  -h, --help            show this help message and exit
+  --log-level {debug,info,warning,error}
+                        Logger verbosity. Defaults to INFO on an interactive
+                        TTY and WARNING when stdout is piped/redirected (per
+                        FR-005) — except the `pipeline` verbs, which default
+                        to INFO either way because they are built to run
+                        unattended.

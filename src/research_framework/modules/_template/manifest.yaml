@@ -1,0 +1,33 @@
+name: example
+version: 0.1.0
+description: Template module — copy to modules/<name>/ and customize (not walked by bridge)
+triggers:
+  - type: url_pattern
+    pattern: "^https?://example\\.com/"
+entry_point: extractor.py
+preflight:
+  entry_point: preflight.py
+  timeout_seconds: 30
+default_value_tier: routine
+schema_examples: few-shot.md
+source_id_from:
+  example_sources: url
+user_owned:
+  - sources.yaml
+extraction_timeout_seconds: 600
+
+# --- spec 038 optional blocks (absent ⇒ today's behaviour) ---
+#
+# authentication:
+#   env_vars: [EXAMPLE_API_KEY]   # MANDATORY when declared; preflight fatal_fail if unset
+# authentication: none            # explicit no-credentials posture
+#
+# rate_limits:                    # v1 declare-only — no client-side enforcement yet
+#   requests_per_minute: 60
+#   requests_per_hour: 1000
+#   burst: none
+#   backoff: exponential
+#
+# failure_policy: block_cycle      # default when absent
+# failure_policy: degrade_gracefully
+# failure_policy: defer

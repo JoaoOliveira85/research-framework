@@ -1,0 +1,22 @@
+{
+  "cycle": 1,
+  "phase": "research",
+  "timestamp": "2026-04-16T14:30:00Z",
+  "prompt": "DFS research pass, cycle 1",
+  "sources_consulted": {
+    "internal_wiki": {"searched": true, "results_count": 12, "pages_read": 6},
+    "external_web": {"searched": true, "results_count": 7, "pages_read": 4}
+  },
+  "topics_found": {
+    "new": [],
+    "existing": ["Topic Alpha", "Topic Beta"],
+    "total": 2
+  },
+  "notes_created": ["Topic Alpha.md", "Topic Beta.md"],
+  "notes_updated": [],
+  "new_wikilinks_discovered": [],
+  "cost_estimate_usd": 0.38,
+  "cumulative_cost_usd": 0.50,
+  "next_action": "continue",
+  "termination_reason": null
+}

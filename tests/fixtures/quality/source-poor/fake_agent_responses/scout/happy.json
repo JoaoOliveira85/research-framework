@@ -1,0 +1,297 @@
+{
+  "schema_version": "2.0",
+  "cycle": 1,
+  "phase": "scout",
+  "timestamp": "2026-05-17T00:00:01Z",
+  "dimensions_covered": [
+    "technical",
+    "organizational",
+    "domain"
+  ],
+  "topics_from_code": [
+    {
+      "id": "CT-1-001",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-1.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-1-c1.md"
+    },
+    {
+      "id": "CT-1-002",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-2.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-2-c1.md"
+    },
+    {
+      "id": "CT-1-003",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-3.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-3-c1.md"
+    },
+    {
+      "id": "CT-1-004",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-4.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-4-c1.md"
+    },
+    {
+      "id": "CT-1-005",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-5.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-5-c1.md"
+    },
+    {
+      "id": "CT-1-006",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-6.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-6-c1.md"
+    },
+    {
+      "id": "CT-1-007",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-7.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-7-c1.md"
+    },
+    {
+      "id": "CT-1-008",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-8.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-8-c1.md"
+    },
+    {
+      "id": "CT-1-009",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-9.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-9-c1.md"
+    },
+    {
+      "id": "CT-1-010",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-10.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-10-c1.md"
+    },
+    {
+      "id": "CT-1-011",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-11.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-11-c1.md"
+    },
+    {
+      "id": "CT-1-012",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-12.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-12-c1.md"
+    },
+    {
+      "id": "CT-1-013",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-13.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-13-c1.md"
+    },
+    {
+      "id": "CT-1-014",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-14.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-14-c1.md"
+    },
+    {
+      "id": "CT-1-015",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-15.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-15-c1.md"
+    },
+    {
+      "id": "CT-1-016",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-16.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-16-c1.md"
+    },
+    {
+      "id": "CT-1-017",
+      "topic_type": "concept",
+      "source_file": "synthetic/gap/topic-17.md",
+      "source_snippet": "lines 1-5",
+      "proposed_filename": "gap-topic-17-c1.md"
+    }
+  ],
+  "intent_from_confluence": [],
+  "topics_found": {
+    "new": [
+      {
+        "title": "Gap topic 1 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-1-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      },
+      {
+        "title": "Gap topic 2 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-2-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      },
+      {
+        "title": "Gap topic 3 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-3-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      },
+      {
+        "title": "Gap topic 4 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-4-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      },
+      {
+        "title": "Gap topic 5 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-5-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      },
+      {
+        "title": "Gap topic 6 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-6-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      },
+      {
+        "title": "Gap topic 7 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-7-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      },
+      {
+        "title": "Gap topic 8 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-8-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      },
+      {
+        "title": "Gap topic 9 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-9-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      },
+      {
+        "title": "Gap topic 10 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-10-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      },
+      {
+        "title": "Gap topic 11 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-11-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      },
+      {
+        "title": "Gap topic 12 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-12-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      },
+      {
+        "title": "Gap topic 13 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-13-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      },
+      {
+        "title": "Gap topic 14 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-14-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      },
+      {
+        "title": "Gap topic 15 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-15-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      },
+      {
+        "title": "Gap topic 16 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-16-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      },
+      {
+        "title": "Gap topic 17 cycle 1",
+        "coverage_category": "concepts",
+        "proposed_filename": "gap-topic-17-c1.md",
+        "discovery": "gap-substitution",
+        "substitution_for": "missing-external-corpus"
+      }
+    ],
+    "existing": [],
+    "total": 17
+  },
+  "proposed_filenames": [
+    "gap-topic-1-c1.md",
+    "gap-topic-2-c1.md",
+    "gap-topic-3-c1.md",
+    "gap-topic-4-c1.md",
+    "gap-topic-5-c1.md",
+    "gap-topic-6-c1.md",
+    "gap-topic-7-c1.md",
+    "gap-topic-8-c1.md",
+    "gap-topic-9-c1.md",
+    "gap-topic-10-c1.md",
+    "gap-topic-11-c1.md",
+    "gap-topic-12-c1.md",
+    "gap-topic-13-c1.md",
+    "gap-topic-14-c1.md",
+    "gap-topic-15-c1.md",
+    "gap-topic-16-c1.md",
+    "gap-topic-17-c1.md"
+  ],
+  "sources_consulted": {
+    "only-wiki": {
+      "searched": true,
+      "results_count": 0,
+      "pages_read": 0
+    }
+  },
+  "access_methods_used": {
+    "synthetic": "local"
+  },
+  "termination_condition": null,
+  "notes_created": [],
+  "unresolved_wikilinks": [],
+  "budget_consumed_usd": 0.0,
+  "missing_sources": [
+    "arxiv-corpus",
+    "oreilly-shelf",
+    "youtube-channel"
+  ],
+  "gap_substitution_attempted": true
+}

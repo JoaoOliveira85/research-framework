@@ -1,0 +1,106 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+*.egg
+dist/
+/build/
+# The unanchored ``build/`` pattern (also in some users' global gitignore)
+# would otherwise hide ``tests/build/``, which holds the smoke-gate
+# enforcer tests (spec-019 US1). Explicitly include it.
+!tests/build/
+!tests/build/**
+tests/build/__pycache__/
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Tools
+.ruff_cache/
+.mypy_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Speckit-generated vaults (test outputs, temp vaults)
+/tmp/
+*.tmp
+
+# Claude Code local config — ignore session/cache state. Specific paths
+# (instead of `.claude/`) so we can re-include project-shipped slash
+# commands under `.claude/skills/` further down.
+.claude/settings.local.json
+.claude/worktrees/
+.claude/cache/
+.claude/sessions/
+.claude/plugins/
+
+# Ignore all skill subdirs by default, then re-include the ones we ship
+# as project-level slash commands.
+.claude/skills/*
+!.claude/skills/speckit-taskstoissues/
+
+# Cursor local config
+.cursor/
+
+# -----------------------------------------------------------------------------
+# Examples folder — ONLY the two canonical examples are tracked.
+#
+# Any other file dropped into examples/ (personal vault specs, draft
+# settings, scratch notes) stays local. Use this folder as a sandbox without
+# worrying about accidentally committing private content.
+# -----------------------------------------------------------------------------
+examples/*
+!examples/research.spec.md
+!examples/settings.yml
+
+# Spec 022 quality harness — per-run workspace (includes the spec-026 isolated
+# fixture copies under _pipeline/quality/work/).
+_pipeline/quality/
+# Spec 026: only the volatile SQLite WAL sidecars are ignored. The rest of each
+# fixture's _pipeline/ (coverage-targets.json, sources.db seed, prompts, …) are
+# committed INPUTS — the harness now runs against an isolated copy (FR-001), so
+# the tracked seed tree is never mutated and must stay tracked & visible.
+tests/fixtures/quality/*/_pipeline/sources.db-shm
+tests/fixtures/quality/*/_pipeline/sources.db-wal
+# install.sh writes its audit record even in --dry-run (spec 039); the 009 CI
+# smoke + local dry-runs target these fixtures, and the record leaks a
+# machine-absolute target_dir/root_dir, so it must never be committed.
+tests/fixtures/quality/*/_pipeline/install_summary.json
+
+# Spec 056 benchmark harness — per-run sweep workspace (dated run dirs with
+# report.json/report.md + per-cell raw outputs). The committed fixture INPUTS
+# (research.spec.md, settings.yaml, benchmark-matrix*.yaml, tasks/, manifest.json,
+# fake_agent_responses/) stay tracked; only the generated _pipeline/ is ignored.
+tests/fixtures/benchmark/_pipeline/
+
+# Local operator checklists / scratch notes that are never meant to be
+# committed (per-session working docs the agent or maintainer drops at the
+# repo root to track in-flight task sequencing).
+MONDAY.md
+
+
+# spec-kit local pointer state — points downstream /speckit.* commands at the
+# current feature dir. Per-session/local; committing it pins one feature for
+# everyone and churns on every feature switch.
+.specify/feature.json

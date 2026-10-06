@@ -1,0 +1,339 @@
+{
+  "schema_version": "2.0",
+  "cycle": 1,
+  "phase": "scout",
+  "timestamp": "2026-05-17T00:00:01Z",
+  "dimensions_covered": [
+    "technical",
+    "organizational",
+    "domain"
+  ],
+  "topics_from_code": [
+    {
+      "id": "CT-1-001",
+      "topic_type": "service",
+      "source_file": "synthetic/acme/synthetic-order-service/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-order-service.md"
+    },
+    {
+      "id": "CT-1-002",
+      "topic_type": "service",
+      "source_file": "synthetic/acme/synthetic-payment-service/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-payment-service.md"
+    },
+    {
+      "id": "CT-1-003",
+      "topic_type": "service",
+      "source_file": "synthetic/acme/synthetic-inventory-service/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-inventory-service.md"
+    },
+    {
+      "id": "CT-1-004",
+      "topic_type": "service",
+      "source_file": "synthetic/acme/synthetic-notification-service/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-notification-service.md"
+    },
+    {
+      "id": "CT-1-005",
+      "topic_type": "service",
+      "source_file": "synthetic/acme/synthetic-audit-service/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-audit-service.md"
+    },
+    {
+      "id": "CT-1-006",
+      "topic_type": "flow",
+      "source_file": "synthetic/acme/synthetic-checkout-flow/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-checkout-flow.md"
+    },
+    {
+      "id": "CT-1-007",
+      "topic_type": "flow",
+      "source_file": "synthetic/acme/synthetic-refund-flow/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-refund-flow.md"
+    },
+    {
+      "id": "CT-1-008",
+      "topic_type": "flow",
+      "source_file": "synthetic/acme/synthetic-settlement-flow/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-settlement-flow.md"
+    },
+    {
+      "id": "CT-1-009",
+      "topic_type": "concept",
+      "source_file": "synthetic/acme/synthetic-idempotency-keys/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-idempotency-keys.md"
+    },
+    {
+      "id": "CT-1-010",
+      "topic_type": "concept",
+      "source_file": "synthetic/acme/synthetic-saga-orchestration/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-saga-orchestration.md"
+    },
+    {
+      "id": "CT-1-011",
+      "topic_type": "concept",
+      "source_file": "synthetic/acme/synthetic-circuit-breaker/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-circuit-breaker.md"
+    },
+    {
+      "id": "CT-1-012",
+      "topic_type": "concept",
+      "source_file": "synthetic/acme/synthetic-event-sourcing/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-event-sourcing.md"
+    },
+    {
+      "id": "CT-1-013",
+      "topic_type": "decision",
+      "source_file": "synthetic/acme/synthetic-adr-retry-policy/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-adr-retry-policy.md"
+    },
+    {
+      "id": "CT-1-014",
+      "topic_type": "decision",
+      "source_file": "synthetic/acme/synthetic-adr-database-choice/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-adr-database-choice.md"
+    },
+    {
+      "id": "CT-1-015",
+      "topic_type": "service",
+      "source_file": "synthetic/acme/synthetic-gateway-service/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-gateway-service.md"
+    },
+    {
+      "id": "CT-1-016",
+      "topic_type": "concept",
+      "source_file": "synthetic/acme/synthetic-hexagonal-ports/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-hexagonal-ports.md"
+    },
+    {
+      "id": "CT-1-017",
+      "topic_type": "flow",
+      "source_file": "synthetic/acme/synthetic-webhook-flow/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-webhook-flow.md"
+    },
+    {
+      "id": "CT-1-018",
+      "topic_type": "service",
+      "source_file": "synthetic/acme/synthetic-ledger-service/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "synthetic-ledger-service.md"
+    }
+  ],
+  "intent_from_confluence": [],
+  "topics_found": {
+    "new": [
+      {
+        "title": "Synthetic Order Service",
+        "coverage_category": "services",
+        "proposed_filename": "synthetic-order-service.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-001"
+        ]
+      },
+      {
+        "title": "Synthetic Payment Service",
+        "coverage_category": "services",
+        "proposed_filename": "synthetic-payment-service.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-002"
+        ]
+      },
+      {
+        "title": "Synthetic Inventory Service",
+        "coverage_category": "services",
+        "proposed_filename": "synthetic-inventory-service.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-003"
+        ]
+      },
+      {
+        "title": "Synthetic Notification Service",
+        "coverage_category": "services",
+        "proposed_filename": "synthetic-notification-service.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-004"
+        ]
+      },
+      {
+        "title": "Synthetic Audit Service",
+        "coverage_category": "services",
+        "proposed_filename": "synthetic-audit-service.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-005"
+        ]
+      },
+      {
+        "title": "Synthetic Checkout Flow",
+        "coverage_category": "flows",
+        "proposed_filename": "synthetic-checkout-flow.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-006"
+        ]
+      },
+      {
+        "title": "Synthetic Refund Flow",
+        "coverage_category": "flows",
+        "proposed_filename": "synthetic-refund-flow.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-007"
+        ]
+      },
+      {
+        "title": "Synthetic Settlement Flow",
+        "coverage_category": "flows",
+        "proposed_filename": "synthetic-settlement-flow.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-008"
+        ]
+      },
+      {
+        "title": "Synthetic Idempotency Keys",
+        "coverage_category": "concepts",
+        "proposed_filename": "synthetic-idempotency-keys.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-009"
+        ]
+      },
+      {
+        "title": "Synthetic Saga Orchestration",
+        "coverage_category": "concepts",
+        "proposed_filename": "synthetic-saga-orchestration.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-010"
+        ]
+      },
+      {
+        "title": "Synthetic Circuit Breaker",
+        "coverage_category": "concepts",
+        "proposed_filename": "synthetic-circuit-breaker.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-011"
+        ]
+      },
+      {
+        "title": "Synthetic Event Sourcing",
+        "coverage_category": "concepts",
+        "proposed_filename": "synthetic-event-sourcing.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-012"
+        ]
+      },
+      {
+        "title": "Synthetic ADR Retry Policy",
+        "coverage_category": "decisions",
+        "proposed_filename": "synthetic-adr-retry-policy.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-013"
+        ]
+      },
+      {
+        "title": "Synthetic ADR Database Choice",
+        "coverage_category": "decisions",
+        "proposed_filename": "synthetic-adr-database-choice.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-014"
+        ]
+      },
+      {
+        "title": "Synthetic Gateway Service",
+        "coverage_category": "services",
+        "proposed_filename": "synthetic-gateway-service.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-015"
+        ]
+      },
+      {
+        "title": "Synthetic Hexagonal Ports",
+        "coverage_category": "concepts",
+        "proposed_filename": "synthetic-hexagonal-ports.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-016"
+        ]
+      },
+      {
+        "title": "Synthetic Webhook Flow",
+        "coverage_category": "flows",
+        "proposed_filename": "synthetic-webhook-flow.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-017"
+        ]
+      },
+      {
+        "title": "Synthetic Ledger Service",
+        "coverage_category": "services",
+        "proposed_filename": "synthetic-ledger-service.md",
+        "discovery": "code-derived",
+        "source_code_topic_ids": [
+          "CT-1-018"
+        ]
+      }
+    ],
+    "existing": [],
+    "total": 18
+  },
+  "proposed_filenames": [
+    "synthetic-order-service.md",
+    "synthetic-payment-service.md",
+    "synthetic-inventory-service.md",
+    "synthetic-notification-service.md",
+    "synthetic-audit-service.md",
+    "synthetic-checkout-flow.md",
+    "synthetic-refund-flow.md",
+    "synthetic-settlement-flow.md",
+    "synthetic-idempotency-keys.md",
+    "synthetic-saga-orchestration.md",
+    "synthetic-circuit-breaker.md",
+    "synthetic-event-sourcing.md",
+    "synthetic-adr-retry-policy.md",
+    "synthetic-adr-database-choice.md",
+    "synthetic-gateway-service.md",
+    "synthetic-hexagonal-ports.md",
+    "synthetic-webhook-flow.md",
+    "synthetic-ledger-service.md"
+  ],
+  "sources_consulted": [
+    "payment-repo",
+    "order-repo"
+  ],
+  "access_methods_used": {
+    "synthetic": "local"
+  },
+  "termination_condition": null,
+  "notes_created": [],
+  "unresolved_wikilinks": [],
+  "budget_consumed_usd": 0.0
+}

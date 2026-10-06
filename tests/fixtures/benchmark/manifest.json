@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "description": "Per-task expectations for the spec-056 benchmark fixture. topics_expected is the denominator for the scout quality scalar (topics_proposed / topics_expected, capped at 1.0).",
+  "tasks": {
+    "scout": {
+      "topics_expected": 4
+    },
+    "note-writer": {
+      "note_type": "concept"
+    },
+    "verifier": {}
+  }
+}

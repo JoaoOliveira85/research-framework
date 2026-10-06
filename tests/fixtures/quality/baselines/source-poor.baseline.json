@@ -1,0 +1,62 @@
+{
+  "baseline_commit": "fa01b996cb6ad8b38bd0ede232b114f7e448bed5",
+  "coverage_targets_hash": "sha256:584c60a530c1f5734a2d45ef5120ccf2824f281b304eb83cd1c8201374cecfe2",
+  "fixture": "source-poor",
+  "last_updated": "2026-09-06T04:40:50Z",
+  "last_updated_by": "fix/harness-telemetry-correctness",
+  "last_updated_reason": "Re-bless from a 3-cycle run (issue #268): the harness drove one cycle; cost_per_substantive_note double-counted notes (#294); step-gate verdicts are recorded (#269); metrics with no denominator now read unmeasured.",
+  "metrics": {
+    "cost_efficiency": {
+      "cost_per_substantive_note": 0.0,
+      "cost_sum_usd": 0.0,
+      "reason": "020_not_present",
+      "status": "na",
+      "substantive_notes": 1
+    },
+    "coverage": {
+      "coverage_pct": 0.0,
+      "notes_per_category": {
+        "concepts": 0,
+        "decisions": 0,
+        "flows": 0,
+        "integrations": 0,
+        "services": 0
+      },
+      "spec_drift": 0.0
+    },
+    "cycle_health": {
+      "cycles_fail": 3,
+      "cycles_pass": 0,
+      "retry_once_rate": 0.0,
+      "sg002_trip_count": 3,
+      "unmeasured": {
+        "verifier_reject_rate": "verifier_never_invoked"
+      },
+      "verifier_reject_rate": null
+    },
+    "note_quality": {
+      "acronym_link_pct": null,
+      "per_template_section_fill": {},
+      "template_compliance_pct": null,
+      "unmeasured": {
+        "acronym_link_pct": "no_notes_written",
+        "template_compliance_pct": "no_notes_written"
+      }
+    },
+    "source_health": {
+      "gate_passed": true,
+      "message": "source health gate passed",
+      "module_error_rates": {}
+    },
+    "source_quality": {
+      "broken_source_rate": 0.0,
+      "source_diversity_shannon": 0.0,
+      "spec_source_utilization": 0.0,
+      "tier2_source_ratio": null,
+      "unmeasured": {
+        "tier2_source_ratio": "no_citation_with_resolvable_credibility"
+      }
+    }
+  },
+  "schema_version": "1.0"
+}

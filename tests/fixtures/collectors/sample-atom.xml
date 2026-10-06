@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Test Atom Feed</title>
+  <link href="https://atomfeed.example.com"/>
+  <id>urn:uuid:test-atom-feed-001</id>
+  <updated>2026-05-07T12:00:00Z</updated>
+  <entry>
+    <id>urn:uuid:atom-entry-001</id>
+    <title>Atom Entry One</title>
+    <link rel="alternate" href="https://atomfeed.example.com/entry-one"/>
+    <published>2026-05-05T09:00:00Z</published>
+    <updated>2026-05-05T09:00:00Z</updated>
+    <author><name>Carol Contributor</name></author>
+    <summary>Summary of atom entry one.</summary>
+    <content type="text">Full content of atom entry one. This content is long enough to exceed the 500 character threshold so the collector uses it without fetching the article URL. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi.</content>
+  </entry>
+  <entry>
+    <id>urn:uuid:atom-entry-002</id>
+    <title>Atom Entry Two</title>
+    <link rel="alternate" href="https://atomfeed.example.com/entry-two"/>
+    <published>2026-05-06T10:00:00Z</published>
+    <updated>2026-05-06T10:00:00Z</updated>
+    <author><name>Dave Developer</name></author>
+    <summary>Summary of atom entry two.</summary>
+    <content type="text">Full content of atom entry two. This is also long enough to exceed the 500 character threshold for direct use. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum et dolore.</content>
+  </entry>
+</feed>

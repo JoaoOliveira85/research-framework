@@ -1,0 +1,159 @@
+name: CI
+
+# Runs on version tags and by hand — never per PR, push or schedule
+# (2026-09-07: the owner's monthly Actions allowance went in under a day on
+# per-PR runs with a macOS matrix, and macOS bills at 10x). The merge gate is
+# the LOCAL suite (CONTRIBUTING: pytest + scripts/guards/run_all.py + ruff),
+# which every PR reports. macOS is opt-in on a manual run (`macos: true`):
+# the OS-sensitive surfaces (portability guard, shellcheck, installer
+# dry-run) already pass on Linux.
+
+on:
+  workflow_dispatch:
+    inputs:
+      macos:
+        description: "Also run the guard set on macos-latest (10x minutes)"
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: ci (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.macos && '["ubuntu-latest","macos-latest"]' || '["ubuntu-latest"]') }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Configure git identity
+        # GitHub runners ship without a global git identity. The framework's
+        # Principle X auto-commit path (prune boundary snapshots, vault_commit,
+        # …) shells out to `git commit`, which fails "tell me who you are"
+        # without one. A real user who `git init`s a vault normally has a
+        # global identity; CI must set one explicitly (spec 009).
+        run: |
+          git config --global user.email "ci@research-framework.invalid"
+          git config --global user.name "research-framework CI"
+          git config --global init.defaultBranch main
+
+      - name: Guard battery (issue #278 — names the failing guard, not just "tests failed")
+        run: python scripts/guards/run_all.py
+
+      - name: Pytest (fast loop)
+        run: pytest -m "not e2e"
+
+      - name: Ruff check
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Install shellcheck
+        # ubuntu-latest ships shellcheck; macos-latest does NOT (the bare
+        # `shellcheck` call there exits 127). Install only when missing.
+        shell: bash
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            if [ "${RUNNER_OS}" = "macOS" ]; then
+              brew install shellcheck
+            else
+              sudo apt-get update && sudo apt-get install -y shellcheck
+            fi
+          fi
+          shellcheck --version
+
+      - name: Shellcheck shipped scripts
+        # An unmatched `scripts/*.sh` reaches shellcheck as a literal path and
+        # fails the job, so the directory is globbed with `find` and the list
+        # stays correct whether or not a shell script ever lands there again.
+        # `.git-hooks/` (issue #278) has no `.sh` suffix (git hook naming is
+        # fixed) so it's listed explicitly rather than globbed. `install.sh` /
+        # `generate_vault.sh` (issue #288) were a coverage gap identical to
+        # the portability guard's own — added here too. NOT added:
+        # `templates/vault-script.sh.j2` — it's Jinja2, not valid shell
+        # (`{{ }}`/`{% %}` markup), so shellcheck needs the rendered output,
+        # not the template source; `scripts/check_portability.py` covers it
+        # today instead (its rules are plain line scans, unaffected by Jinja
+        # markup).
+        shell: bash
+        run: |
+          files=(build.sh install.sh generate_vault.sh dist-templates/*.sh .git-hooks/pre-commit)
+          while IFS= read -r f; do files+=("$f"); done \
+            < <(find scripts -maxdepth 1 -name '*.sh')
+          shellcheck "${files[@]}"
+
+      - name: Installer dry-run smoke (spec 039)
+        # US5/FR-005: exercise the installer's OS/dep probe + plan on both OSes.
+        # Non-interactive runners require --accept-path == the resolved target
+        # (a 039 contract); dry-run mutates nothing (the install.log it writes is
+        # gitignored). Asserts a clean exit 0.
+        run: |
+          TARGET="$PWD/tests/fixtures/quality/tech-lite"
+          bash dist-templates/install.sh "$TARGET" --dry-run --accept-path "$TARGET"
+
+  e2e:
+    # The `ci` job above runs `pytest -m "not e2e"`, so without this job the
+    # e2e tier runs in NO automation except the four files build.sh's
+    # SMOKE_TESTS names — 17 of 27 tests, including FR-003 / FR-004 / US3 /
+    # SC-002 proofs, were green only on a contributor's laptop (issue #266).
+    # `tests/build/test_e2e_tier_runs_in_automation.py` fails if this job is
+    # removed while any e2e file is outside SMOKE_TESTS.
+    #
+    # Linux only, deliberately: the tier costs ~6.5 minutes and macOS runner
+    # minutes bill at 10x, while the OS-sensitive surfaces (portability guard,
+    # shellcheck, installer dry-run) are already on both in `ci`. The release
+    # job that drives build.sh (quality.yml) is Linux-only for the same
+    # reason.
+    name: e2e (ubuntu-latest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Configure git identity
+        # Same reason as the `ci` job: the cycle runner's Principle X
+        # auto-commit path shells out to `git commit`.
+        run: |
+          git config --global user.email "ci@research-framework.invalid"
+          git config --global user.name "research-framework CI"
+          git config --global init.defaultBranch main
+
+      - name: Pytest (e2e tier)
+        # live_llm is excluded: those spend real money and are opt-in.
+        run: pytest -m "e2e and not live_llm"

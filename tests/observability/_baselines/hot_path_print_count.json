@@ -1,0 +1,9 @@
+{
+  "src/research_framework/pipeline/cycle_runner.py": 0,
+  "src/research_framework/pipeline/orchestrator.py": 0,
+  "src/research_framework/pipeline/runner.py": 0,
+  "src/research_framework/pipeline/steps/scout.py": 0,
+  "src/research_framework/pipeline/steps/research.py": 0,
+  "src/research_framework/pipeline/steps/postprocess.py": 0,
+  "src/research_framework/pipeline/source_bridge/orchestrator.py": 0
+}

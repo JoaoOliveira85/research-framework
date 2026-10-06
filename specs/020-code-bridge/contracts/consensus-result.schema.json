@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://research-framework.dev/contracts/020/consensus-result",
+  "title": "ConsensusResult",
+  "description": "Per-source per-cycle consensus audit record. Lives at _pipeline/sources/<module>/consensus/<source-id-hash>-cycle-NNN.json.",
+  "type": "object",
+  "required": [
+    "module",
+    "source_id",
+    "cycle",
+    "value_tier",
+    "extractors_spawned",
+    "verdicts",
+    "final_verdict",
+    "findings_unioned",
+    "dissenting_extractor_indices",
+    "consensus_decided_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "module": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "source_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cycle": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "value_tier": {
+      "type": "string",
+      "enum": ["routine", "important", "critical"]
+    },
+    "extractors_spawned": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "N. MUST be odd per D2. Config-load validates this; this field documents what actually ran."
+    },
+    "verdicts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": ["ok", "empty", "exhausted", "error"]
+      },
+      "description": "One verdict per spawned extractor, ordered by spawn order."
+    },
+    "final_verdict": {
+      "type": "string",
+      "enum": ["ok", "empty", "exhausted", "error"]
+    },
+    "findings_unioned": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total findings across all extractors after union."
+    },
+    "dissenting_extractor_indices": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "description": "Indices (0-based) of extractors whose verdict differed from final_verdict."
+    },
+    "consensus_decided_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

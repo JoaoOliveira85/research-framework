@@ -1,0 +1,24 @@
+name: youtube
+version: 0.1.0
+description: YouTube video transcript + metadata extraction via yt-dlp
+triggers:
+  - type: url_pattern
+    pattern: "^https?://(?:www\\.)?youtube\\.com/watch\\?v=[A-Za-z0-9_-]+"
+  - type: url_pattern
+    pattern: "^https?://youtu\\.be/[A-Za-z0-9_-]+"
+entry_point: extractor.py
+preflight:
+  entry_point: preflight.py
+  timeout_seconds: 30
+default_value_tier: routine
+default_tier: basic
+schema_examples: few-shot.md
+source_id_from:
+  youtube_videos: url
+  youtube_channels: url
+user_owned:
+  - sources.yaml
+extraction_timeout_seconds: 180
+
+authentication:
+  env_vars: [YOUTUBE_API_KEY]

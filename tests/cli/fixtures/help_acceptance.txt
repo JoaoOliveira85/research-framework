@@ -1,0 +1,7 @@
+usage: research-framework acceptance [-h] --vault VAULT [--json] [--strict]
+
+options:
+  -h, --help     show this help message and exit
+  --vault VAULT  Vault directory
+  --json         Machine-readable stdout
+  --strict       Treat WARN gates as blocking (non-zero exit)

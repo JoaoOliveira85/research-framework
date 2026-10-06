@@ -1,0 +1,24 @@
+{
+  "last_updated": "2026-06-01T10:00:00Z",
+  "cycle_number": 3,
+  "categories": [
+    {
+      "name": "concepts",
+      "note_type": "concept",
+      "target_count": 5,
+      "met_count": 2
+    },
+    {
+      "name": "services",
+      "note_type": "service",
+      "target_count": 4,
+      "met_count": 1
+    },
+    {
+      "name": "flows",
+      "note_type": "flow",
+      "target_count": 3,
+      "met_count": 0
+    }
+  ]
+}

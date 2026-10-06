@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://research-framework.local/schemas/pipeline-state-v1.json",
+  "title": "PipelineState",
+  "description": "Persisted state for a research-vault pipeline run.",
+  "type": "object",
+  "required": ["run_id", "started_at", "framework_version", "phases"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "run_id": {
+      "type": "string",
+      "description": "Stable identifier for this run, e.g. '2026-05-14-1500'."
+    },
+    "started_at": {
+      "type": "string",
+      "description": "ISO-8601 UTC timestamp when the run started."
+    },
+    "framework_version": {
+      "type": "integer",
+      "description": "Schema version. Currently 1.",
+      "enum": [1]
+    },
+    "phases": {
+      "type": "object",
+      "description": "Per-phase status records.",
+      "required": ["collect", "extract", "scout", "triage", "research", "verify", "report"],
+      "additionalProperties": false,
+      "properties": {
+        "collect":  { "$ref": "#/$defs/PhaseRecord" },
+        "extract":  { "$ref": "#/$defs/PhaseRecord" },
+        "scout":    { "$ref": "#/$defs/PhaseRecord" },
+        "triage":   { "$ref": "#/$defs/PhaseRecord" },
+        "research": { "$ref": "#/$defs/PhaseRecord" },
+        "verify":   { "$ref": "#/$defs/PhaseRecord" },
+        "report":   { "$ref": "#/$defs/PhaseRecord" }
+      }
+    }
+  },
+  "$defs": {
+    "PhaseStatus": {
+      "type": "string",
+      "enum": ["pending", "in_progress", "waiting", "done", "skipped", "failed"]
+    },
+    "PhaseRecord": {
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": true,
+      "properties": {
+        "status": { "$ref": "#/$defs/PhaseStatus" },
+        "started_at": {
+          "type": ["string", "null"],
+          "description": "ISO-8601 UTC timestamp when the phase started."
+        },
+        "finished_at": {
+          "type": ["string", "null"],
+          "description": "ISO-8601 UTC timestamp when the phase finished."
+        },
+        "summary": {
+          "type": ["object", "null"],
+          "description": "Phase-specific summary data (arbitrary keys)."
+        },
+        "errors": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of error messages accumulated during the phase."
+        }
+      }
+    }
+  }
+}

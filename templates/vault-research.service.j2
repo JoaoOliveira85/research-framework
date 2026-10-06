@@ -1,0 +1,15 @@
+# {{ spec.name }} — scheduled research
+# Install: cp this file to ~/.config/systemd/user/ && systemctl --user enable vault-research
+[Unit]
+Description={{ spec.name }} vault — research cycle
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart={{ vault_dir }}/vault research
+WorkingDirectory={{ vault_dir }}
+StandardOutput=append:{{ vault_dir }}/_pipeline/research.log
+StandardError=append:{{ vault_dir }}/_pipeline/research.log
+
+[Install]
+WantedBy=default.target

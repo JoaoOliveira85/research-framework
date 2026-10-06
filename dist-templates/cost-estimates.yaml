@@ -1,0 +1,10 @@
+# Bundled per-stage default ceilings (spec 033 cost-estimator.contract.md §5).
+# Vaults may override via <vault>/cost-estimates.yaml (shallow merge).
+ceilings:
+  plan_narrator: 0.35
+  scout: 0.80
+  research: 1.20
+  note_writer: 1.50
+  verifier: 0.25
+  probe_retrieval: 0.40
+  default: 1.00

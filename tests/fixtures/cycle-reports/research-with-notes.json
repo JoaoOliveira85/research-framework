@@ -1,0 +1,22 @@
+{
+  "cycle": 2,
+  "phase": "research",
+  "timestamp": "2026-04-16T15:00:00Z",
+  "prompt": "DFS research pass, cycle 2",
+  "sources_consulted": {
+    "internal_wiki": {"searched": true, "results_count": 8, "pages_read": 4},
+    "external_web": {"searched": true, "results_count": 5, "pages_read": 3}
+  },
+  "topics_found": {
+    "new": ["Topic Gamma"],
+    "existing": ["Topic Alpha", "Topic Beta", "Topic Delta"],
+    "total": 4
+  },
+  "notes_created": ["Topic Gamma.md", "Topic Delta.md"],
+  "notes_updated": ["Topic Alpha.md"],
+  "new_wikilinks_discovered": ["Topic Epsilon"],
+  "cost_estimate_usd": 0.42,
+  "cumulative_cost_usd": 0.92,
+  "next_action": "continue",
+  "termination_reason": null
+}

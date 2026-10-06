@@ -1,0 +1,16 @@
+{
+  "schema_version": "2.0",
+  "cycle": 1,
+  "phase": "scout",
+  "timestamp": "2026-04-17T14:30:00Z",
+  "dimensions_covered": ["technical", "organizational", "domain", "market", "temporal"],
+  "topics_from_code": [],
+  "intent_from_confluence": [],
+  "proposed_filenames": [],
+  "sources_consulted": ["Confluence"],
+  "access_methods_used": {},
+  "termination_condition": null,
+  "notes_created": [],
+  "unresolved_wikilinks": [],
+  "budget_consumed_usd": 5.00
+}

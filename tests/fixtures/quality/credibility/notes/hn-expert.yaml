@@ -1,0 +1,7 @@
+title: Retry Semantics
+type: concept
+source_urls:
+  - url: "https://news.ycombinator.com/item?id=12345"
+    title: "HN: practitioner on retry semantics"
+    credibility: commentary
+    coi: false

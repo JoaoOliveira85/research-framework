@@ -1,0 +1,11 @@
+{
+  "final_exit_code": 1,
+  "final_exit_reason": "max_cycles reached",
+  "cycle_budget": {
+    "configured": 12,
+    "source": "settings.yaml::pipeline.max_cycles",
+    "actual": 6,
+    "exit_status": "constrained"
+  },
+  "rejected_unresolved": 1
+}

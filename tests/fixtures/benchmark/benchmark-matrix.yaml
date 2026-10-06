@@ -1,0 +1,20 @@
+# Spec 056 — default benchmark matrix (2 executors × 2 models × 3 tasks = 12 cells).
+# Runtimes MUST be dispatchable: either a key in agent_call._RUNTIME_ADAPTERS
+# (claude/codex/cursor-agent/python) OR an HTTP runtime in _HTTP_RUNTIMES (ollama).
+# Adding a model = append one string; adding an executor = one block.
+# For the full claude × codex × cursor-agent × ollama sweep, use
+# benchmark-matrix.full.yaml (operator runs `--matrix benchmark-matrix.full.yaml`).
+schema_version: "1.0"
+tasks:
+  - scout
+  - note-writer
+  - verifier
+executors:
+  - runtime: claude
+    models:
+      - sonnet
+      - haiku
+  - runtime: codex
+    models:
+      - default
+      - high

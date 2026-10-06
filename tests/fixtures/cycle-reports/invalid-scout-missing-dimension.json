@@ -1,0 +1,22 @@
+{
+  "cycle": 1,
+  "phase": "scout",
+  "timestamp": "2026-04-16T14:00:00Z",
+  "prompt": "BFS scout pass, cycle 1 — missing required source",
+  "sources_consulted": {
+    "internal_wiki": {"searched": true, "results_count": 8, "pages_read": 3}
+  },
+  "topics_found": {
+    "new": ["Topic Alpha"],
+    "existing": [],
+    "total": 1
+  },
+  "proposed_filenames": ["Topic Alpha.md"],
+  "notes_created": [],
+  "notes_updated": [],
+  "new_wikilinks_discovered": [],
+  "cost_estimate_usd": 0.08,
+  "cumulative_cost_usd": 0.08,
+  "next_action": "continue",
+  "termination_reason": null
+}

@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://research-framework/specs/063/acceptance-scorecard.schema.json",
+  "title": "Acceptance scorecard (FR-006)",
+  "description": "Per-vault acceptance run result written to _pipeline/acceptance/report-<date>.json. The human-readable REPORT-<date>.md is rendered from this. Emitted by ./vault acceptance and (per Q4) at clean-exit finalise.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "generated_at",
+    "vault",
+    "overall",
+    "generic_gates"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "kind": { "const": "acceptance-scorecard" },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp of the acceptance run."
+    },
+    "vault": {
+      "type": "string",
+      "description": "Vault root path (or name) the scorecard grades."
+    },
+    "framework_version": {
+      "type": "string",
+      "description": "research-framework version that ran the gates."
+    },
+    "overall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "fail_count", "warn_count", "exit_code"],
+      "properties": {
+        "status": { "enum": ["PASS", "FAIL", "WARN"] },
+        "fail_count": { "type": "integer", "minimum": 0 },
+        "warn_count": { "type": "integer", "minimum": 0 },
+        "exit_code": { "enum": [0, 1] }
+      }
+    },
+    "generic_gates": {
+      "type": "array",
+      "description": "Results for the §4.1 gate set (generic-gates.contract.md).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gate_id", "status", "message"],
+        "properties": {
+          "gate_id": {
+            "enum": ["GA-001", "GA-002", "GA-003", "GA-004", "GA-005", "GA-006"]
+          },
+          "status": { "enum": ["PASS", "FAIL", "WARN"] },
+          "metric_value": { "type": ["number", "string", "null"] },
+          "threshold": { "type": ["number", "string", "null"] },
+          "message": { "type": "string" },
+          "evidence_paths": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "ledger_reconciliation": {
+      "type": "object",
+      "description": "US2 — ledger verdicts cross-checked against note citations.",
+      "additionalProperties": false,
+      "properties": {
+        "sources_total": { "type": "integer", "minimum": 0 },
+        "disagreements": {
+          "type": "array",
+          "description": "Sources the ledger marked failed but notes demonstrably cite.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source", "ledger_verdict", "citation_rate"],
+            "properties": {
+              "source": { "type": "string" },
+              "ledger_verdict": {
+                "enum": [
+                  "USED",
+                  "SKIPPED_RELEVANCE",
+                  "ACCESS_FAIL",
+                  "PIPELINE_DROP",
+                  "QUALITY_REJECT",
+                  "NOT_REACHED",
+                  "LEDGER_DISAGREEMENT"
+                ]
+              },
+              "citation_rate": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Fraction of in-scope notes citing this source."
+              }
+            }
+          }
+        }
+      }
+    },
+    "citation_grading": {
+      "type": "object",
+      "description": "US3 — spec-053 authority/trunk + spec-055 credibility grading.",
+      "additionalProperties": false,
+      "properties": {
+        "derived_trunk_role": {
+          "type": "string",
+          "description": "The vault's derived trunk (highest-priority role) per spec 053."
+        },
+        "authority_inversions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Notes citing against the derived-trunk authority."
+        },
+        "credibility_ungraded": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Citations lacking a resolvable credibility tier (spec 055)."
+        },
+        "coi_flagged": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Citations with coi: true surfaced for review."
+        }
+      }
+    },
+    "domain_probes": {
+      "type": "object",
+      "description": "US4/US5 — summary of in-vault _pipeline/acceptance/ domain probes (data discovered, not framework-owned).",
+      "additionalProperties": true,
+      "properties": {
+        "pack": { "type": "string" },
+        "gold_anchors": { "type": "array", "items": { "type": "string" } },
+        "breadth_score": { "type": ["number", "null"] }
+      }
+    }
+  }
+}

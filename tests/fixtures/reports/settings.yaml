@@ -1,0 +1,5 @@
+pipeline:
+  max_cycles: 5
+  budget_usd: 1.50
+limits:
+  cycle_budget_usd: 1.50

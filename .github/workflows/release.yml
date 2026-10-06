@@ -1,0 +1,216 @@
+name: Release
+
+# This workflow runs on a `v*` tag push or a manual `workflow_dispatch`
+# ONLY — never on a push to `main` (CLAUDE.md § CI budget). "Merged" is
+# not "released"; the tag is the release.
+#
+# Two ways to cut one:
+#
+#   A. Tag it — `git tag vX.Y.Z && git push --tags`. The normal path. The
+#      workflow uses the tag directly and goes straight to build + publish.
+#
+#   B. Dispatch it — run this workflow by hand against a ref whose
+#      `pyproject.toml` carries the new version. It reads that version,
+#      creates the matching `vX.Y.Z` tag if it does not exist (skipping
+#      idempotently if it does), then builds and publishes.
+#
+#   There is no third path: bumping `pyproject.toml` and pushing to main
+#   triggers nothing at all.
+#
+# Artifacts attached to every Release:
+#
+#   * research-framework-X.Y.Z.tar.gz       — the install bundle (recommended)
+#   * research_framework-X.Y.Z-py3-none-any.whl   — Python wheel
+#   * research_framework-X.Y.Z.tar.gz             — Python sdist
+#
+# Release notes are a concat of (a) git-log between the previous tag and
+# this one and (b) GitHub's native PR/commit summary (appended).
+#
+# Important: this workflow uses GITHUB_TOKEN to push the tag. The tag
+# push itself does NOT trigger a second run of this workflow (that's a
+# documented GITHUB_TOKEN limitation, and it's what we want — otherwise
+# we'd loop). All build + release work happens in this same run.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'   # pre-release suffixes like v0.3.0-rc1
+
+permissions:
+  contents: write   # required to create the tag + the Release
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: decide whether this push should release, and what tag to use.
+  # ---------------------------------------------------------------------------
+  detect-version:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.decide.outputs.should_release }}
+      tag: ${{ steps.decide.outputs.tag }}
+      version: ${{ steps.decide.outputs.version }}
+      needs_tag_create: ${{ steps.decide.outputs.needs_tag_create }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need full tag history for the existence check
+
+      - name: Decide
+        id: decide
+        run: |
+          set -euo pipefail
+
+          # Case B: tag push → use the tag directly, no auto-create needed.
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            TAG="${GITHUB_REF_NAME}"
+            VERSION="${TAG#v}"
+            echo "Triggered by tag push: ${TAG}"
+            {
+              echo "should_release=true"
+              echo "needs_tag_create=false"
+              echo "tag=${TAG}"
+              echo "version=${VERSION}"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Case A: push to main → read pyproject version, check if its
+          # tag already exists. Skip if it does (idempotent — re-runs are
+          # safe).
+          VERSION=$(python -c "import tomllib, pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          TAG="v${VERSION}"
+
+          if git rev-parse "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists; nothing to release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Detected new version ${VERSION}; will create ${TAG} and release."
+          {
+            echo "should_release=true"
+            echo "needs_tag_create=true"
+            echo "tag=${TAG}"
+            echo "version=${VERSION}"
+          } >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # Job 2: tag (if needed), build everything, publish the Release.
+  # ---------------------------------------------------------------------------
+  build-and-release:
+    needs: detect-version
+    if: needs.detect-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need full history for release-note generation
+
+      - name: Create and push tag (auto-tag flow only)
+        if: needs.detect-version.outputs.needs_tag_create == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ needs.detect-version.outputs.tag }}" \
+            -m "Release ${{ needs.detect-version.outputs.tag }}"
+          git push origin "${{ needs.detect-version.outputs.tag }}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build + test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]" build
+
+      - name: Verify tag matches pyproject version
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${{ needs.detect-version.outputs.version }}"
+          PYPROJECT_VERSION=$(python -c "import tomllib, pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match pyproject.toml ($PYPROJECT_VERSION). Bump pyproject and re-tag."
+            exit 1
+          fi
+
+      - name: Build wheel + sdist (python -m build)
+        run: python -m build
+
+      - name: Build install bundle (build.sh — runs the smoke gate + spec-022 quality harness)
+        # `--quality` flag runs the smoke gate first (ADR-0007 mandatory),
+        # then the spec-022 E2E quality harness across all 3 fixtures
+        # (tech-lite / source-poor / source-rich) and fails the release if
+        # any metric regresses >15% from the committed baselines. Closes the
+        # "022 harness is opt-in" gap surfaced in the 0.3.2 post-mortem —
+        # no release can be cut while quality regressed.
+        run: bash build.sh --quality
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          set -euo pipefail
+          TAG="${{ needs.detect-version.outputs.tag }}"
+          VERSION="${{ needs.detect-version.outputs.version }}"
+
+          PREV_TAG=$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..${TAG}"
+            HEADER="## Changes since ${PREV_TAG}"
+          else
+            RANGE="${TAG}"
+            HEADER="## Initial release"
+          fi
+
+          BUNDLE_NAME=$(basename "$(ls build/research-*-*.tar.gz | head -n 1)")
+          WHEEL_NAME=$(basename "$(ls dist/*.whl | head -n 1)")
+
+          {
+            echo "${HEADER}"
+            echo ""
+            git log "${RANGE}" --pretty=format:'- %s (%h)' --no-merges
+            echo ""
+            echo ""
+            echo "## Install (bundle — recommended)"
+            echo ""
+            echo "Includes \`install.sh\`, scripts, templates, settings, and example specs."
+            echo ""
+            echo '```bash'
+            echo "curl -L -o research-framework.tar.gz https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${BUNDLE_NAME}"
+            echo "tar -xzf research-framework.tar.gz"
+            echo "cd research-framework-${VERSION} && ./install.sh"
+            echo '```'
+            echo ""
+            echo "## Install (wheel only — CLI access)"
+            echo ""
+            echo '```bash'
+            echo "pip install https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${WHEEL_NAME}"
+            echo '```'
+          } > release-notes.md
+
+          echo "--- release-notes.md ---"
+          cat release-notes.md
+          echo "------------------------"
+
+      - name: Create GitHub Release with artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.detect-version.outputs.tag }}
+          name: ${{ needs.detect-version.outputs.tag }}
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+            build/research-*.tar.gz
+          body_path: release-notes.md
+          generate_release_notes: true   # appends GitHub's PR/commit auto-summary
+          draft: false
+          # Pre-release if the tag carries a PEP 440 pre-release/dev marker.
+          # Covers both hyphenated tags (e.g. v1.2.3-rc1) AND canonical PEP 440
+          # forms that pip/hatchling normalise to (e.g. v1.0.0rc1, v1.0.0a2,
+          # v1.0.0b1, v1.0.0.dev3). Final releases (v1.2.3) carry none of these.
+          prerelease: ${{ contains(needs.detect-version.outputs.tag, '-') || contains(needs.detect-version.outputs.version, 'rc') || contains(needs.detect-version.outputs.version, 'a') || contains(needs.detect-version.outputs.version, 'b') || contains(needs.detect-version.outputs.version, 'dev') }}

@@ -1,0 +1,5 @@
+# raw_data/ stays out of git: it can be large and is regenerable.
+# The vault's .gitignore also excludes it (tracked vs data_vault/ only).
+*
+!.gitignore
+!README.md

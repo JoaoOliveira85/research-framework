@@ -1,0 +1,341 @@
+# ===========================================================================
+# research-framework global settings — CURSOR-CLAUDE profile
+# ===========================================================================
+# Drop-in alternative to `settings.cursor.yaml` that routes every stage through
+# the `cursor-agent` CLI BUT pins the model selection to Anthropic's Claude
+# lineup (rather than the default Cursor/Composer/GPT mix). Use it when you
+# want cursor-agent's flat-rate billing + write containment via `--workspace`
+# (spec 052 ADR-0010) AND Claude's reasoning quality on every stage.
+#
+# This profile was authored for the v1.0.0 **reference-vault** live validation run
+# (1.0.0rc7, post-PR-#146): cursor-agent is now the framework's flagship
+# unattended runtime, and the validation campaign pairs it with Claude models
+# end-to-end to exercise the full vault pipeline on the strongest reasoning
+# tier available on a flat-rate plan.
+#
+# How to use it:
+#
+#   rv generate --spec research.spec.md --output ~/my-vault \
+#               --settings settings.cursor-claude.yaml
+#
+# The flag copies THIS file into `{vault}/settings.yaml`, so the generated
+# vault stays fully self-contained.
+#
+# Billing model (identical to settings.cursor.yaml):
+#
+#   cursor-agent is FLAT-RATE: it reports real token *counts* (usage block)
+#   but emits NO per-call dollar figure. The framework records the real tokens
+#   and derives the dollar from the spec-033 estimator, writing
+#   `cost_source: "runtime_tokens"` into each agent-call sidecar. The dollar
+#   cap (`budget.max_usd`) fires on that estimate; the token cap fires on the
+#   REAL tokens — the meaningful guardrail for a subscription-billed runtime.
+#
+# Model-alias translation vs. the Claude profile (`settings.yaml`):
+#
+#   claude profile             cursor-claude profile                tier
+#   --------------             ---------------------                ----
+#   haiku-3.5 (cheap)      →   claude-4.5-sonnet                    basic
+#   sonnet (default)       →   claude-4.6-sonnet-medium-thinking    normal
+#   opus (router upgrade)  →   claude-opus-4-8-thinking-high        flagship
+#
+# Notes on the basic tier: cursor-agent does NOT currently advertise a Haiku
+# variant, so the basic tier collapses onto `claude-4.5-sonnet` (no-thinking).
+# That is the cheapest+fastest Claude available through cursor-agent. The
+# reasoning-effort dimension is baked into the model id (`-thinking-high`,
+# `-medium-thinking`, `-low`, …), not a `-c` flag. Run `cursor-agent --list-models`
+# to inspect every Claude variant your account can reach.
+# ===========================================================================
+
+schema_version: 1
+
+# ---------------------------------------------------------------------------
+# Where generated vaults land. Same semantics as the other profiles.
+# ---------------------------------------------------------------------------
+output_dir: null
+
+# ---------------------------------------------------------------------------
+# How agents talk to models.
+# ---------------------------------------------------------------------------
+communication:
+  mode: cli                   # spawn `cursor-agent` as a subprocess
+
+# ---------------------------------------------------------------------------
+# Default executor applied to any stage that does not override it.
+#
+# `agent_call.py` always adds two flags for the cursor runtime, so you do NOT
+# put them in `args`:
+#
+#   -p --output-format json   headless / non-interactive; machine-readable.
+#                             (The cost-capture path swaps `json` →
+#                             `stream-json` automatically.)
+#   --trust                   REQUIRED headless — without it the CLI blocks on
+#                             an interactive "trust this workspace?" prompt.
+#   --workspace <vault>       AUTO-INJECTED — the cursor analogue of codex's
+#                             `--cd`. Pins the agent's writable root to the
+#                             vault so note-writer can write into a vault that
+#                             lives in a sibling directory of the orchestrator's
+#                             cwd. This is the write-confinement story that
+#                             keeps cursor CONTAINED to the vault without a
+#                             full-access mode. Pass your own `--workspace`/`-w`
+#                             in `args` only if you must override it.
+#
+# The `args` below are applied to EVERY cursor invocation (additive merge with
+# per-stage `args`):
+#
+#   --force          run the agent fully autonomously (no per-action approval
+#                    prompt) — required for unattended cycles.
+#   --approve-mcps   auto-approve MCP tool calls (GitHub / Atlassian / etc.)
+#                    so an unattended cycle doesn't stall waiting for consent.
+# ---------------------------------------------------------------------------
+default_executor:
+  type: cli
+  runtime: cursor-agent                       # expects a `cursor-agent` binary on PATH
+  model: claude-4.6-sonnet-medium-thinking    # balanced "normal"-tier default
+  args:                                       # applied to EVERY cursor call (additive)
+    - --force
+    - --approve-mcps
+  skill: null                                 # filled in per stage
+  timeout_s: 3600
+  retry: 1
+  on_fail: abort
+
+# ---------------------------------------------------------------------------
+# Pipeline-wide knobs. Runtime-agnostic — mirrors settings.cursor.yaml so the
+# claude-flavoured cursor profile reaches the same gate thresholds.
+# ---------------------------------------------------------------------------
+pipeline:
+  max_cycles: 20
+  # Run-level CUMULATIVE dollar cap. `0` / `0.0` / an absent key mean
+  # UNLIMITED, decided in the spec-061 resolver itself (amendment
+  # 2026-09-07); see settings.yaml for the full rationale.
+  budget_usd: 25.00
+  backlog_promotion_threshold: 2
+
+  note_writer_batch_size: 6
+  max_batches_per_cycle: 10
+  source_failure_thresholds:
+    required_quorum_loss: 2
+    enrichment_max_failures: 0
+  queryability_score_regression_pp: 5
+  gates:
+    sg_001_min_topics_warn_floor: 1
+    sg_002_min_categories: 5
+    sg_003_abstraction_warn_pct: 20
+    sg_003_abstraction_fail_pct: 60
+    abstraction_enabled: true           # false switches SG-003/CG-003 off
+    cg_001_min_yield_factor: 1.0
+    cg_002_min_categories_per_cycle: 3
+    cg_004_min_avg_word_count: 200
+    cg_006_min_word_count_compliance_pct: 90
+    cg_007_max_orphan_link_pct: 15
+
+# ---------------------------------------------------------------------------
+# Per-stage executor overrides. Cheap stages drop to `claude-4.5-sonnet`
+# (the basic tier; no-thinking sonnet is the smallest Claude on cursor-agent).
+# Everything else inherits the `claude-4.6-sonnet-medium-thinking` default.
+# ---------------------------------------------------------------------------
+stages:
+  # --- 1.x install / pre-flight ------------------------------------------
+  install_wizard:
+    model: claude-4.6-sonnet-medium-thinking
+    skill: install-wizard
+
+  vault_spec_author:
+    model: claude-4.6-sonnet-medium-thinking
+    skill: vault-spec
+
+  # --- 2.x pre-processing ------------------------------------------------
+  # Source-relevance is a cheap related/unrelated gate — use the basic tier.
+  source_relevance:
+    model: claude-4.5-sonnet
+    skill: source-relevance
+    timeout_s: 300
+
+  # --- 3.x scout / research / verify -------------------------------------
+  scout:
+    model: claude-4.6-sonnet-medium-thinking
+    skill: scout
+
+  topic_classifier:
+    model: claude-4.5-sonnet
+    skill: topic-classifier
+
+  dfs_prompt_gen:
+    model: claude-4.6-sonnet-medium-thinking
+    skill: dfs-prompt-gen         # router may upgrade to the flagship model
+
+  note_writer:
+    model: claude-4.6-sonnet-medium-thinking
+    skill: note-writer            # router may upgrade per-topic
+
+  note_tagger:
+    model: claude-4.5-sonnet
+    skill: note-tagger
+
+  verifier:
+    enabled: true
+    model: claude-4.6-sonnet-medium-thinking
+    skill: verifier
+    timeout_s: 600
+    on_timeout: pending
+    output_filename: "cycle-{cycle:03d}-verifier.json"
+
+  source_manager:
+    enabled: true
+    decay_after_n_cycles: 3
+    auto_promote_discovered: false
+
+  # --- 3.9 end-of-cycle topic expansion ----------------------------------
+  topic_propose:
+    enabled: false
+    model: claude-4.5-sonnet
+    skill: topic-propose
+    timeout_s: 900
+    max_proposals: 10
+    max_degree: 2
+    relation_types:
+      - variant
+      - prerequisite
+      - contrast
+      - sibling
+      - downstream_effect
+      - user_question
+    on_missing_out_of_scope: skip
+    auto_promote: true
+
+  # --- 4.x post-cycle ----------------------------------------------------
+  cycle_report:
+    model: claude-4.6-sonnet-medium-thinking
+    skill: cycle-report
+
+  final_report:
+    model: claude-4.6-sonnet-medium-thinking
+    skill: final-report
+
+  # --- 5.x ask / write ---------------------------------------------------
+  ask_answer:
+    model: claude-4.6-sonnet-medium-thinking
+    skill: ask-answer
+
+  doc_planner:
+    model: claude-4.6-sonnet-medium-thinking
+    skill: doc-planner
+
+  doc_writer:
+    model: claude-4.6-sonnet-medium-thinking
+    skill: doc-writer             # router may upgrade to the flagship model
+
+  # --- Utility -----------------------------------------------------------
+  model_router:
+    model: claude-4.5-sonnet
+    skill: model-router
+
+  default_update_spec:
+    model: claude-4.6-sonnet-medium-thinking
+    skill: default-update-spec
+
+# ---------------------------------------------------------------------------
+# Model router — upgrades specific stages to the strongest Claude when the
+# workload warrants it. "Upgrade" on this profile means
+# claude-4.6-sonnet-medium-thinking → claude-opus-4-8-thinking-high.
+# ---------------------------------------------------------------------------
+model_router:
+  enabled: true
+  eligible_stages:
+    - dfs_prompt_gen
+    - note_writer
+    - doc_writer
+    - ask_answer
+  signals:
+    - input_tokens
+    - source_count
+    - cross_link_density
+    - citation_density
+    - topic_class
+    - complexity_flag
+  upgrade_rules:
+    upgrade_model: claude-opus-4-8-thinking-high
+    opus_if_tokens_over: 40000
+    opus_if_sources_over: 10
+
+# ---------------------------------------------------------------------------
+# Research loop limits. Runtime-agnostic (identical to the other profiles).
+# ---------------------------------------------------------------------------
+cycles:
+  max_consecutive_verifier_rejections:
+    initial: 6
+    update: 3
+
+# ---------------------------------------------------------------------------
+# Research mode defaults. Runtime-agnostic.
+# ---------------------------------------------------------------------------
+research_modes:
+  bootstrap:
+    exit_condition: coverage_met
+    scout_bias: new_topics
+    note_action: create
+    wind_down:
+      budget_pct_trigger: 0.8
+      zero_scout_cycles_trigger: 2
+      min_cycles_before_wind_down: 2
+
+  refresh:
+    exit_condition: no_new_deltas
+    scout_bias: changes_since_snapshot
+    note_action: merge
+    new_topic_policy: backlog
+
+  expand:
+    exit_condition: coverage_met_or_no_deltas
+    scout_bias: both
+    note_action: create_or_merge
+    budget_split:
+      coverage_pct: 0.6
+      refresh_pct: 0.4
+    wind_down:
+      budget_pct_trigger: 0.8
+      zero_scout_cycles_trigger: 2
+      min_cycles_before_wind_down: 2
+    auto_tail_refresh: true
+
+# ---------------------------------------------------------------------------
+# Exit invariant. Runtime-agnostic.
+# ---------------------------------------------------------------------------
+exit_invariant:
+  block_on_stubs: true
+  try_resolve_before_abort: true
+
+# ---------------------------------------------------------------------------
+# Budget guard rails. cursor-agent is flat-rate, so the dollar cap bounds an
+# ESTIMATE (cost_source: runtime_tokens) rather than a billed amount.
+# ---------------------------------------------------------------------------
+# The block the settings loader actually parses (spec 033). The older
+# top-level `budget:` block was never read by any code path — it is gone
+# (issue #230). Absent limits are SKIPPED by budget_guard, so a profile that
+# declared none ran unattended with no ceiling at all. These are runaway
+# ceilings, not targets; see settings.yaml for the full rationale.
+limits:
+  # cursor-agent is flat-rate: the dollar cap bounds the ESTIMATE
+  # (cost_source: runtime_tokens), and the token tally is the real guardrail.
+  cycle_budget_usd: 5.00
+  cycle_budget_warn_at: 0.8
+  cycle_wallclock_budget_minutes: 90
+  codex_token_budget: 1500000
+
+# ---------------------------------------------------------------------------
+# Vault commands. Runtime-agnostic.
+# ---------------------------------------------------------------------------
+commands:
+  ask: ask_answer
+  research: scout
+  write: doc_writer
+
+# ---------------------------------------------------------------------------
+# Citation / verifier policy (Principle IX). Runtime-agnostic.
+# ---------------------------------------------------------------------------
+citation:
+  tier1_required: true
+  tier2_required: true
+  render_sections:
+    tier1_heading: "Vault Sources"
+    tier2_heading: "Original Sources"

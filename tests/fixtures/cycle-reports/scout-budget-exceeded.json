@@ -1,0 +1,23 @@
+{
+  "cycle": 2,
+  "phase": "scout",
+  "timestamp": "2026-04-16T15:00:00Z",
+  "prompt": "BFS scout — budget exceeded",
+  "sources_consulted": {
+    "internal_wiki": {"searched": true, "results_count": 20, "pages_read": 10},
+    "external_web": {"searched": true, "results_count": 15, "pages_read": 8}
+  },
+  "topics_found": {
+    "new": ["Topic X"],
+    "existing": [],
+    "total": 1
+  },
+  "proposed_filenames": ["Topic X.md"],
+  "notes_created": [],
+  "notes_updated": [],
+  "new_wikilinks_discovered": [],
+  "cost_estimate_usd": 50.0,
+  "cumulative_cost_usd": 300.0,
+  "next_action": "terminate",
+  "termination_reason": "budget_cap"
+}

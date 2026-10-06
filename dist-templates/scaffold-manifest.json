@@ -1,0 +1,308 @@
+{
+  "framework_version": 1,
+  "generator_commit": "a09b34d1023036829c44e175e85dfb4ca5920e19",
+  "generated_at": "2026-05-16T13:24:45.822023+00:00",
+  "entries": [
+    {
+      "path": ".claude/.tmpl-versions.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "e92a087718e1f2eeb366ec02ab1da131fdd239627ef7fb749da5fe6e065ba852",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": ".claude/commands/ask.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "12ed7ef3dbfa8669b87cd29a067cd6ec1798215f4dfef65c642cc1f68073ce5d",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": ".claude/commands/extract.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "69ccc5ccfb957d6e56f6bcf7945448af6c57573723b6a0008012815ea34251eb",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": ".claude/commands/pipeline.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "870419f74e591f9549b77878d20f27810af986e00e0d1e9cae350f0be6d5dcb4",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": ".claude/commands/report.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "2d0fbc8f15fad2b4bcf7a1f1519fbc90ab3fa5059549d3a52efb400b243f4c55",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": ".claude/commands/research.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "0cca6df2d95ec262f7dd66cfbff47a0721e765175838f4830981ee3a686509c2",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": ".claude/commands/scout.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "a2552ef32159f0663e091bc7fe7dac365f049439e20289deee7028732c5d1c6b",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": ".claude/commands/verify.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "ae63a1f1b7b5569297e579cdd60e06ee4d56281945d68aec4600ddfaf9bdd257",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": ".claude/commands/write.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "23b57beadc253505d37e908b4256b85deabc4ab7106212154685f4917e5087da",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": ".claude/settings.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "2fc023cf8ec1698efb0d78661b4e9b6fe4cd6c3e7d0aa4e065a0fc38ad606250",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": ".cursor/.tmpl-versions.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "5cac15d0712defb8f81406edf9d35e4b81f9555d26514a74ee6bcb5046866b98",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": ".cursor/cli.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "33181c8eebc98b56909728fd689742780daf9fdad63101fd60bb6f15b6f55c77",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": ".gitignore",
+      "kind": "other",
+      "template_version": 1,
+      "rendered_sha256": "e7842b0d044b09e436ba98aa9847906c4b1b1d26f2581b1d40be0ea226ff17cd",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": ".tmpl-versions.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "100e0630f2a2fe36bfe95d607c017d6d51821f2ac89adb3fe422486d1dd3db43",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "AGENTS.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "0552076f9449e6d9a596d103595a1a520dabd7e591d43a3329041fb097c4e207",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "CLAUDE.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "dc63a06b7a93517398d1c544aa46376f4540ba0c7af25ceabe759a61cbe461c1",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "README.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "c642d2871a8c196234be4cf30cf62556ef1a8e3ca3ba222676d722748085e995",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_concepts.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "9cf6e414129a4d209befc05cffbb46cd8476e654ec847ed35da753567bf7225d",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_graph.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "6dd49e365f1f3c58a94b7a1580e11ff03e25dbd374886421f0b13a9af7bd2476",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_index.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "5d721ccc47a0fda4c82efe08b74bfde367a3c4afe606f604294f1aae72ba6ac1",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_pipeline/.tmpl-versions.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "edd3a7cc374cc1bb6005f288914c181c736888764eae9cfc26e10683d50ccbc4",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_pipeline/budget-log.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "a06d387991a25d922ef6673f5e2836876eed2e4587dc109d3ffe5e18bd7a6796",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_pipeline/coverage-targets.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "812cd2df0b747920145f3dd3b4ea2ec1f4192fbd02614967e463847561cd69e0",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_pipeline/prompts/dfs-prompt.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "e8891762d1747dc187a0fc52c4f62d70acc85f46459cb58f4d110360738b0d7f",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_pipeline/prompts/scout-prompt.md",
+      "kind": "markdown",
+      "template_version": 2,
+      "rendered_sha256": "1307ca7eb936e4159846306243addfdcd4f4d00cda0611826dd695ea98365769",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_pipeline/research-backlog.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "24363007c28eea212c3301a31f920f9653e23b2ac80c5032b14c17c2fd86663e",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_pipeline/sources.db",
+      "kind": "other",
+      "template_version": 1,
+      "rendered_sha256": "e10a4e14ef9c13e3254b8cad43a4a5f7f2dcb0a72cb36cea582e57a4ce067710",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_pipeline/spec-parse.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "a026ab3b3eccd6fe87b24bea071b113b171f816b6fd451bc24b9908b8a0706c5",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_pipeline/systemd/.tmpl-versions.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "f8a20ccdbf9dea7c1d11f03c3e1a37d55531a57bfb6d0f38073605027999c5e7",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_pipeline/systemd/vault-research.service",
+      "kind": "other",
+      "template_version": 1,
+      "rendered_sha256": "848e4622ca2ca8a6106989f67d726a7ed01cb9e57a002c3058d037d92069dd6c",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_templates/CHANGELOG.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "288f9baf6cdde6e63a3b0431d178b2c94490b9ff9124011718d1a208e9655e96",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_templates/concept.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "100eb51f006442cdafa5fd088e459d21057777f75cd606c825c3334665f29d77",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "data_vault/_concepts.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "4649bfe235f101680aec7636c7e924308b86e4d336cd46f5481d023934bc7cb1",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "data_vault/_graph.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "a911ada347e7b5d66b46c320194cdfced5c197355181c5faa37a826cced8a27e",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "data_vault/_index.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "56b332edc6e8f5d40ab65340b4b933315a8ae64ae0ecd53b60eefc89fec796fc",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "data_vault/_templates/concept.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "e2f66bb169e564a6bbed2c0cbd1682291295cfc5b1cca893106856f2d503c9f2",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "raw_data/.gitignore",
+      "kind": "other",
+      "template_version": 1,
+      "rendered_sha256": "ccb79bbf4e3e1e6f3b00c4921e160bec58738cb732c53656cf2cf5bb5c806705",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "raw_data/.tmpl-versions.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "c32bd42e1bbf8031fb8e173ccd94d6d0c7418239ae3471c28810a80599921e17",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "raw_data/README.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "392fed25445a6cb47b9e3de8ebedb1d341916144fb2cc98b2314e6a810d2a997",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "settings.yaml",
+      "kind": "yaml",
+      "template_version": 1,
+      "rendered_sha256": "654c257b8aa6012b48a5eda55d70cbf7eebe80bb672a99bbccc3cacdb9dbd166",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "update_vault.py",
+      "kind": "python",
+      "template_version": 1,
+      "rendered_sha256": "97757a2c3477604407eaa096c9e5b12438bf3ce3ce4fbee154aac01a9a714c35",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "vault",
+      "kind": "shell",
+      "template_version": 1,
+      "rendered_sha256": "b1dfa7aede549acaf574d34f08990d8bc1d828b260899d8fe475de030d34137d",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "vault-config.yaml",
+      "kind": "yaml",
+      "template_version": 1,
+      "rendered_sha256": "7e02d10b560b79034d4d15b95aa42ff41159e0c22f67d292eca04cc27b762a9f",
+      "is_user_owned_after_first_write": true
+    }
+  ]
+}

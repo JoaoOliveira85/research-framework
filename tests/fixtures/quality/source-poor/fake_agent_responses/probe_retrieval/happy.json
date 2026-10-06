@@ -1,0 +1,1 @@
+[{"query": "What is the primary risk?", "answer": "Synthetic probe answer one.", "sources": ["https://synthetic.test/probe/risk-1", "https://synthetic.test/probe/risk-2"]}, {"query": "What changed since last cycle?", "answer": "Synthetic probe answer two.", "sources": ["https://synthetic.test/probe/delta-1"]}]

@@ -1,0 +1,48 @@
+{
+  "schema_version": "2.0",
+  "cycle": 1,
+  "phase": "scout",
+  "timestamp": "2026-04-17T14:30:00Z",
+  "dimensions_covered": ["technical", "organizational", "domain", "market", "temporal"],
+  "topics_from_code": [
+    {"id": "CT-1-001", "topic_type": "service", "source_file": "acme-corp/oehk-service/README.md", "source_snippet": "lines 1-18", "proposed_filename": "OEHK (Order Engine Housekeeper).md"},
+    {"id": "CT-1-002", "topic_type": "service", "source_file": "acme-corp/oms-service/README.md", "source_snippet": "lines 1-12", "proposed_filename": "OMS (Order Management Service).md"},
+    {"id": "CT-1-003", "topic_type": "service", "source_file": "acme-corp/erp-service/README.md", "source_snippet": "lines 1-20", "proposed_filename": "ERP (Event Replay Processor).md"},
+    {"id": "CT-1-004", "topic_type": "decision", "source_file": "acme-corp/oehk-service/docs/adr/0001-retry-policy.md", "source_snippet": "ADR body", "proposed_filename": "ADR 0001 - OEHK Retry Policy.md"},
+    {"id": "CT-1-005", "topic_type": "concept", "source_file": "acme-corp/oehk-service/src/main/java/com/acme/oehk/domain/OrderGroup.java", "source_snippet": "class OrderGroup"},
+    {"id": "CT-1-006", "topic_type": "concept", "source_file": "acme-corp/oms-service/src/main/java/com/acme/oms/domain/RiskProfile.java", "source_snippet": "class RiskProfile"},
+    {"id": "CT-1-007", "topic_type": "flow", "source_file": "acme-corp/oehk-service/src/main/resources/application.yml", "source_snippet": "kafka topic: order.housekeeper.trigger.v1", "proposed_filename": "Order Housekeeper Trigger Flow.md"},
+    {"id": "CT-1-008", "topic_type": "config", "source_file": "acme-corp/oehk-service/src/main/resources/application.yml", "source_snippet": "retries: 3"},
+    {"id": "CT-1-009", "topic_type": "service", "source_file": "acme-corp/wms-service/README.md", "source_snippet": "lines 1-10", "proposed_filename": "WMS (Warehouse Management Service).md"},
+    {"id": "CT-1-010", "topic_type": "service", "source_file": "acme-corp/oebh-service/README.md", "source_snippet": "lines 1-10", "proposed_filename": "OEBH (Order Engine Batch Handler).md"},
+    {"id": "CT-1-011", "topic_type": "service", "source_file": "acme-corp/oecdh-service/README.md", "source_snippet": "lines 1-10", "proposed_filename": "OECDH (Order Engine Customer Data Handler).md"},
+    {"id": "CT-1-012", "topic_type": "service", "source_file": "acme-corp/pim-service/README.md", "source_snippet": "lines 1-10", "proposed_filename": "PIM (Product Information Manager).md"}
+  ],
+  "intent_from_confluence": [
+    {"id": "IT-1-001", "parent_code_topic_id": "CT-1-001", "source_url": "https://example.atlassian.net/wiki/spaces/DOCS/pages/111/OEHK", "intent_summary": "Housekeeping cleanup on stale order records", "intent_type": "description"},
+    {"id": "IT-1-002", "parent_code_topic_id": "CT-1-004", "source_url": "https://example.atlassian.net/wiki/spaces/DOCS/pages/222/Retry", "intent_summary": "Retries should escalate with backoff to avoid thundering herd", "intent_type": "decision"},
+    {"id": "IT-1-003", "parent_code_topic_id": "CT-1-005", "source_url": "https://example.atlassian.net/wiki/spaces/DOCS/pages/333/OrderGroup", "intent_summary": "Grouping for shared limits across a customer segment", "intent_type": "description"},
+    {"id": "IT-1-004", "parent_code_topic_id": "CT-1-003", "source_url": "https://example.atlassian.net/wiki/spaces/DOCS/pages/444/ERP", "intent_summary": "Replays events for downstream consumers", "intent_type": "description"}
+  ],
+  "proposed_filenames": [
+    "OEHK (Order Engine Housekeeper).md",
+    "OMS (Order Management Service).md",
+    "ERP (Event Replay Processor).md",
+    "ADR 0001 - OEHK Retry Policy.md",
+    "Order Housekeeper Trigger Flow.md",
+    "WMS (Warehouse Management Service).md",
+    "OEBH (Order Engine Batch Handler).md",
+    "OECDH (Order Engine Customer Data Handler).md",
+    "PIM (Product Information Manager).md"
+  ],
+  "sources_consulted": ["GitHub repos", "Confluence"],
+  "access_methods_used": {
+    "acme-corp/oehk-service": "local",
+    "acme-corp/oms-service": "local",
+    "acme-corp/erp-service": "local"
+  },
+  "termination_condition": null,
+  "notes_created": [],
+  "unresolved_wikilinks": [],
+  "budget_consumed_usd": 14.20
+}

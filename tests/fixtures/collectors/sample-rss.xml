@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Test Blog</title>
+    <link>https://testblog.example.com</link>
+    <description>A test blog for unit tests</description>
+    <item>
+      <title>First Post</title>
+      <link>https://testblog.example.com/first-post</link>
+      <guid>https://testblog.example.com/first-post</guid>
+      <pubDate>Mon, 05 May 2026 10:00:00 +0000</pubDate>
+      <dc:creator>Alice Author</dc:creator>
+      <description>Summary of the first post.</description>
+      <content:encoded><![CDATA[<p>This is the full content of the first post. It is long enough to pass the 500-char threshold so the collector uses it directly without fetching the article URL. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>]]></content:encoded>
+    </item>
+    <item>
+      <title>Second Post</title>
+      <link>https://testblog.example.com/second-post</link>
+      <guid>https://testblog.example.com/second-post</guid>
+      <pubDate>Tue, 06 May 2026 11:00:00 +0000</pubDate>
+      <dc:creator>Bob Writer</dc:creator>
+      <description>Summary of the second post.</description>
+      <content:encoded><![CDATA[<p>Full content of the second post. Also long enough to exceed the 500 character limit so we avoid making article fetch requests during tests. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>]]></content:encoded>
+    </item>
+    <item>
+      <title>Third Post</title>
+      <link>https://testblog.example.com/third-post</link>
+      <guid>https://testblog.example.com/third-post</guid>
+      <pubDate>Wed, 07 May 2026 12:00:00 +0000</pubDate>
+      <description>Summary only — no content:encoded.</description>
+    </item>
+  </channel>
+</rss>

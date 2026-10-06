@@ -1,0 +1,46 @@
+{
+  "last_updated": "2026-05-21T22:47:43Z",
+  "cycle_number": 0,
+  "categories": [
+    {
+      "name": "services",
+      "note_type": "service",
+      "target_count": 4,
+      "met_count": 0,
+      "required": true,
+      "display_name": ""
+    },
+    {
+      "name": "flows",
+      "note_type": "flow",
+      "target_count": 3,
+      "met_count": 0,
+      "required": true,
+      "display_name": ""
+    },
+    {
+      "name": "concepts",
+      "note_type": "concept",
+      "target_count": 3,
+      "met_count": 0,
+      "required": true,
+      "display_name": ""
+    },
+    {
+      "name": "decisions",
+      "note_type": "decision",
+      "target_count": 2,
+      "met_count": 0,
+      "required": true,
+      "display_name": ""
+    },
+    {
+      "name": "integrations",
+      "note_type": "service",
+      "target_count": 2,
+      "met_count": 0,
+      "required": true,
+      "display_name": ""
+    }
+  ]
+}

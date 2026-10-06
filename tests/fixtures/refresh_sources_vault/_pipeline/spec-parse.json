@@ -1,0 +1,101 @@
+{
+  "name": "fake-agent-vault",
+  "location": "/private/var/folders/53/0pw3ylss08z97x1zjxxv1r6w0000gp/T/tmp_ikjm7xp/vault",
+  "owner": "tests",
+  "scope": {
+    "domain": "test-domain",
+    "organization": "test-org",
+    "boundaries": [],
+    "out_of_scope": [
+      "crypto"
+    ],
+    "contextual_questions": [],
+    "source_of_truth_rules": []
+  },
+  "note_types": [
+    {
+      "name": "concept",
+      "description": "A synthetic concept note.",
+      "folder": "01 - Concepts",
+      "required_sections": [],
+      "contextual_questions": [],
+      "min_word_count": 30,
+      "source_policy": "",
+      "template_version": "1.0.0"
+    }
+  ],
+  "data_sources": [
+    {
+      "name": "synthetic",
+      "type": "external",
+      "description": "Synthetic source for tests.",
+      "required": true,
+      "access_method": "",
+      "priority": 2,
+      "role": "behaviour",
+      "repos": [],
+      "phases": []
+    }
+  ],
+  "search_dimensions": [
+    "technical"
+  ],
+  "coverage_targets": {
+    "last_updated": "",
+    "cycle_number": 0,
+    "categories": [
+      {
+        "name": "cat_a",
+        "note_type": "concept",
+        "target_count": 5,
+        "met_count": 0,
+        "required": true,
+        "expected_filenames": [],
+        "display_name": "",
+        "priority": 90
+      },
+      {
+        "name": "cat_b",
+        "note_type": "concept",
+        "target_count": 5,
+        "met_count": 0,
+        "required": true,
+        "expected_filenames": [],
+        "display_name": "",
+        "priority": 85
+      },
+      {
+        "name": "cat_c",
+        "note_type": "concept",
+        "target_count": 5,
+        "met_count": 0,
+        "required": true,
+        "expected_filenames": [],
+        "display_name": "",
+        "priority": 80
+      }
+    ]
+  },
+  "budget": {
+    "max_usd": 10.0,
+    "max_cycles": 5,
+    "warn_at_pct": 0.8
+  },
+  "max_cycles": 5,
+  "naming_convention": "full_name",
+  "jira_project": null,
+  "access_modes": [],
+  "settings": {
+    "default_executor": null,
+    "stages": {},
+    "commands": {
+      "ask": "ask",
+      "research": "research",
+      "write": "write"
+    }
+  },
+  "code_source_url_patterns": [],
+  "research_mode": "bootstrap",
+  "vault_corpus_dir": "data_vault",
+  "processors": {}
+}

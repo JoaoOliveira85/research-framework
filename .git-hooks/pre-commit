@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Pre-commit guard battery (issue #278).
+#
+# .git/hooks/ is not tracked, so a hook placed there is invisible to git and
+# every other contributor — the exact "invoked only by a human checklist"
+# shape issue #278 named. This file lives in a TRACKED directory instead;
+# scripts/install-git-hooks.sh points git at it with `git config
+# core.hooksPath .git-hooks`, one command, run once per clone.
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${ROOT_DIR}"
+
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+
+echo "[pre-commit] running guard battery (scripts/guards/run_all.py)..."
+"${PYTHON_BIN}" scripts/guards/run_all.py

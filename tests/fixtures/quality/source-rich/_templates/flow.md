@@ -1,0 +1,37 @@
+---
+type: flow
+template_version: "1.0.0"
+source_urls: []
+coverage_category: ""
+---
+
+# {{ title }}
+
+## Overview
+
+<!-- Contextual question guidance:
+-->
+
+## Trigger
+
+<!-- Contextual question guidance:
+-->
+
+## Steps
+
+<!-- Contextual question guidance:
+-->
+
+## Failure Modes
+
+<!-- Contextual question guidance:
+-->
+
+## Related
+
+<!-- Contextual question guidance:
+-->
+
+---
+
+<sub>Rendered from template <code>flow.md</code> v1.0.0. Notes created from this template MUST keep <code>template_version</code> in sync so <code>scripts/vault_health.py --check-template-version</code> can detect upgrades.</sub>

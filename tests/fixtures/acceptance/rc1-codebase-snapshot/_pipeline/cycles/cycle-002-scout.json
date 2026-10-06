@@ -1,0 +1,17 @@
+{
+  "schema_version": "2.0",
+  "cycle": 2,
+  "phase": "scout",
+  "sources_consulted": [
+    {
+      "name": "GitHub Pull Requests",
+      "searched": true,
+      "reason": ""
+    },
+    {
+      "name": "Product Confluence Space",
+      "searched": true,
+      "reason": ""
+    }
+  ]
+}

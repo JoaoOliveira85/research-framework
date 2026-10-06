@@ -1,0 +1,25 @@
+note_types:
+  - name: concept
+    description: Domain concept
+    folder: "03 - Concepts"
+    authoritative_role: domain
+  - name: service
+    description: Service note
+    folder: "01 - Services"
+    authoritative_role: behaviour
+data_sources:
+  - name: Hacker News
+    type: external
+    role: domain
+    priority: 2
+    default_credibility: commentary
+  - name: arXiv
+    type: external
+    role: domain
+    priority: 2
+    default_credibility: corroborated
+  - name: Official Docs
+    type: external
+    role: behaviour
+    priority: 1
+    default_credibility: primary

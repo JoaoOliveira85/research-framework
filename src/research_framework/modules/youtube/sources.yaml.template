@@ -1,0 +1,4 @@
+youtube_videos:
+  - url: https://www.youtube.com/watch?v=REPLACE_VIDEO_ID
+    label: Example video — replace with a real one you care about
+    value_tier: routine

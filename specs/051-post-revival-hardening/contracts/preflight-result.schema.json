@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://research-framework.dev/contracts/051/preflight-result",
+  "title": "PreflightResult",
+  "description": "Cross-process payload emitted by a module's preflight subprocess (stdout JSON) and parsed by the bridge. See specs/051-post-revival-hardening/contracts/preflight.contract.md.",
+  "type": "object",
+  "required": ["schema_version", "verdict", "corrections", "messages"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Cross-boundary payload version (spec 036 discipline)."
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["success", "warning", "fatal_fail"],
+      "description": "success → run module normally; warning → run + record corrections; fatal_fail → skip THIS module only (Principle VIII isolation). Subprocess crash/timeout/garbage-stdout maps to fatal_fail (fail-closed)."
+    },
+    "corrections": {
+      "type": "array",
+      "description": "Suggested fixes for malformed sources.yaml entries. May be empty.",
+      "items": {
+        "type": "object",
+        "required": ["original", "suggested", "reason", "applied"],
+        "additionalProperties": false,
+        "properties": {
+          "original": {
+            "type": "string",
+            "description": "Malformed value exactly as written in sources.yaml."
+          },
+          "suggested": {
+            "type": "string",
+            "description": "Corrected value (e.g. rss.arxiv.org/rss/cs.AI)."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Why the original is wrong."
+          },
+          "applied": {
+            "type": "boolean",
+            "description": "true = correction used for this cycle's extraction; false = suggestion only."
+          }
+        }
+      }
+    },
+    "messages": {
+      "type": "array",
+      "description": "Human-readable notes surfaced in the cycle report. May be empty.",
+      "items": { "type": "string" }
+    }
+  }
+}

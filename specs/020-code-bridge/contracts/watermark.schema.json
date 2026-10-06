@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://research-framework.dev/contracts/020/watermark",
+  "title": "Watermark map",
+  "description": "Per-module watermark file. Maps source_id strings to watermark entries.",
+  "type": "object",
+  "additionalProperties": {
+    "$ref": "#/$defs/WatermarkEntry"
+  },
+  "$defs": {
+    "WatermarkEntry": {
+      "type": "object",
+      "required": ["source_version", "bridge_version", "extracted_at", "verdict"],
+      "additionalProperties": false,
+      "properties": {
+        "source_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Last-extracted version. Cache-hit when this matches the current version."
+        },
+        "bridge_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+"
+        },
+        "extracted_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "verdict": {
+          "type": "string",
+          "enum": ["ok", "empty", "exhausted", "error"]
+        },
+        "consensus": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["n", "majority", "agreed_at"],
+              "additionalProperties": false,
+              "properties": {
+                "n": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Number of extractors spawned. Must be odd per D2."
+                },
+                "majority": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Number of extractors agreeing on final_verdict."
+                },
+                "agreed_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          ]
+        },
+        "consecutive_empty_cycles": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per-source counter for exhaustion detection (used by US4 future logic)."
+        },
+        "recent_cycle_verdicts": {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 3,
+          "description": "Rolling window of the last 3 per-cycle verdicts (cache.py::append_cycle_verdict), oldest-to-newest. Added after this schema shipped (#295) — pipeline.source_bridge.cache.save_watermarks writes it via dataclasses.asdict on every entry, so it is present on every real watermarks.json."
+        }
+      }
+    }
+  }
+}

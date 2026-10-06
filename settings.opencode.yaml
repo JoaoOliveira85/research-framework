@@ -1,0 +1,356 @@
+# ===========================================================================
+# research-framework global settings — OPENCODE profile (spec 064)
+# ===========================================================================
+# Drop-in alternative to `settings.yaml` / `settings.codex.yaml` /
+# `settings.cursor.yaml` that routes every stage through the `opencode` CLI —
+# a PROVIDER-AGNOSTIC agentic runtime. The model provider (Ollama / OpenAI /
+# Anthropic / Google / OpenRouter / …) is a *configuration* choice expressed as
+# `--model provider/model`; one executor reaches every provider opencode knows.
+#
+# How to use it:
+#
+#   rv generate --spec research.spec.md --output ~/my-vault \
+#               --settings settings.opencode.yaml
+#
+# The flag copies THIS file into `{vault}/settings.yaml`, so the generated
+# vault stays fully self-contained.
+#
+# Why opencode (vs the spec-047 Ollama HTTP path): opencode runs a real agent
+# loop with filesystem tools, so it WRITES the stage output files scout /
+# note-writer need — the thing a raw HTTP call could not do. Local Ollama runs
+# are genuinely $0; metered providers report a real per-call dollar from
+# opencode's models.dev pricing catalog.
+#
+# Provider / credentials:
+#
+#   opencode owns its provider + credential config (`~/.config/opencode/
+#   opencode.json` + `opencode auth login`). The framework does NOT re-implement
+#   it — point `--model` at any provider/model opencode is configured for. A
+#   local Ollama box is the reference local provider (configure it as an
+#   openai-compatible provider in opencode.json with your box's baseURL).
+#
+# Billing model (per-call, by provider — NOT a static class):
+#
+#   opencode emits NDJSON `step_finish` events carrying REAL `tokens` + a real
+#   `cost`. LOCAL providers (ollama/local/…) ⇒ measured `cost: 0.0` + real
+#   tokens ⇒ `cost_source: "runtime"` (the dollar cap can never fire; the
+#   WALL-CLOCK cap is the operative guardrail). METERED providers ⇒ the real
+#   pricing-catalog dollar ⇒ `cost_source: "runtime"`; if a provider omits the
+#   dollar, the spec-033 estimator fills it ⇒ `cost_source: "runtime_tokens"`.
+#   You are never billed blind, and a local run is never a silent $0.
+#
+# Containment:
+#
+#   `agent_call.py` always injects `--dir <vault>` (the opencode analogue of
+#   codex `--cd` / cursor `--workspace`) so the agent's writes stay confined to
+#   the vault. The `--dangerously-skip-permissions` flag in `args` is the
+#   UNATTENDED *approval* posture (auto-approve tool calls so a headless cycle
+#   doesn't stall) — it is orthogonal to containment, which `--dir` enforces.
+#   Pass your own `--dir`/`-d` in `args` only to override (yours wins; no
+#   double flag).
+#
+# Model-tier translation vs. the Claude profile (local-Ollama reference set):
+#
+#   claude profile       opencode profile                tier
+#   --------------       ----------------                ----
+#   haiku (cheap)    →   ollama/qwen3-coder:30b-64k      basic
+#   sonnet (default) →   ollama/qwen3.6:27b              normal
+#   opus (upgrade)   →   ollama/qwen3.6:35b              flagship
+#
+#   opencode bakes reasoning effort into `--variant high|max|minimal` (the
+#   cursor `-high`-suffix analogue) rather than a `-c` arg. Swap any value for
+#   a hosted `provider/model` (e.g. `openai/gpt-5.4`, `anthropic/claude-opus-5`)
+#   to run the same vault on a metered provider — no framework change.
+#   Run `opencode models` to see everything your account can reach.
+# ===========================================================================
+
+schema_version: 1
+
+# ---------------------------------------------------------------------------
+# Where generated vaults land. Same semantics as the other profiles.
+# ---------------------------------------------------------------------------
+output_dir: null
+
+# ---------------------------------------------------------------------------
+# How agents talk to models.
+# ---------------------------------------------------------------------------
+communication:
+  mode: cli                   # spawn `opencode run` as a subprocess
+
+# Providers treated as local ($0, real tokens, cost_source: runtime). Consumed by
+# the opencode cost classifier + preflight (agent_call.py::_resolve_local_providers
+# reads this key; default is {ollama, local, lmstudio, llamacpp}). Override per
+# vault to declare additional local prefixes (e.g. an OpenAI-compatible endpoint
+# pointed at your own Ollama box). An explicit `[]` disables local classification.
+# For these the dollar cap never fires — set a wall-clock budget for unattended runs.
+local_providers:
+  - ollama
+  - local
+
+# ---------------------------------------------------------------------------
+# Default executor applied to any stage that does not override it.
+#
+# `agent_call.py` always adds the headless + containment flags, so you do NOT
+# put them in `args`:
+#
+#   run --format json   headless / non-interactive; NDJSON event stream the
+#                       wrapper parses for real tokens + cost (`step_finish`).
+#   --dir <vault>       AUTO-INJECTED — pins the agent's writable root to the
+#                       vault (codex `--cd` / cursor `--workspace` analogue) so
+#                       note-writer can write into a vault that lives in a
+#                       sibling directory of the orchestrator's cwd. This is the
+#                       write-confinement story; do NOT reach for a full-disk
+#                       mode. Pass your own `--dir` in `args` only to override.
+#
+# The `args` below are applied to EVERY opencode invocation (additive merge with
+# per-stage `args`):
+#
+#   --dangerously-skip-permissions   auto-approve tool calls (no per-action
+#                                    prompt) — required for unattended cycles.
+#                                    Contained by `--dir`; this is approval, not
+#                                    filesystem scope.
+# ---------------------------------------------------------------------------
+default_executor:
+  type: cli
+  runtime: opencode           # expects an `opencode` binary on PATH
+  model: ollama/qwen3.6:27b   # balanced "normal"-tier default (research/general)
+  args:                       # applied to EVERY opencode call (additive)
+    - --dangerously-skip-permissions
+  skill: null                 # filled in per stage
+  timeout_s: 3600
+  retry: 1
+  on_fail: abort
+
+# ---------------------------------------------------------------------------
+# Pipeline-wide knobs. Runtime-agnostic — mirrors settings.yaml / the codex /
+# cursor profiles so the opencode profile reaches the same defaults.
+# ---------------------------------------------------------------------------
+pipeline:
+  max_cycles: 20
+  # Run-level CUMULATIVE dollar cap. `0` / `0.0` / an absent key mean
+  # UNLIMITED, decided in the spec-061 resolver itself (amendment
+  # 2026-09-07); see settings.yaml for the full rationale.
+  budget_usd: 25.00
+  backlog_promotion_threshold: 2
+
+  note_writer_batch_size: 6
+  max_batches_per_cycle: 10
+  source_failure_thresholds:
+    required_quorum_loss: 2
+    enrichment_max_failures: 0
+  queryability_score_regression_pp: 5
+  gates:
+    sg_001_min_topics_warn_floor: 1
+    sg_002_min_categories: 5
+    sg_003_abstraction_warn_pct: 20
+    sg_003_abstraction_fail_pct: 60
+    abstraction_enabled: true           # false switches SG-003/CG-003 off
+    cg_001_min_yield_factor: 1.0
+    cg_002_min_categories_per_cycle: 3
+    cg_004_min_avg_word_count: 200
+    cg_006_min_word_count_compliance_pct: 90
+    cg_007_max_orphan_link_pct: 15
+
+# ---------------------------------------------------------------------------
+# Per-stage executor overrides. Cheap stages drop to the basic-tier model;
+# everything else inherits the `ollama/qwen3.6:27b` default.
+# ---------------------------------------------------------------------------
+stages:
+  install_wizard:
+    model: ollama/qwen3.6:27b
+    skill: install-wizard
+
+  vault_spec_author:
+    model: ollama/qwen3.6:27b
+    skill: vault-spec
+
+  source_relevance:
+    model: ollama/qwen3-coder:30b-64k
+    skill: source-relevance
+    timeout_s: 300
+
+  scout:
+    model: ollama/qwen3.6:27b
+    skill: scout
+
+  topic_classifier:
+    model: ollama/qwen3-coder:30b-64k
+    skill: topic-classifier
+
+  dfs_prompt_gen:
+    model: ollama/qwen3.6:27b
+    skill: dfs-prompt-gen
+
+  note_writer:
+    model: ollama/qwen3.6:27b
+    skill: note-writer
+
+  note_tagger:
+    model: ollama/qwen3-coder:30b-64k
+    skill: note-tagger
+
+  verifier:
+    enabled: true
+    model: ollama/qwen3.6:27b
+    skill: verifier
+    timeout_s: 600
+    on_timeout: pending
+    output_filename: "cycle-{cycle:03d}-verifier.json"
+
+  source_manager:
+    enabled: true
+    decay_after_n_cycles: 3
+    auto_promote_discovered: false
+
+  topic_propose:
+    enabled: false
+    model: ollama/qwen3-coder:30b-64k
+    skill: topic-propose
+    timeout_s: 900
+    max_proposals: 10
+    max_degree: 2
+    relation_types:
+      - variant
+      - prerequisite
+      - contrast
+      - sibling
+      - downstream_effect
+      - user_question
+    on_missing_out_of_scope: skip
+    auto_promote: true
+
+  cycle_report:
+    model: ollama/qwen3.6:27b
+    skill: cycle-report
+
+  final_report:
+    model: ollama/qwen3.6:27b
+    skill: final-report
+
+  ask_answer:
+    model: ollama/qwen3.6:27b
+    skill: ask-answer
+
+  doc_planner:
+    model: ollama/qwen3.6:27b
+    skill: doc-planner
+
+  doc_writer:
+    model: ollama/qwen3.6:27b
+    skill: doc-writer
+
+  model_router:
+    model: ollama/qwen3-coder:30b-64k
+    skill: model-router
+
+  default_update_spec:
+    model: ollama/qwen3.6:27b
+    skill: default-update-spec
+
+# ---------------------------------------------------------------------------
+# Model router — upgrades specific stages to the strongest model when the
+# workload warrants it. On the opencode profile, "upgrade" means
+# ollama/qwen3.6:27b → ollama/qwen3.6:35b (the flagship tier).
+# ---------------------------------------------------------------------------
+model_router:
+  enabled: true
+  eligible_stages:
+    - dfs_prompt_gen
+    - note_writer
+    - doc_writer
+    - ask_answer
+  signals:
+    - input_tokens
+    - source_count
+    - cross_link_density
+    - citation_density
+    - topic_class
+    - complexity_flag
+  upgrade_rules:
+    upgrade_model: ollama/qwen3.6:35b
+    opus_if_tokens_over: 40000
+    opus_if_sources_over: 10
+
+# ---------------------------------------------------------------------------
+# Research loop limits. Runtime-agnostic (identical to the other profiles).
+# ---------------------------------------------------------------------------
+cycles:
+  max_consecutive_verifier_rejections:
+    initial: 6
+    update: 3
+
+# ---------------------------------------------------------------------------
+# Research mode defaults. Runtime-agnostic.
+# ---------------------------------------------------------------------------
+research_modes:
+  bootstrap:
+    exit_condition: coverage_met
+    scout_bias: new_topics
+    note_action: create
+    wind_down:
+      budget_pct_trigger: 0.8
+      zero_scout_cycles_trigger: 2
+      min_cycles_before_wind_down: 2
+
+  refresh:
+    exit_condition: no_new_deltas
+    scout_bias: changes_since_snapshot
+    note_action: merge
+    new_topic_policy: backlog
+
+  expand:
+    exit_condition: coverage_met_or_no_deltas
+    scout_bias: both
+    note_action: create_or_merge
+    budget_split:
+      coverage_pct: 0.6
+      refresh_pct: 0.4
+    wind_down:
+      budget_pct_trigger: 0.8
+      zero_scout_cycles_trigger: 2
+      min_cycles_before_wind_down: 2
+    auto_tail_refresh: true
+
+# ---------------------------------------------------------------------------
+# Exit invariant. Runtime-agnostic.
+# ---------------------------------------------------------------------------
+exit_invariant:
+  block_on_stubs: true
+  try_resolve_before_abort: true
+
+# ---------------------------------------------------------------------------
+# Budget guard rails. For LOCAL providers cost is a measured $0, so only the
+# wall-clock cap bites. For METERED providers the dollar cap bounds the real
+# per-call cost opencode reports.
+# ---------------------------------------------------------------------------
+# The block the settings loader actually parses (spec 033). The older
+# top-level `budget:` block was never read by any code path — it is gone
+# (issue #230). Absent limits are SKIPPED by budget_guard, so a profile that
+# declared none ran unattended with no ceiling at all. These are runaway
+# ceilings, not targets; see settings.yaml for the full rationale.
+limits:
+  # opencode fronts both LOCAL providers (measured $0 — only the wall-clock
+  # cap bites) and METERED ones (real per-call dollars). Both ceilings are
+  # declared so the profile is safe either way; the wall-clock is wide enough
+  # for a local model.
+  cycle_budget_usd: 5.00
+  cycle_budget_warn_at: 0.8
+  cycle_wallclock_budget_minutes: 240
+
+# ---------------------------------------------------------------------------
+# Vault commands. Runtime-agnostic.
+# ---------------------------------------------------------------------------
+commands:
+  ask: ask_answer
+  research: scout
+  write: doc_writer
+
+# ---------------------------------------------------------------------------
+# Citation / verifier policy (Principle IX). Runtime-agnostic.
+# ---------------------------------------------------------------------------
+citation:
+  tier1_required: true
+  tier2_required: true
+  render_sections:
+    tier1_heading: "Vault Sources"
+    tier2_heading: "Original Sources"

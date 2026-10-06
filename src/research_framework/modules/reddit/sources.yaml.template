@@ -1,0 +1,42 @@
+# Frozen allowlist from legacy ~/Documents/feeds-vault/scripts/reddit_rss.py (SUBREDDITS).
+# Copy to sources.yaml and edit labels / value_tier per your vault.
+reddit_subreddits:
+  - url: https://www.reddit.com/r/MachineLearning/.rss
+    label: ML research, papers, careers, technical discussion
+    value_tier: routine
+  - url: https://www.reddit.com/r/LocalLLaMA/.rss
+    label: Open models, quantization, local inference, consumer GPU setups
+    value_tier: routine
+  - url: https://www.reddit.com/r/ClaudeAI/.rss
+    label: Claude workflows, usage tips, bug reports, Claude Code
+    value_tier: routine
+  - url: https://www.reddit.com/r/ClaudeCode/.rss
+    label: Claude Code development patterns, agentic coding
+    value_tier: routine
+  - url: https://www.reddit.com/r/LLMDevs/.rss
+    label: LLM application development, RAG, fine-tuning
+    value_tier: routine
+  - url: https://www.reddit.com/r/AI_Agents/.rss
+    label: Agent frameworks, tool use, orchestration, multi-agent systems
+    value_tier: routine
+  - url: https://www.reddit.com/r/AutonomousAgents/.rss
+    label: Autonomous agent architectures, planning, agent orchestration
+    value_tier: routine
+  - url: https://www.reddit.com/r/OpenAI/.rss
+    label: OpenAI product launches, GPT ecosystem, industry trends
+    value_tier: routine
+  - url: https://www.reddit.com/r/cursor/.rss
+    label: Cursor IDE tips, AI coding workflows
+    value_tier: routine
+  - url: https://www.reddit.com/r/singularity/.rss
+    label: AI news, AGI discussion, future speculation
+    value_tier: routine
+  - url: https://www.reddit.com/r/MLOps/.rss
+    label: ML in production, pipelines, infrastructure
+    value_tier: routine
+  - url: https://www.reddit.com/r/ChatGPT/.rss
+    label: ChatGPT usage, prompt ideas, mainstream AI adoption
+    value_tier: routine
+  - url: https://www.reddit.com/r/ArtificialIntelligence/.rss
+    label: General AI news and discussion
+    value_tier: routine

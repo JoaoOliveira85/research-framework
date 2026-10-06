@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://research-framework.local/schemas/vault-ask-1.0.json",
+  "title": "VaultAskEnvelopeV1",
+  "description": "The `./vault ask --format json` answer envelope (spec 036 US1 / FR-003). Produced by research-framework, consumed by assistant-framework. Evolution follows ADR-0013: append-only within 1.x (additionalProperties stays true, new fields are optional), a new schema file per major, `schema_version` carried in the payload so a consumer can refuse a major it does not know. No producer exists yet (036 T001); this file is the contract the producer will conform to, not a description of its output.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "answer", "citations", "confidence"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+$",
+      "description": "The envelope's version, `<major>.<minor>`. This schema accepts every 1.x payload and refuses any other major (ADR-0013 §2-§3)."
+    },
+    "answer": {
+      "type": "string",
+      "description": "The vault-first answer as Markdown. Empty string when the vault cannot answer (spec 036 FR-006) — never omitted."
+    },
+    "citations": {
+      "type": "array",
+      "description": "Tier-1 citations (Principle IX): the vault notes the answer rests on. Empty only when `answer` is empty.",
+      "items": { "$ref": "#/$defs/Citation" }
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "The producer's confidence in [0, 1]. `0.0` with `low_confidence_reason` when it could not be computed (spec 036 US1 scenario 4)."
+    },
+    "source_urls": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Tier-2 citations: the external URLs the Tier-1 notes de-reference to. Optional."
+    },
+    "cost_usd": {
+      "type": "number",
+      "minimum": 0.0,
+      "description": "What producing this answer cost, from the dispatch sidecar (spec 028 / 078). Optional; absent when the runtime reported nothing."
+    },
+    "low_confidence_reason": {
+      "type": "string",
+      "description": "Why `confidence` is low or zero, e.g. `no relevant notes found`. Optional; expected whenever `confidence` is 0.0."
+    }
+  },
+  "$defs": {
+    "Citation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["note_path", "snippet"],
+      "properties": {
+        "note_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Vault-relative path of the cited note, e.g. `data_vault/concepts/<note>.md`."
+        },
+        "snippet": {
+          "type": "string",
+          "description": "The passage the answer draws on, verbatim from the note."
+        }
+      }
+    }
+  }
+}

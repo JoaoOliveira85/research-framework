@@ -1,0 +1,32 @@
+# Spec 056 — full executor sweep across every runtime the framework can dispatch
+# as of the spec-047/052 batch: claude + codex (CLI), cursor-agent (spec 052 CLI),
+# and ollama (spec 047 local HTTP runtime, validated via _HTTP_RUNTIMES not
+# _RUNTIME_ADAPTERS). Edit the local Ollama model tags to match your server.
+#
+# This is the matrix the operator runs to answer "which client/model is best at
+# which job, and at what cost" across vendors. Costs: claude/codex/cursor carry
+# real-or-estimated dollars; ollama cells report cost_usd 0.0 (local runtime).
+schema_version: "1.0"
+tasks:
+  - scout
+  - note-writer
+  - verifier
+executors:
+  - runtime: claude
+    models:
+      - opus
+      - sonnet
+      - haiku
+  - runtime: codex
+    models:
+      - default
+      - high
+  - runtime: cursor-agent
+    models:
+      - sonnet
+      - gpt-5
+  - runtime: ollama
+    models:
+      - qwen3:14b
+      - gemma3:27b
+      - llama3.3:70b

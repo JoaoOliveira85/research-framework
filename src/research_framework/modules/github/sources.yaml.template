@@ -1,0 +1,33 @@
+# GitHub module sources template (spec 020).
+#
+# Each entry enumerates a remote GitHub surface to poll. The `url` decides the
+# surface the extractor fetches:
+#   - .../<org>/<repo>            -> releases (default; "notable changes")
+#   - .../<org>/<repo>/pulls      -> recent pull requests
+#   - .../<org>/<repo>/issues     -> recent issues
+#   - .../<org>/<repo>/releases   -> recent releases
+#
+# Auth is the host `gh` CLI session (`gh auth login`) — there is NO API key in
+# this file or in env. Run `gh auth status` to confirm before a cycle (the
+# module's preflight does this and fails the cycle closed if unauthenticated).
+#
+# This module covers REMOTE GitHub activity. For LOCAL working copies (a repo
+# checked out on disk), use the `code` module's `github_repos:` paths instead.
+#
+# Copy to sources.yaml and edit org/repo + labels + value_tier per your vault.
+github_sources:
+  - url: https://github.com/openai/openai-python/releases
+    label: openai-python releases
+    value_tier: important
+  - url: https://github.com/langchain-ai/langchain/releases
+    label: langchain releases
+    value_tier: routine
+  - url: https://github.com/ollama/ollama/releases
+    label: ollama releases
+    value_tier: important
+  - url: https://github.com/anthropics/anthropic-sdk-python/issues
+    label: anthropic python SDK issues
+    value_tier: routine
+  - url: https://github.com/modelcontextprotocol/servers/pulls
+    label: MCP servers PRs
+    value_tier: routine

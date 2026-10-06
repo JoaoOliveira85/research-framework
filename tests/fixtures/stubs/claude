@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""Stub claude CLI for orchestrator tests.
+
+Writes a canned valid cycle JSON to stdout based on --prompt content.
+Used to test subprocess contracts without real claude authentication.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--prompt", default="")
+    args, _ = parser.parse_known_args()
+
+    prompt = args.prompt.lower()
+    phase = "scout" if "scout" in prompt or "bfs" in prompt else "research"
+
+    payload: dict[str, object] = {
+        "cycle": 1,
+        "phase": phase,
+        "timestamp": "2026-04-16T14:00:00Z",
+        "dimensions_covered": [
+            "technical",
+            "organizational",
+            "domain",
+            "market",
+            "temporal",
+        ],
+        "new_topics": [] if phase == "research" else ["Topic Stub"],
+        "proposed_filenames": [] if phase == "research" else ["Topic Stub.md"],
+        "sources_consulted": ["Internal", "https://example.com"],
+        "external_sources_consulted": ["https://example.com"],
+        "termination_condition": None,
+        "notes_created": ["Topic Stub.md"] if phase == "research" else [],
+        "unresolved_wikilinks": [],
+        "budget_consumed_usd": 0.05,
+    }
+    print(json.dumps(payload))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

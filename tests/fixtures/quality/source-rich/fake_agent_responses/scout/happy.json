@@ -1,0 +1,291 @@
+{
+  "schema_version": "2.0",
+  "cycle": 1,
+  "phase": "scout",
+  "timestamp": "2026-05-17T00:00:01Z",
+  "dimensions_covered": [
+    "technical",
+    "organizational",
+    "domain"
+  ],
+  "topics_from_code": [
+    {
+      "id": "CT-1-001",
+      "topic_type": "service",
+      "source_file": "synthetic/acme/curated-service-note-1-c1/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "curated-service-note-1-c1.md"
+    },
+    {
+      "id": "CT-1-002",
+      "topic_type": "service",
+      "source_file": "synthetic/acme/curated-service-note-2-c1/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "curated-service-note-2-c1.md"
+    },
+    {
+      "id": "CT-1-003",
+      "topic_type": "service",
+      "source_file": "synthetic/acme/curated-service-note-3-c1/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "curated-service-note-3-c1.md"
+    },
+    {
+      "id": "CT-1-004",
+      "topic_type": "flow",
+      "source_file": "synthetic/acme/curated-flow-note-1-c1/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "curated-flow-note-1-c1.md"
+    },
+    {
+      "id": "CT-1-005",
+      "topic_type": "flow",
+      "source_file": "synthetic/acme/curated-flow-note-2-c1/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "curated-flow-note-2-c1.md"
+    },
+    {
+      "id": "CT-1-006",
+      "topic_type": "flow",
+      "source_file": "synthetic/acme/curated-flow-note-3-c1/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "curated-flow-note-3-c1.md"
+    },
+    {
+      "id": "CT-1-007",
+      "topic_type": "concept",
+      "source_file": "synthetic/acme/curated-concept-note-1-c1/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "curated-concept-note-1-c1.md"
+    },
+    {
+      "id": "CT-1-008",
+      "topic_type": "concept",
+      "source_file": "synthetic/acme/curated-concept-note-2-c1/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "curated-concept-note-2-c1.md"
+    },
+    {
+      "id": "CT-1-009",
+      "topic_type": "concept",
+      "source_file": "synthetic/acme/curated-concept-note-3-c1/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "curated-concept-note-3-c1.md"
+    },
+    {
+      "id": "CT-1-010",
+      "topic_type": "decision",
+      "source_file": "synthetic/acme/curated-decision-note-1-c1/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "curated-decision-note-1-c1.md"
+    },
+    {
+      "id": "CT-1-011",
+      "topic_type": "decision",
+      "source_file": "synthetic/acme/curated-decision-note-2-c1/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "curated-decision-note-2-c1.md"
+    },
+    {
+      "id": "CT-1-012",
+      "topic_type": "decision",
+      "source_file": "synthetic/acme/curated-decision-note-3-c1/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "curated-decision-note-3-c1.md"
+    },
+    {
+      "id": "CT-1-013",
+      "topic_type": "service",
+      "source_file": "synthetic/acme/curated-integration-note-1-c1/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "curated-integration-note-1-c1.md"
+    },
+    {
+      "id": "CT-1-014",
+      "topic_type": "service",
+      "source_file": "synthetic/acme/curated-integration-note-2-c1/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "curated-integration-note-2-c1.md"
+    },
+    {
+      "id": "CT-1-015",
+      "topic_type": "service",
+      "source_file": "synthetic/acme/curated-integration-note-3-c1/README.md",
+      "source_snippet": "lines 1-40",
+      "proposed_filename": "curated-integration-note-3-c1.md"
+    }
+  ],
+  "intent_from_confluence": [],
+  "topics_found": {
+    "new": [
+      {
+        "title": "Curated Service Note 1 c1",
+        "coverage_category": "services",
+        "proposed_filename": "curated-service-note-1-c1.md",
+        "discovery": "source-rich",
+        "source_code_topic_ids": [
+          "CT-1-001"
+        ]
+      },
+      {
+        "title": "Curated Service Note 2 c1",
+        "coverage_category": "services",
+        "proposed_filename": "curated-service-note-2-c1.md",
+        "discovery": "source-rich",
+        "source_code_topic_ids": [
+          "CT-1-002"
+        ]
+      },
+      {
+        "title": "Curated Service Note 3 c1",
+        "coverage_category": "services",
+        "proposed_filename": "curated-service-note-3-c1.md",
+        "discovery": "source-rich",
+        "source_code_topic_ids": [
+          "CT-1-003"
+        ]
+      },
+      {
+        "title": "Curated Flow Note 1 c1",
+        "coverage_category": "flows",
+        "proposed_filename": "curated-flow-note-1-c1.md",
+        "discovery": "source-rich",
+        "source_code_topic_ids": [
+          "CT-1-004"
+        ]
+      },
+      {
+        "title": "Curated Flow Note 2 c1",
+        "coverage_category": "flows",
+        "proposed_filename": "curated-flow-note-2-c1.md",
+        "discovery": "source-rich",
+        "source_code_topic_ids": [
+          "CT-1-005"
+        ]
+      },
+      {
+        "title": "Curated Flow Note 3 c1",
+        "coverage_category": "flows",
+        "proposed_filename": "curated-flow-note-3-c1.md",
+        "discovery": "source-rich",
+        "source_code_topic_ids": [
+          "CT-1-006"
+        ]
+      },
+      {
+        "title": "Curated Concept Note 1 c1",
+        "coverage_category": "concepts",
+        "proposed_filename": "curated-concept-note-1-c1.md",
+        "discovery": "source-rich",
+        "source_code_topic_ids": [
+          "CT-1-007"
+        ]
+      },
+      {
+        "title": "Curated Concept Note 2 c1",
+        "coverage_category": "concepts",
+        "proposed_filename": "curated-concept-note-2-c1.md",
+        "discovery": "source-rich",
+        "source_code_topic_ids": [
+          "CT-1-008"
+        ]
+      },
+      {
+        "title": "Curated Concept Note 3 c1",
+        "coverage_category": "concepts",
+        "proposed_filename": "curated-concept-note-3-c1.md",
+        "discovery": "source-rich",
+        "source_code_topic_ids": [
+          "CT-1-009"
+        ]
+      },
+      {
+        "title": "Curated Decision Note 1 c1",
+        "coverage_category": "decisions",
+        "proposed_filename": "curated-decision-note-1-c1.md",
+        "discovery": "source-rich",
+        "source_code_topic_ids": [
+          "CT-1-010"
+        ]
+      },
+      {
+        "title": "Curated Decision Note 2 c1",
+        "coverage_category": "decisions",
+        "proposed_filename": "curated-decision-note-2-c1.md",
+        "discovery": "source-rich",
+        "source_code_topic_ids": [
+          "CT-1-011"
+        ]
+      },
+      {
+        "title": "Curated Decision Note 3 c1",
+        "coverage_category": "decisions",
+        "proposed_filename": "curated-decision-note-3-c1.md",
+        "discovery": "source-rich",
+        "source_code_topic_ids": [
+          "CT-1-012"
+        ]
+      },
+      {
+        "title": "Curated Integration Note 1 c1",
+        "coverage_category": "integrations",
+        "proposed_filename": "curated-integration-note-1-c1.md",
+        "discovery": "source-rich",
+        "source_code_topic_ids": [
+          "CT-1-013"
+        ]
+      },
+      {
+        "title": "Curated Integration Note 2 c1",
+        "coverage_category": "integrations",
+        "proposed_filename": "curated-integration-note-2-c1.md",
+        "discovery": "source-rich",
+        "source_code_topic_ids": [
+          "CT-1-014"
+        ]
+      },
+      {
+        "title": "Curated Integration Note 3 c1",
+        "coverage_category": "integrations",
+        "proposed_filename": "curated-integration-note-3-c1.md",
+        "discovery": "source-rich",
+        "source_code_topic_ids": [
+          "CT-1-015"
+        ]
+      }
+    ],
+    "existing": [],
+    "total": 15
+  },
+  "proposed_filenames": [
+    "curated-service-note-1-c1.md",
+    "curated-service-note-2-c1.md",
+    "curated-service-note-3-c1.md",
+    "curated-flow-note-1-c1.md",
+    "curated-flow-note-2-c1.md",
+    "curated-flow-note-3-c1.md",
+    "curated-concept-note-1-c1.md",
+    "curated-concept-note-2-c1.md",
+    "curated-concept-note-3-c1.md",
+    "curated-decision-note-1-c1.md",
+    "curated-decision-note-2-c1.md",
+    "curated-decision-note-3-c1.md",
+    "curated-integration-note-1-c1.md",
+    "curated-integration-note-2-c1.md",
+    "curated-integration-note-3-c1.md"
+  ],
+  "sources_consulted": [
+    "official-docs",
+    "oreilly-shelf",
+    "arxiv-feed",
+    "github-org",
+    "confluence-space"
+  ],
+  "access_methods_used": {
+    "synthetic": "local"
+  },
+  "termination_condition": null,
+  "notes_created": [],
+  "unresolved_wikilinks": [],
+  "budget_consumed_usd": 0.0
+}

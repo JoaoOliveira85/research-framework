@@ -1,0 +1,316 @@
+# ===========================================================================
+# research-framework global settings — OLLAMA profile (spec 047 v1)
+# ===========================================================================
+# Drop-in alternative to `settings.yaml` / `settings.codex.yaml` /
+# `settings.cursor.yaml` that routes every stage to a LOCAL Ollama server over
+# HTTP instead of spawning a vendor CLI. Pick this profile to run a vault
+# fully offline / MCP-free on your own GPU box — zero per-token cost, no vendor
+# quota, no CLI dependency.
+#
+# How to use it:
+#
+#   rv generate --spec research.spec.md --output ~/my-vault \
+#               --settings settings.ollama.yaml
+#
+# The flag copies THIS file into `{vault}/settings.yaml`, so the generated
+# vault stays fully self-contained.
+#
+# Prerequisites:
+#
+#   1. An Ollama server reachable at `base_url` below (default
+#      http://localhost:11434). Override per-run with the OLLAMA_BASE_URL
+#      env var without editing this file.
+#   2. The three tier models pulled on that box. VERIFY the exact tags with
+#      `ollama list` and adjust the `model:` fields if yours differ — Ollama
+#      model ids are `name:tag` (e.g. `qwen3:14b`, not `Qwen3-14B`).
+#
+# Billing model (IMPORTANT — differs from claude/codex/cursor):
+#
+#   Ollama is LOCAL: every call is genuinely $0 and the API returns REAL token
+#   counts. The framework records `cost_usd: 0.0` with the true tokens and
+#   `cost_source: "runtime"` (both measured — unlike cursor's estimated dollar).
+#   The dollar cap can never fire (cost is always 0); the WALL-CLOCK cap
+#   (spec 033) is your operative guardrail for an unattended local run.
+#
+# Tier → model map (edit to match your `ollama list`):
+#
+#   claude profile       ollama profile     tier        role
+#   --------------       --------------     ----        ----
+#   haiku (cheap)    →   qwen3:14b          basic       cheap/fast gates
+#   sonnet (default) →   gemma3:27b         normal      most stages
+#   opus (upgrade)   →   llama3.3:70b       flagship    router upgrades
+# ===========================================================================
+
+schema_version: 1
+
+# ---------------------------------------------------------------------------
+# Where generated vaults land. Same semantics as the other profiles.
+# ---------------------------------------------------------------------------
+output_dir: null
+
+# ---------------------------------------------------------------------------
+# How agents talk to models. `http` selects the spec-047 HTTP dispatch branch
+# in agent_call.py (the single non-CLI dispatch path); `default_executor.type:
+# api` is the functional trigger that branch reads.
+# ---------------------------------------------------------------------------
+communication:
+  mode: http
+
+# ---------------------------------------------------------------------------
+# Default executor applied to any stage that does not override it.
+#
+# `type: api`        routes this stage through the HTTP backend (no CLI spawn).
+# `base_url`         the Ollama server root. OLLAMA_BASE_URL env wins if set.
+# `api_path`         defaults to the OpenAI-compatible /v1/chat/completions;
+#                    set to /api/chat to use Ollama's native endpoint instead
+#                    (both response shapes are parsed).
+# `timeout_s`        local 70B inference is slow — give cycles room (2h here).
+# ---------------------------------------------------------------------------
+default_executor:
+  type: api
+  runtime: ollama
+  base_url: http://localhost:11434
+  api_path: /v1/chat/completions
+  model: gemma3:27b            # balanced "normal"-tier default for most stages
+  skill: null                  # filled in per stage
+  timeout_s: 7200
+  retry: 1
+  on_fail: abort
+
+# ---------------------------------------------------------------------------
+# Pipeline-wide knobs. Runtime-agnostic — mirrors the other profiles.
+# ---------------------------------------------------------------------------
+pipeline:
+  max_cycles: 20
+  # Run-level CUMULATIVE dollar cap. `0` / `0.0` / an absent key mean
+  # UNLIMITED, decided in the spec-061 resolver itself (amendment
+  # 2026-09-07); see settings.yaml for the full rationale.
+  budget_usd: 25.00
+  backlog_promotion_threshold: 2
+
+  note_writer_batch_size: 6
+  max_batches_per_cycle: 10
+  source_failure_thresholds:
+    required_quorum_loss: 2
+    enrichment_max_failures: 0
+  queryability_score_regression_pp: 5
+  gates:
+    sg_001_min_topics_warn_floor: 1
+    sg_002_min_categories: 5
+    sg_003_abstraction_warn_pct: 20
+    sg_003_abstraction_fail_pct: 60
+    cg_001_min_yield_factor: 1.0
+    cg_002_min_categories_per_cycle: 3
+    cg_004_min_avg_word_count: 200
+    cg_006_min_word_count_compliance_pct: 90
+    cg_007_max_orphan_link_pct: 15
+
+# ---------------------------------------------------------------------------
+# Per-stage executor overrides. Cheap stages drop to `qwen3:14b` (basic tier);
+# everything else inherits the `gemma3:27b` default.
+# ---------------------------------------------------------------------------
+stages:
+  # --- 1.x install / pre-flight ------------------------------------------
+  install_wizard:
+    model: gemma3:27b
+    skill: install-wizard
+
+  vault_spec_author:
+    model: gemma3:27b
+    skill: vault-spec
+
+  # --- 2.x pre-processing ------------------------------------------------
+  source_relevance:
+    model: qwen3:14b
+    skill: source-relevance
+    timeout_s: 600
+
+  # --- 3.x scout / research / verify -------------------------------------
+  scout:
+    model: gemma3:27b
+    skill: scout
+
+  topic_classifier:
+    model: qwen3:14b
+    skill: topic-classifier
+
+  dfs_prompt_gen:
+    model: gemma3:27b
+    skill: dfs-prompt-gen         # router may upgrade to the flagship model
+
+  note_writer:
+    model: gemma3:27b
+    skill: note-writer            # router may upgrade per-topic
+
+  note_tagger:
+    model: qwen3:14b
+    skill: note-tagger
+
+  verifier:
+    enabled: true
+    model: gemma3:27b
+    skill: verifier
+    timeout_s: 1200
+    on_timeout: pending
+    output_filename: "cycle-{cycle:03d}-verifier.json"
+
+  source_manager:
+    enabled: true
+    decay_after_n_cycles: 3
+    auto_promote_discovered: false
+
+  # --- 3.9 end-of-cycle topic expansion ----------------------------------
+  topic_propose:
+    enabled: false
+    model: qwen3:14b
+    skill: topic-propose
+    timeout_s: 1200
+    max_proposals: 10
+    max_degree: 2
+    relation_types:
+      - variant
+      - prerequisite
+      - contrast
+      - sibling
+      - downstream_effect
+      - user_question
+    on_missing_out_of_scope: skip
+    auto_promote: true
+
+  # --- 4.x post-cycle ----------------------------------------------------
+  cycle_report:
+    model: gemma3:27b
+    skill: cycle-report
+
+  final_report:
+    model: gemma3:27b
+    skill: final-report
+
+  # --- 5.x ask / write ---------------------------------------------------
+  ask_answer:
+    model: gemma3:27b
+    skill: ask-answer
+
+  doc_planner:
+    model: gemma3:27b
+    skill: doc-planner
+
+  doc_writer:
+    model: gemma3:27b
+    skill: doc-writer             # router may upgrade to the flagship model
+
+  # --- Utility -----------------------------------------------------------
+  model_router:
+    model: qwen3:14b
+    skill: model-router
+
+  default_update_spec:
+    model: gemma3:27b
+    skill: default-update-spec
+
+# ---------------------------------------------------------------------------
+# Model router — upgrades specific stages to the strongest local model when the
+# workload warrants it. On the Ollama profile, "upgrade" means
+# gemma3:27b → llama3.3:70b (the flagship tier).
+# ---------------------------------------------------------------------------
+model_router:
+  enabled: true
+  eligible_stages:
+    - dfs_prompt_gen
+    - note_writer
+    - doc_writer
+    - ask_answer
+  signals:
+    - input_tokens
+    - source_count
+    - cross_link_density
+    - citation_density
+    - topic_class
+    - complexity_flag
+  upgrade_rules:
+    upgrade_model: llama3.3:70b
+    opus_if_tokens_over: 40000
+    opus_if_sources_over: 10
+
+# ---------------------------------------------------------------------------
+# Research loop limits. Runtime-agnostic (identical to the other profiles).
+# ---------------------------------------------------------------------------
+cycles:
+  max_consecutive_verifier_rejections:
+    initial: 6
+    update: 3
+
+# ---------------------------------------------------------------------------
+# Research mode defaults. Runtime-agnostic.
+# ---------------------------------------------------------------------------
+research_modes:
+  bootstrap:
+    exit_condition: coverage_met
+    scout_bias: new_topics
+    note_action: create
+    wind_down:
+      budget_pct_trigger: 0.8
+      zero_scout_cycles_trigger: 2
+      min_cycles_before_wind_down: 2
+
+  refresh:
+    exit_condition: no_new_deltas
+    scout_bias: changes_since_snapshot
+    note_action: merge
+    new_topic_policy: backlog
+
+  expand:
+    exit_condition: coverage_met_or_no_deltas
+    scout_bias: both
+    note_action: create_or_merge
+    budget_split:
+      coverage_pct: 0.6
+      refresh_pct: 0.4
+    wind_down:
+      budget_pct_trigger: 0.8
+      zero_scout_cycles_trigger: 2
+      min_cycles_before_wind_down: 2
+    auto_tail_refresh: true
+
+# ---------------------------------------------------------------------------
+# Exit invariant. Runtime-agnostic.
+# ---------------------------------------------------------------------------
+exit_invariant:
+  block_on_stubs: true
+  try_resolve_before_abort: true
+
+# ---------------------------------------------------------------------------
+# Budget guard rails. Ollama is local ⇒ $0, so the dollar cap can never fire;
+# the wall-clock cap (spec 033) is the operative guardrail for unattended runs.
+# ---------------------------------------------------------------------------
+# The block the settings loader actually parses (spec 033). The older
+# top-level `budget:` block was never read by any code path — it is gone
+# (issue #230). Absent limits are SKIPPED by budget_guard, so a profile that
+# declared none ran unattended with no ceiling at all. These are runaway
+# ceilings, not targets; see settings.yaml for the full rationale.
+limits:
+  # Ollama is local ⇒ a measured $0, so the dollar cap can never fire; it is
+  # declared anyway so a vault switched onto a metered runtime is not left
+  # uncapped. The wall-clock cap is the operative guardrail here, and local
+  # generation is slow — hence the wider ceiling.
+  cycle_budget_usd: 5.00
+  cycle_budget_warn_at: 0.8
+  cycle_wallclock_budget_minutes: 240
+
+# ---------------------------------------------------------------------------
+# Vault commands. Runtime-agnostic.
+# ---------------------------------------------------------------------------
+commands:
+  ask: ask_answer
+  research: scout
+  write: doc_writer
+
+# ---------------------------------------------------------------------------
+# Citation / verifier policy (Principle IX). Runtime-agnostic.
+# ---------------------------------------------------------------------------
+citation:
+  tier1_required: true
+  tier2_required: true
+  render_sections:
+    tier1_heading: "Vault Sources"
+    tier2_heading: "Original Sources"

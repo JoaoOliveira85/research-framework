@@ -1,0 +1,4 @@
+#!/bin/bash
+# stale
+VAULT_DIR=/var/folders/tmp/feeds-vault
+exec python -m research_vault.cli generate

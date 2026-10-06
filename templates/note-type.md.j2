@@ -1,0 +1,21 @@
+---
+type: {{ nt.name }}
+template_version: "{{ nt.template_version }}"
+source_urls: []
+coverage_category: ""
+summary: ""
+---
+
+# {{ '{{' }} title {{ '}}' }}
+
+{% for section in nt.required_sections %}
+## {{ section }}
+
+<!-- Contextual question guidance:
+{% for q in nt.contextual_questions %}- {{ q }}
+{% endfor %}-->
+
+{% endfor %}
+---
+
+<sub>Rendered from template <code>{{ nt.name }}.md</code> v{{ nt.template_version }}. Notes created from this template MUST keep <code>template_version</code> in sync so <code>scripts/vault_health.py --check-template-version</code> can detect upgrades.</sub>

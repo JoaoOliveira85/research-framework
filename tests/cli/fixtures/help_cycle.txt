@@ -1,0 +1,20 @@
+usage: research-framework cycle [-h] --vault VAULT --cycle CYCLE
+                                [--budget-cap USD] [--estimate-only]
+                                [--target-topics TARGET_TOPICS [TARGET_TOPICS ...]]
+
+options:
+  -h, --help            show this help message and exit
+  --vault VAULT         Vault directory
+  --cycle CYCLE         Cycle number
+  --budget-cap USD      The `--max-usd` rung of the spec-061 ladder for this
+                        verb: a LIFETIME dollar ceiling across every cycle the
+                        vault has run (issue #239). Omitted, it resolves from
+                        settings.yaml `pipeline.budget_usd`; 0 disables the
+                        cap. There is no hardcoded default — that was issue
+                        #233.
+  --estimate-only       Cost preflight (issue #238): print the projected per-
+                        stage spend for this cycle and exit without
+                        dispatching anything.
+  --target-topics TARGET_TOPICS [TARGET_TOPICS ...]
+                        Focus topics for this cycle (passed to scout prompt
+                        renderer)

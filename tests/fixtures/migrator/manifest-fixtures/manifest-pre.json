@@ -1,0 +1,238 @@
+{
+  "framework_version": -1,
+  "generator_commit": "55d16d1f0e8686ef21b78b957683412e174f0c21",
+  "generated_at": "2026-05-13T13:54:00.702362+00:00",
+  "entries": [
+    {
+      "path": ".claude/.tmpl-versions.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "a9d890f76a28b233af2c64777c48a58168e234750243d55282c5f5b527aec4dd",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": ".claude/commands/ask.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "6408c555bc9a5186e2e85b8a924278bcf6afef18976940bdd6d9668afdf20f9b",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": ".claude/commands/research.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "8ff1e5dd7eb74a433eaa2b0c3800c7077dae52541de8a6f64b54e3accd58f6bc",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": ".claude/commands/write.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "735ec43a99e00fb2b47dbf7fb1e8526bf29922b952392e43020e46170c6d42db",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": ".cursor/.tmpl-versions.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "3bcea439cf45c96549e21bdee424e08f1f8c6da30722c0b766096e76687e1bd6",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": ".cursor/cli.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "b9ad165a7719296d49c883374beb36da85816a58efd0ba4036763950eba16da6",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": ".gitignore",
+      "kind": "other",
+      "template_version": 1,
+      "rendered_sha256": "e7842b0d044b09e436ba98aa9847906c4b1b1d26f2581b1d40be0ea226ff17cd",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": ".tmpl-versions.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "a377e89ae4254a494c69429a0c1ced4972f6fbb78ed6b4de2f7b3729e49a52ed",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "AGENTS.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "0552076f9449e6d9a596d103595a1a520dabd7e591d43a3329041fb097c4e207",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "CLAUDE.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "ec3acc8783ec152820194262c1a87e64d7e8d34d5b3113a79fdecfceb12f975d",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "README.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "c642d2871a8c196234be4cf30cf62556ef1a8e3ca3ba222676d722748085e995",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_concepts.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "9cf6e414129a4d209befc05cffbb46cd8476e654ec847ed35da753567bf7225d",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_graph.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "6dd49e365f1f3c58a94b7a1580e11ff03e25dbd374886421f0b13a9af7bd2476",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_index.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "5d721ccc47a0fda4c82efe08b74bfde367a3c4afe606f604294f1aae72ba6ac1",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_pipeline/.tmpl-versions.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "7bdda652202bf001e7727cb4f8a485d8d34a76ad7ecb5351a1d5306a0ce39ee2",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_pipeline/budget-log.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "a06d387991a25d922ef6673f5e2836876eed2e4587dc109d3ffe5e18bd7a6796",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_pipeline/coverage-targets.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "47f2e8b82bb7cf5f25cdfe449fe486f1799d1bd3893666bebc27ed3d82c3cfde",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_pipeline/prompts/dfs-prompt.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "e8891762d1747dc187a0fc52c4f62d70acc85f46459cb58f4d110360738b0d7f",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_pipeline/prompts/scout-prompt.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "fcc40be657940f6cc4f2da88c23a0e03d9750e2a890f051df5b6170aff8bfa4a",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_pipeline/research-backlog.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "24363007c28eea212c3301a31f920f9653e23b2ac80c5032b14c17c2fd86663e",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_pipeline/sources.db",
+      "kind": "other",
+      "template_version": 1,
+      "rendered_sha256": "ced2b70d07a439f289d9131730a9098474640a3f0ac825549114ecdc596016ea",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_pipeline/spec-parse.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "10277a3ab4db52289b73946a8f166b8dd3d2710a9bf34d5d1b74ed6216a68d3d",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_pipeline/systemd/.tmpl-versions.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "b4ab0cd4201b88bf0060dfb0047a0f4768f5afeed48775786619cd9e861a4255",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_pipeline/systemd/vault-research.service",
+      "kind": "other",
+      "template_version": 1,
+      "rendered_sha256": "848e4622ca2ca8a6106989f67d726a7ed01cb9e57a002c3058d037d92069dd6c",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "_templates/CHANGELOG.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "12a71471049ab6a677aa542c5779a33f27cf0a327bbd51d1890cd46674e3b4ad",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_templates/concept.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "fc63f68bb570388efdf17c88f9adddefd087ede2d89a6ea6f2b8f8878be34253",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "raw_data/.gitignore",
+      "kind": "other",
+      "template_version": 1,
+      "rendered_sha256": "ccb79bbf4e3e1e6f3b00c4921e160bec58738cb732c53656cf2cf5bb5c806705",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "raw_data/.tmpl-versions.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "5b1630021e1a8caeea5c7cf0c50f1184a150c1b4ee1cddba20575f36b7def0a8",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "raw_data/README.md",
+      "kind": "markdown",
+      "template_version": 1,
+      "rendered_sha256": "392fed25445a6cb47b9e3de8ebedb1d341916144fb2cc98b2314e6a810d2a997",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "settings.yaml",
+      "kind": "yaml",
+      "template_version": 1,
+      "rendered_sha256": "5e32f6f485f254dc409ad2dfc6461577a3f80fc265750064d2b8b4ad5a4d4bb6",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "update_vault.py",
+      "kind": "python",
+      "template_version": 1,
+      "rendered_sha256": "97757a2c3477604407eaa096c9e5b12438bf3ce3ce4fbee154aac01a9a714c35",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "vault",
+      "kind": "shell",
+      "template_version": 1,
+      "rendered_sha256": "2d22d1277a15f4630664d6cde4dd8bbb8bea18a8a1a904a735ca2e635c372b9b",
+      "is_user_owned_after_first_write": false
+    },
+    {
+      "path": "vault-config.yaml",
+      "kind": "yaml",
+      "template_version": 1,
+      "rendered_sha256": "1f8bd673db048f8762697d19b542b3d104c77fefe3fffb427bc724f54a8921f2",
+      "is_user_owned_after_first_write": false
+    }
+  ]
+}

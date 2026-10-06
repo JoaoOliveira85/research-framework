@@ -1,0 +1,21 @@
+# Representative feeds from legacy ~/Documents/feeds-vault/scripts/sources.yaml.
+# Copy to sources.yaml and edit labels / value_tier per your vault.
+rss_feeds:
+  - url: https://importai.substack.com/feed
+    label: Import AI — cutting-edge AI research analysis (Jack Clark)
+    value_tier: important
+  - url: https://www.interconnects.ai/feed
+    label: Interconnects — open models, RLHF, training methods
+    value_tier: important
+  - url: https://simonw.substack.com/feed
+    label: Simon Willison's Newsletter — LLMs in practice, developer tools
+    value_tier: routine
+  - url: https://lexfridman.com/feed/podcast/
+    label: Lex Fridman Podcast — deep-dive AI interviews
+    value_tier: important
+  - url: https://simonwillison.net/atom/everything/
+    label: Simon Willison's blog (Atom) — practical LLM engineering
+    value_tier: routine
+  - url: https://rss.arxiv.org/rss/cs.AI
+    label: arXiv cs.AI — AI preprints (academic RSS)
+    value_tier: important

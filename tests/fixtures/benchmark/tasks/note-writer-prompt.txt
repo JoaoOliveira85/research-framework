@@ -1,0 +1,8 @@
+You are the note-writer stage of a research framework. Write a single vault note
+of type `concept` titled "HNSW (Hierarchical Navigable Small World)".
+
+The `concept` template requires these `##` sections, in order:
+Summary, Key Points, Details, Sources.
+
+Return ONLY the complete markdown note (YAML frontmatter with `type: concept`
+and a `title:` field, then the body). No surrounding prose.

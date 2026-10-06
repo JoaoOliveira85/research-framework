@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://research-framework.dev/contracts/051/yield-calibration",
+  "title": "YieldCalibrationLog",
+  "description": "Append-per-cycle empirical record of the FR1 cycle-yield model. Lives at <vault>/_pipeline/yield-calibration.json. Re-tuned against in 0.7.2.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "schema_version",
+      "cycle",
+      "ts",
+      "base",
+      "cadence_bucket",
+      "cadence_factor",
+      "coverage_bucket",
+      "coverage_factor",
+      "target",
+      "actual",
+      "exit_status"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "type": "string",
+        "const": "1.0",
+        "description": "Cross-boundary payload version (spec 036 discipline)."
+      },
+      "cycle": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "Cycle number this record was emitted for."
+      },
+      "ts": {
+        "type": "string",
+        "format": "date-time",
+        "description": "ISO-8601 UTC timestamp of the cycle's CG-001 evaluation."
+      },
+      "base": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "cycle_yield.base_notes_per_cycle in effect."
+      },
+      "cadence_bucket": {
+        "type": "string",
+        "enum": ["daily", "weekly", "biweekly", "monthly"],
+        "description": "Time-since-last-cycle bucket. Cold start maps to 'monthly'."
+      },
+      "cadence_factor": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "description": "Multiplier from cycle_yield.cadence_factor for the bucket."
+      },
+      "coverage_bucket": {
+        "type": "string",
+        "enum": [
+          "coverage_below_50pct",
+          "coverage_50_to_80pct",
+          "coverage_above_80pct"
+        ],
+        "description": "met/target coverage ratio bucket across coverage-targets categories."
+      },
+      "coverage_factor": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "description": "Multiplier from cycle_yield.coverage_factor for the bucket."
+      },
+      "target": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "clamp(ceil(base * cadence_factor * coverage_factor), min_floor, max_ceiling); 0 when the vault is fully covered (no-remaining-work short-circuit)."
+      },
+      "actual": {
+        "type": "integer",
+        "minimum": 0,
+        "description": "Notes actually created this cycle."
+      },
+      "exit_status": {
+        "type": "string",
+        "enum": ["PASS", "WARN", "FAIL"],
+        "description": "CG-001 verdict: PASS (actual>=target), WARN (floor<=actual<target), FAIL (actual<floor)."
+      }
+    }
+  }
+}

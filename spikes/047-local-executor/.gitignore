@@ -1,0 +1,4 @@
+# Spike scratch output - never commit
+_out/
+.codex_home/
+*.log

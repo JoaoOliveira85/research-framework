@@ -1,0 +1,26 @@
+name: atlassian
+version: 0.1.0
+description: Jira issues (REST API v3) + Confluence pages (REST API) on Atlassian Cloud (Basic email:token auth)
+triggers:
+  - type: url_pattern
+    pattern: "^https?://[a-zA-Z0-9-]+\\.atlassian\\.net/"
+entry_point: extractor.py
+preflight:
+  entry_point: preflight.py
+  timeout_seconds: 30
+default_value_tier: routine
+default_tier: basic
+schema_examples: few-shot.md
+source_id_from:
+  jira_projects: url
+  confluence_spaces: url
+user_owned:
+  - sources.yaml
+extraction_timeout_seconds: 180
+
+# Basic auth: base64(ATLASSIAN_EMAIL:ATLASSIAN_API_TOKEN). Both env vars are
+# MANDATORY — preflight fails the cycle closed if either is missing. The site
+# (<site>.atlassian.net) comes from each source URL in sources.yaml.
+authentication:
+  env_vars: [ATLASSIAN_EMAIL, ATLASSIAN_API_TOKEN]
+failure_policy: block_cycle

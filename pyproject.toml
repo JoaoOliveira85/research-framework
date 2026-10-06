@@ -1,0 +1,95 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "research-framework"
+version = "1.0.0"
+description = "Knowledge vault generator — produces populated, validated, git-initialized Obsidian-compatible vaults from a spec file"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "João Pedro Oliveira" },
+]
+dependencies = [
+    "jinja2>=3.1",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+budget = ["tiktoken>=0.6"]
+reports = ["fpdf2>=2.7"]
+dev = [
+    "pytest>=7.4",
+    "hypothesis>=6.90",
+    "black>=24.0",
+    "ruff>=0.1",
+    "jsonschema>=4.20",
+]
+
+[project.scripts]
+research-framework = "research_framework.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/research_framework"]
+
+# Bundle runtime assets inside the wheel under research_framework/_data/ so the
+# installed CLI has access to them without needing the source tree. The
+# _assets.py resolver prefers these packaged copies over the source-tree paths.
+[tool.hatch.build.targets.wheel.force-include]
+"templates" = "src/research_framework/_data/templates"
+"scripts" = "src/research_framework/_data/scripts"
+".agents" = "src/research_framework/_data/.agents"
+"settings.yaml" = "src/research_framework/_data/settings.yaml"
+"settings.codex.yaml" = "src/research_framework/_data/settings.codex.yaml"
+"settings.cursor.yaml" = "src/research_framework/_data/settings.cursor.yaml"
+"settings.cursor-claude.yaml" = "src/research_framework/_data/settings.cursor-claude.yaml"
+"settings.opencode.yaml" = "src/research_framework/_data/settings.opencode.yaml"
+"settings.ollama.yaml" = "src/research_framework/_data/settings.ollama.yaml"
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+extend-exclude = [
+    # Fake-agent shims installed into fixture vaults by
+    # ``tests/_helpers/fake_agent.install_shim``. The shim deliberately
+    # places ``from tests._helpers import fake_agent`` after runtime
+    # sys.path manipulation (so the import resolves), which ruff's
+    # I001 import-order check (rightly) flags. The shim is generated
+    # source, not maintainer-edited, so it's excluded from lint.
+    "tests/fixtures/quality/*/scripts/agent_call.py",
+    # ruff 0.16+ formats Python code blocks embedded in Markdown; the repo's
+    # docs/specs predate that and are not part of the format baseline.
+    "*.md",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP"]
+ignore = ["E501"]  # line length handled by black
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# pytest's DEFAULT norecursedirs carries `build`, which silently swallowed the
+# whole of `tests/build/` — six modules, including the D11 guard that proves
+# `settings.ollama.yaml` ships in the wheel and the bundle. This list is the
+# default with `build` removed; keep it explicit so a future pytest default
+# cannot re-hide a test directory. Pinned by
+# `tests/spec/test_test_tree_is_fully_collected.py`.
+norecursedirs = ["*.egg", ".*", "_darcs", "CVS", "dist", "node_modules", "venv", "{arch}"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+pythonpath = ["src", "."]
+markers = [
+    "live_llm: marks tests that make real LLM CLI calls (real money). SKIPPED by default — tests/conftest.py adds a skip marker unless --live-llm is passed or LIVE_LLM=1 is set. Renamed from 'integration' in ADR-0008 to free that namespace for Tier 3 (Integration).",
+    "e2e: tier-5 single-cycle or tier-6 multi-cycle pipeline tests using the fake agent (feature 018; tier numbers per ADR-0008)",
+    "slow: tests that subprocess into build.sh or other slow harnesses (feature 018)",
+    "regression: voluntary tag for tests that exist to prevent a specific shipped CHANGELOG.md bug from recurring (ADR-0008)",
+    "acceptance: voluntary tag for tests that prove a specific specs/NNN-*/spec.md acceptance scenario (ADR-0008)",
+]

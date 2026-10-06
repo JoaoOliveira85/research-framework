@@ -1,0 +1,1 @@
+{"verdict": "reject", "violations": [{"rule_id": "IX-tier2-missing", "location": "note:data_vault/01 - Concepts/Alpha.md", "message": "No source_urls entry"}], "suggested_fix": "Add at least one source URL"}

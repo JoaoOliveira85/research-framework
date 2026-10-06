@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-04-16T14:00:00",
+  "note_count": 6,
+  "active_notes": 6,
+  "by_type": {"concept": 6},
+  "by_folder": {"01 - Concepts": 6},
+  "word_count_buckets": {"<200": 0, "200-499": 6, "500-999": 0, "1000+": 0},
+  "unresolved_wikilinks": 1,
+  "unresolved_references": ["Nonexistent Target"]
+}

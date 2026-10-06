@@ -1,0 +1,25 @@
+---
+_template_version: 1
+---
+# {{ spec.name }} — AGENTS.md
+
+Layer 1 routing index. Agents read this file first to locate content.
+
+## Folder Structure
+
+{% for nt in spec.note_types -%}
+- `data_vault/{{ nt.folder }}/` — {{ nt.description }}
+{% endfor %}
+
+## Topic Index
+
+_(populated after Phase 2 by `update_vault.py reindex`)_
+
+## Data Sources Consulted
+
+Ordered by priority. Code is source-of-truth for behaviour; Confluence/Jira are
+consulted for intent.
+
+{% for ds in spec.data_sources | sort(attribute='priority') -%}
+- {{ ds.name }} ({{ ds.type }}, priority {{ ds.priority }}, role {{ ds.role }})
+{% endfor %}

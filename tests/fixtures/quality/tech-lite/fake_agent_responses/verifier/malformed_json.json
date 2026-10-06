@@ -1,0 +1,7 @@
+Here is the verifier verdict:
+```json
+{verdict: "reject", missing_quotes: true}
+```
+That's the verdict — should be parseable by the relaxed regex.
+
+Fallback inline verdict: {"verdict": "reject", "violations": [{"code": "SYNTHETIC", "message": "fake_agent malformed_json scenario"}], "suggested_fix": null}

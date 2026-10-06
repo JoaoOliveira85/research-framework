@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+"""Stub verifier CLI for pipeline tests.
+
+Parses --output-file <path> from argv and writes a canned verdict to that
+path.  Used to test verifier subprocess contracts without real claude.
+
+The verdicts are inlined as dicts rather than loaded from separate fixture
+files so that this stub is self-contained and CWD-independent — pytest may
+invoke it from varying working directories depending on how subprocess.run is
+called, so any relative path to a fixture would break.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+
+# Inlined so the stub is self-contained and CWD-independent (see module doc).
+ACCEPT_VERDICT = {"verdict": "accept", "violations": [], "suggested_fix": None}
+REJECT_VERDICT = {
+    "verdict": "reject",
+    "violations": ["Note 'Topic Alpha.md' is missing required front-matter field: tags"],
+    "suggested_fix": "Add a 'tags' key to the front-matter of Topic Alpha.md",
+}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output-file", required=True)
+    parser.add_argument(
+        "--canned-verdict",
+        choices=["accept", "reject"],
+        default="accept",
+        help="Which canned verdict to emit (default: accept)",
+    )
+    args, _ = parser.parse_known_args()
+
+    verdict = REJECT_VERDICT if args.canned_verdict == "reject" else ACCEPT_VERDICT
+    Path(args.output_file).write_text(json.dumps(verdict))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

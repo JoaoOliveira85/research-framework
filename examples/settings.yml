@@ -1,0 +1,420 @@
+# ===========================================================================
+# research-framework global settings
+# ===========================================================================
+# These are the *defaults*. Every value can be overridden by a vault's
+# research.spec.md (`settings:` block) — spec wins over file.
+#
+# The same file shape is copied into each generated vault so that the vault
+# remains self-contained once the generator is deleted.
+#
+# Principle: keep this file short, opinionated, and fully commented. A user
+# should be able to understand the entire pipeline by reading this file.
+# ===========================================================================
+
+schema_version: 1
+
+# ---------------------------------------------------------------------------
+# Where generated vaults land.
+#
+# `output_dir` is consulted when the user runs `./generate.sh` (or `rv
+# generate`) WITHOUT passing an explicit `--output <dir>` flag. It lets a
+# user who only has one vault they care about set the destination once and
+# then run the generator with zero arguments.
+#
+# Resolution rules:
+#
+#   - `null` (the default) — fall back to the spec file's own `location`
+#     field (detailed spec) or `<spec-file-parent>/<spec.name>` (simple
+#     spec). Backwards-compatible with pre-0.2.9 behaviour.
+#   - Leading `~` is expanded to the user's home directory.
+#   - `$ENV_VAR` / `${ENV_VAR}` are expanded.
+#   - Absolute paths are used as-is.
+#   - Relative paths are resolved against the parent directory of *this*
+#     settings file, NOT the user's current working directory — that way a
+#     settings.yaml committed next to a spec stays portable.
+#
+# CLI precedence: `--output` flag > `output_dir` here > spec location.
+# ---------------------------------------------------------------------------
+output_dir: null
+
+# ---------------------------------------------------------------------------
+# How agents talk to models.
+# ---------------------------------------------------------------------------
+communication:
+  # "cli"  → spawn local CLI binaries (claude, codex, …) as subprocesses.
+  # "api"  → call providers directly over HTTP (requires keys). NOT YET
+  #          IMPLEMENTED; the orchestrator will error out if selected.
+  mode: cli
+
+# ---------------------------------------------------------------------------
+# Default executor applied to any stage that does not override it.
+# An executor is an *object*, not a string: it pairs a runtime with a model,
+# a skill file, a timeout, and a failure policy. Stages pick up this default
+# and then tweak only the fields they need (usually `model` and `skill`).
+# ---------------------------------------------------------------------------
+default_executor:
+  type: cli             # cli | script | api
+  runtime: claude       # binary on PATH; only used when type == cli
+  model: sonnet         # friendly alias → resolved by the runtime
+  skill: null           # filled in per stage
+  timeout_s: 3600       # 1 hour — long enough for the hardest single call
+  retry: 1              # number of retries on non-zero exit / API 5xx
+  # ---------------------------------------------------------------------
+  # Why bypassPermissions:
+  #
+  # speckit's contract IS the spec — `sources:`, `note_types:`,
+  # `data_sources:` already declare what the agent is authorised to
+  # read, fetch, and write. Re-asking the human for each Bash call,
+  # WebFetch, or file edit during a non-interactive `--print` run is
+  # both impossible (no human present) and redundant (the spec is the
+  # authorisation). The codex profile already mirrors this with
+  # `--sandbox workspace-write` — this is the claude equivalent.
+  #
+  # Set to `default` (or remove the args block) if you want per-call
+  # confirmation; override at stage level for asymmetric trust.
+  # ---------------------------------------------------------------------
+  args:
+    - --permission-mode
+    - bypassPermissions
+  on_fail: abort        # abort | skip | continue
+
+# ---------------------------------------------------------------------------
+# Pipeline-wide knobs that don't fit under a single stage.
+# ---------------------------------------------------------------------------
+pipeline:
+  # ---------------------------------------------------------------------
+  # Auto-promotion threshold for orphan wikilinks.
+  #
+  # After every cycle, `topic_harvest.py` ranks every unresolved
+  # `[[wikilink]]` by how many distinct existing notes cite it. Any
+  # entry whose citation count meets or exceeds this threshold becomes
+  # a new `CoverageCategory` in `_pipeline/coverage-targets.json` —
+  # so the Phase 3 gate tracks emergent topology rather than just
+  # spec-author foresight (constitution v1.3.0 § "Coverage Targets —
+  # Dynamic extension via backlog promotion").
+  #
+  # Tuning:
+  #   1   → every orphan becomes a target (rarely useful — produces noise
+  #         from acronyms and casual name-drops)
+  #   2   → default; balances noise filtering against capturing real
+  #         emergent concepts the agent surfaces
+  #   3+  → stricter; only orphans the vault's own notes converge on
+  #   ∞   → set to a very high number to disable auto-promotion entirely
+  # ---------------------------------------------------------------------
+  backlog_promotion_threshold: 2
+
+  # ---------------------------------------------------------------------
+  # Feature 017 — vault quality fix.
+  # All keys below have safe defaults that match the spec's Story 9
+  # thresholds; tune per vault by overriding in the spec's `settings:`
+  # block. The orchestrator reads these at cycle start.
+  # ---------------------------------------------------------------------
+
+  # Topics per note-writer invocation. Hard-clamped to [3, 10] by the
+  # batch scheduler (R-004); values outside range log a WARN and clamp.
+  note_writer_batch_size: 6
+
+  # Safety net so a runaway batch loop can't burn the entire budget on
+  # one cycle. WARN-and-stop on cap-trip; never FAILs the cycle.
+  max_batches_per_cycle: 10
+
+  # Mid-run source-failure thresholds (R-003). Required-source quorum
+  # loss aborts the cycle (exit 2). Enrichment failures are unlimited
+  # by default (0 = disabled cap). Set per-vault when a stricter
+  # discipline is wanted (e.g. code-derived vaults: required_quorum_loss: 1).
+  source_failure_thresholds:
+    required_quorum_loss: 2
+    enrichment_max_failures: 0
+
+  # Queryability score regression band (R-002). Drops within this
+  # tolerance are reported as `stable`; drops beyond are `regressing`
+  # (WARN, not FAIL). 5pp is ~1.5x observed run-to-run agent variance.
+  queryability_score_regression_pp: 5
+
+  # Deterministic gate thresholds (spec Story 9). All gates produce
+  # GateResult with PASS/WARN/FAIL/NA; the orchestrator uses these to
+  # decide whether to retry the cycle (incremental, max 2 retries).
+  gates:
+    # SG (step gates) — run between scout/note-writer steps.
+    sg_001_min_topics_warn_floor: 1     # < this → SG-001 FAIL
+    sg_002_min_categories: 5            # min distinct categories in topics_found.new
+    sg_003_abstraction_warn_pct: 20     # 20% < ratio ≤ warn_pct → WARN
+    sg_003_abstraction_fail_pct: 60     # ratio > fail_pct → FAIL
+    # CG (cycle gates) — run after notes are written, before next cycle.
+    cg_001_min_yield_factor: 1.0        # multiplier on ceil(remaining/remaining_cycles)
+    cg_002_min_categories_per_cycle: 3  # cycle must touch ≥ this many categories
+    cg_004_min_avg_word_count: 200      # falls back to per-note-type min_word_count when stricter
+    cg_006_min_word_count_compliance_pct: 90  # ≥ this % of cycle's notes meet min_word_count
+    cg_007_max_orphan_link_pct: 15      # ≤ this % of cycle's wikilinks unresolved at cycle end
+
+# ---------------------------------------------------------------------------
+# Per-stage executor overrides.
+# Stage keys mirror the orchestrator's pipeline map:
+#   1.x  install / pre-flight
+#   2.x  per-cycle pre-processing
+#   3.x  scout / research / verify / write-back
+#   4.x  post-cycle analysis
+#   5.x  user-facing read/write operations (ask/write)
+#
+# Fields left unset inherit from `default_executor`.
+# ---------------------------------------------------------------------------
+stages:
+  # --- 1.x install / pre-flight ------------------------------------------
+  install_wizard:
+    model: sonnet       # conversational; needs follow-up questions
+    skill: install-wizard
+
+  vault_spec_author:
+    model: sonnet
+    skill: vault-spec
+
+  # --- 2.x pre-processing ------------------------------------------------
+  source_relevance:
+    model: haiku        # cheap binary related/unrelated gate
+    skill: source-relevance
+    timeout_s: 300
+
+  # --- 3.x scout / research / verify -------------------------------------
+  scout:
+    model: sonnet
+    skill: scout
+
+  topic_classifier:
+    model: haiku
+    skill: topic-classifier
+
+  dfs_prompt_gen:
+    model: sonnet       # router may upgrade to opus on complex topics
+    skill: dfs-prompt-gen
+
+  note_writer:
+    model: sonnet       # router can upgrade per-topic
+    skill: note-writer
+
+  note_tagger:
+    model: haiku
+    skill: note-tagger
+
+  verifier:
+    enabled: true
+    model: sonnet
+    skill: verifier
+    timeout_s: 600
+    on_timeout: pending
+    output_filename: "cycle-{cycle:03d}-verifier.json"
+
+  source_manager:
+    enabled: true
+    decay_after_n_cycles: 3         # archive unlocked sources after N consecutive empty cycles
+    auto_promote_discovered: false  # true = no confirmation prompt when promoting new sources
+
+  # --- 3.9 end-of-cycle topic expansion (independent sub-stages) ---------
+  # Phase 1 (`topic_harvest`) is a zero-cost deterministic script — it
+  # always runs and has no settings here. Phase 2 (`topic_propose`) is an
+  # optional agent stage that proposes scope-bounded tangents derived
+  # from the notes just written this cycle. It is OFF by default so a
+  # new vault stays predictable; flip `enabled: true` to turn it on.
+  #
+  # The two phases are fully independent: Phase 1 writes
+  # `_pipeline/cycles/cycle-NNN-harvest.json` + a `topic-harvest` managed
+  # block in `research-backlog.md`; Phase 2 writes
+  # `cycle-NNN-propose.json` + a separate `topic-propose` block. You can
+  # enable/disable or re-tune them without touching the other.
+  #
+  # See specs/003-topic-harvest-stage/phase-2-semantic.md.
+  topic_propose:
+    enabled: false          # opt-in; default off for predictability
+    model: haiku            # cheap relevance judgement, not deep reasoning
+    skill: topic-propose
+    timeout_s: 900
+    # How many accepted proposals to surface per cycle. Extra candidates
+    # are pushed to `rejected[]` with `rejected_by: cap_exceeded` so the
+    # agent's output is fully recorded for audit.
+    max_proposals: 10
+    # How many hops from a touched note a proposal's parent may live.
+    # 1 = parent was written/updated this cycle. 2 = parent is cited via
+    # `[[…]]` from a touched note. Anything further is rejected.
+    max_degree: 2
+    # Closed enum — proposals that pick any other value are rejected
+    # with `rejected_by: bad_relation`. Extend only when the existing
+    # types genuinely can't capture a recurring case.
+    relation_types:
+      - variant
+      - prerequisite
+      - contrast
+      - sibling
+      - downstream_effect
+      - user_question
+    # What Phase 2 does when the spec has no `scope.out_of_scope`.
+    #   skip  → emit an empty manifest and return (default; safest).
+    #   warn  → proceed, tag every accepted proposal `scope_check: warn`.
+    #   error → emit an empty manifest and flag the run's final report.
+    on_missing_out_of_scope: skip
+    # Auto-promote accepted proposals into the next cycle's scout as
+    # explicit target_topics. Turn off to keep Phase 2 purely advisory
+    # (proposals live in the backlog but the scout isn't forced to
+    # consume them).
+    auto_promote: true
+
+  # --- 4.x post-cycle ----------------------------------------------------
+  cycle_report:
+    model: sonnet
+    skill: cycle-report
+
+  final_report:
+    model: sonnet
+    skill: final-report
+
+  # --- 5.x ask / write ---------------------------------------------------
+  ask_answer:
+    model: sonnet
+    skill: ask-answer
+
+  doc_planner:
+    model: sonnet
+    skill: doc-planner
+
+  doc_writer:
+    model: sonnet       # router may upgrade to opus
+    skill: doc-writer
+
+  # --- Utility -----------------------------------------------------------
+  model_router:
+    model: haiku        # cheap dispatch decision
+    skill: model-router
+
+  default_update_spec:
+    model: sonnet       # validates whether the implicit update spec still fits
+    skill: default-update-spec
+
+# ---------------------------------------------------------------------------
+# Model router — when enabled, the router decides at runtime whether to
+# upgrade a stage's executor (e.g. sonnet → opus) based on signals from the
+# inputs. Stages that accept routing are listed below; anything not listed
+# uses its static executor.
+# ---------------------------------------------------------------------------
+model_router:
+  enabled: true
+  eligible_stages:
+    - dfs_prompt_gen
+    - note_writer
+    - doc_writer
+    - ask_answer
+  signals:
+    - input_tokens         # more context → consider opus
+    - source_count         # >10 sources → consider opus
+    - cross_link_density   # dense wikilinking → consider opus
+    - citation_density     # many tier-2 sources to reconcile → opus
+    - topic_class          # "concept" or "decision" heavier than "reference"
+    - complexity_flag      # user-supplied --complexity=high in ask/write
+  upgrade_rules:
+    # Very rough defaults; tuned by users per-vault.
+    opus_if_tokens_over: 40000
+    opus_if_sources_over: 10
+
+# ---------------------------------------------------------------------------
+# Research loop limits.
+# ---------------------------------------------------------------------------
+cycles:
+  # First ever run (vault creation). Generous so big-bang vaults can land.
+  initial_max: 6
+  # Every subsequent update cycle. Kept small — users trigger manually.
+  update_max: 3
+  # Verifier rejections that count as "stop trying"; exits the loop gracefully.
+  max_consecutive_verifier_rejections:
+    initial: 6
+    update: 3
+
+# ---------------------------------------------------------------------------
+# Research mode defaults.
+# Each run picks exactly one mode (auto-detected or `--mode`-overridden);
+# every cycle inside the run inherits it. The spec can override per-vault;
+# individual fields can also be overridden per-run by CLI flags.
+#
+# Mode semantics:
+#   bootstrap → breadth-first scaffolding of a new vault; creates new notes.
+#   refresh   → depth-first currency; only merges updates into existing
+#               notes. New topics get deferred to `_pipeline/research-backlog.md`.
+#   expand    → mixed: grows coverage AND refreshes. Ends with a tail-refresh
+#               cycle when `auto_tail_refresh` is true.
+#
+# Auto-detection (when --mode is not supplied):
+#   empty data_vault/   → bootstrap
+#   non-empty, no spec scope drift → refresh
+#   non-empty, scope widened or --mode expand → expand
+# ---------------------------------------------------------------------------
+research_modes:
+  bootstrap:
+    exit_condition: coverage_met          # gate against `coverage-targets.json`
+    scout_bias: new_topics
+    note_action: create                   # writer creates new notes
+    wind_down:
+      budget_pct_trigger: 0.8             # stop scouting when budget ≥80% spent
+      zero_scout_cycles_trigger: 2        # …or after 2 cycles of zero new topics
+      min_cycles_before_wind_down: 2      # never wind down before cycle 2
+
+  refresh:
+    exit_condition: no_new_deltas         # scout returns 0 deltas, verifier
+                                          #    accepts 0 merges → terminate
+    scout_bias: changes_since_snapshot    # uses `_pipeline/snapshots/` for diff
+    note_action: merge                    # updates existing notes only
+    new_topic_policy: backlog             # never write inline; defer to backlog
+    # refresh never needs wind-down: it doesn't scout for new topics, so the
+    # sprawl-without-substance failure mode doesn't apply.
+
+  expand:
+    exit_condition: coverage_met_or_no_deltas   # whichever fires last per pair
+    scout_bias: both                            # new topics AND deltas each cycle
+    note_action: create_or_merge
+    budget_split:
+      coverage_pct: 0.6                         # 60% of run budget for new notes
+      refresh_pct: 0.4                          # 40% for merging deltas
+    wind_down:
+      budget_pct_trigger: 0.8
+      zero_scout_cycles_trigger: 2
+      min_cycles_before_wind_down: 2
+    auto_tail_refresh: true                     # chain a final refresh cycle
+                                                # so we never exit on a scout
+
+# ---------------------------------------------------------------------------
+# Exit invariant (applies to all modes).
+# A note is a "stub" when any of the following is true:
+#   • word_count < note_type.min_word_count
+#   • source_urls is empty
+#   • verifier status is `pending` or `rejected`
+#   • frontmatter `status` is still `draft`
+# No run may terminate while `stubs_remaining > 0`. The orchestrator either
+# spends remaining budget resolving them or aborts with a report.
+# ---------------------------------------------------------------------------
+exit_invariant:
+  block_on_stubs: true
+  try_resolve_before_abort: true              # use leftover budget to fix stubs
+
+# ---------------------------------------------------------------------------
+# Budget guard rails. `null` means "no cap" — a pre-flight warning is still
+# shown when estimated cost is ≥80% of the cap, or when the cap is null.
+# ---------------------------------------------------------------------------
+budget:
+  max_usd: null
+  warn_at_pct: 0.8
+
+# ---------------------------------------------------------------------------
+# Commands exposed inside the generated vault. The keys are slash-command
+# names (and script names) the vault will render; the values are the
+# pipelines that back them. Users can rename keys to suit their taste
+# (e.g. "research-framework" instead of "ask") without touching pipeline code.
+# ---------------------------------------------------------------------------
+commands:
+  ask: ask_answer
+  research: scout            # entry-point for the research loop
+  write: doc_writer
+
+# ---------------------------------------------------------------------------
+# Citation / verifier policy (Principle IX).
+# ---------------------------------------------------------------------------
+citation:
+  tier1_required: true       # every answer cites vault notes
+  tier2_required: true       # those notes must themselves cite externals
+  render_sections:
+    tier1_heading: "Vault Sources"
+    tier2_heading: "Original Sources"

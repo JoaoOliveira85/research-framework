@@ -1,0 +1,7 @@
+stages:
+  verifier:
+    enabled: true
+    model: sonnet
+    timeout_s: 30
+    on_timeout: pending
+    output_filename: "cycle-{cycle:03d}-verifier.json"

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "research_vault/contracts/correction-directive.schema.json",
+  "title": "Correction Directive (FR-018)",
+  "description": "Structured payload that turns a gate FAIL into prompt-injection text for the next batch (or next cycle, when batch_number is null). Written by pipeline/correction.py. Auto-expires after `expires_after_cycle`.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "cycle_number",
+    "batch_number",
+    "failing_gate_ids",
+    "diagnosis",
+    "required_actions",
+    "forbidden_actions",
+    "expires_after_cycle",
+    "generated_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1" },
+    "cycle_number": { "type": "integer", "minimum": 1 },
+    "batch_number": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "description": "Null means the directive applies cycle-wide (CG-xxx FAIL). Integer ≥ 1 means the directive applies to a specific batch retry."
+    },
+    "failing_gate_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "pattern": "^[CS]G-\\d{3}$" }
+    },
+    "diagnosis": { "type": "string", "minLength": 1 },
+    "required_actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "forbidden_actions": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "expires_after_cycle": { "type": "integer", "minimum": 1 },
+    "generated_at": { "type": "string", "format": "date-time" }
+  }
+}

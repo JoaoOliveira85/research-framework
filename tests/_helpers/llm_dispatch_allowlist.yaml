@@ -1,0 +1,7 @@
+# LLM dispatch allowlist — permitted direct claude/codex subprocess bypasses.
+#
+# Schema (one list item): see specs/024-testing-infrastructure-v2/data-model.md § Entity 1.
+# Contract: specs/018-testing-strategy/contracts/llm-dispatch-guard.contract.md
+#
+# Rows shrink to zero when spec 025 Tier A1/A2 route these paths through agent_call.py.
+# (empty — SC-003 satisfied after A1 + A2)

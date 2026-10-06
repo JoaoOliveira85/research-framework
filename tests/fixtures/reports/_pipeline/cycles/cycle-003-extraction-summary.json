@@ -1,0 +1,14 @@
+{
+  "cycle": 3,
+  "modules": [
+    {
+      "name": "reddit",
+      "preflight": {
+        "verdict": "fatal_fail",
+        "messages": [
+          "missing env var REDDIT_TOKEN"
+        ]
+      }
+    }
+  ]
+}

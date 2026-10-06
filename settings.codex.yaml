@@ -1,0 +1,365 @@
+# ===========================================================================
+# research-framework global settings — CODEX profile
+# ===========================================================================
+# This is a drop-in alternative to `settings.yaml` that routes every stage
+# through the `codex` CLI instead of `claude`. Pick this profile when you
+# don't have Anthropic tokens / credits available (e.g. mid-month quota
+# exhaustion) but still want the vault to run end-to-end.
+#
+# How to use it:
+#
+#   rv generate --spec research.spec.md --output ~/my-vault \
+#               --settings settings.codex.yaml
+#
+# The flag copies THIS file into `{vault}/settings.yaml`, so the generated
+# vault is still fully self-contained — you can delete the generator
+# afterwards.
+#
+# Model-alias translation vs. the Claude profile:
+#
+#   claude profile      codex profile
+#   --------------      -------------
+#   haiku (cheap)   →   gpt-5.4        (reasoning: low — see `args:` below)
+#   sonnet (default) →  gpt-5.4        (default reasoning — medium)
+#   opus (upgrade)  →   gpt-5.5        (the strongest agentic coding model)
+#
+# Codex doesn't expose a separate "cheap" tier the way Anthropic does, so
+# the haiku-equivalent stages run on `gpt-5.4` with reduced reasoning
+# effort via `args: [-c, model_reasoning_effort=low]`. Remove that override
+# if you'd rather keep every stage at medium reasoning.
+# ===========================================================================
+
+schema_version: 1
+
+# ---------------------------------------------------------------------------
+# Where generated vaults land.
+#
+# Same semantics as `output_dir:` in the Claude profile — see settings.yaml
+# for full documentation. Leaving it `null` falls back to the spec file's
+# own `location` field.
+# ---------------------------------------------------------------------------
+output_dir: null
+
+# ---------------------------------------------------------------------------
+# How agents talk to models.
+# ---------------------------------------------------------------------------
+communication:
+  mode: cli                   # spawn `codex` as a subprocess
+
+# ---------------------------------------------------------------------------
+# Default executor applied to any stage that does not override it.
+#
+# `args` here are applied to EVERY codex invocation (additive merge with
+# per-stage `args`). The flags below are runtime-level requirements,
+# not tuning knobs — change them only if you know what you're doing:
+#
+#   --skip-git-repo-check
+#       Codex's default sandbox refuses to run unless the cwd is a
+#       trusted git repo. The generator now `git init`s the vault at
+#       scaffold time so this normally isn't needed, but the flag is
+#       kept as a belt-and-suspenders safety for vaults moved or
+#       re-rooted after generation.
+#
+#   --sandbox workspace-write
+#       Codex `exec` defaults to a read-only sandbox. The scout and DFS
+#       stages need to WRITE their JSON reports into `_pipeline/cycles/`
+#       and note files into `data_vault/`, which requires the
+#       workspace-write sandbox. Under workspace-write, writes are confined
+#       to codex's *working root*; agent_call.py auto-injects
+#       `--cd <vault>` so that root IS the vault (it does NOT have to be the
+#       cwd you launched from, or live under the framework dir). Reads are
+#       still allowed anywhere the OS permits, so code-first vaults can read
+#       repos outside the vault. `danger-full-access` is deliberately NOT
+#       used: it runs every model-issued command UNsandboxed with full-disk
+#       read+write+network — the behavioural pattern that got 15 git-ignored
+#       vault scripts quarantined by endpoint security mid-cycle on
+#       2026-06-05 (CHANGELOG [1.0.0rc2]). workspace-write keeps the agent
+#       contained to the vault.
+#
+#   -c sandbox_workspace_write.network_access=true
+#       workspace-write blocks outbound network BY DEFAULT. MCP servers run
+#       in the codex process itself (not as sandboxed shell children) so they
+#       work regardless, but the research agent's own shell fetches need this
+#       toggle. Set to `false` for a fully air-gapped, MCP-only vault.
+# ---------------------------------------------------------------------------
+default_executor:
+  type: cli
+  runtime: codex              # expects a `codex` binary on PATH
+  model: gpt-5.4              # balanced default for the majority of stages
+  args:                       # applied to EVERY codex call (additive)
+    - --skip-git-repo-check
+    - --sandbox
+    - workspace-write
+    - -c
+    - sandbox_workspace_write.network_access=true
+  skill: null                 # filled in per stage
+  timeout_s: 3600
+  retry: 1
+  on_fail: abort
+
+# ---------------------------------------------------------------------------
+# Pipeline-wide knobs that don't fit under a single stage. Mirrors the
+# `pipeline:` block in settings.yaml so the codex profile reaches the
+# same defaults; tune per vault by overriding in the spec's `settings:`.
+# ---------------------------------------------------------------------------
+pipeline:
+  max_cycles: 20
+  # Run-level CUMULATIVE dollar cap. `0` / `0.0` / an absent key mean
+  # UNLIMITED, decided in the spec-061 resolver itself (amendment
+  # 2026-09-07); see settings.yaml for the full rationale.
+  budget_usd: 25.00
+  backlog_promotion_threshold: 2
+
+  # ---------------------------------------------------------------------
+  # Feature 017 — vault quality fix. See settings.yaml for the
+  # commented rationale of each key (R-001..R-011).
+  # ---------------------------------------------------------------------
+  note_writer_batch_size: 6
+  max_batches_per_cycle: 10
+  source_failure_thresholds:
+    required_quorum_loss: 2
+    enrichment_max_failures: 0
+  queryability_score_regression_pp: 5
+  gates:
+    sg_001_min_topics_warn_floor: 1
+    sg_002_min_categories: 5
+    sg_003_abstraction_warn_pct: 20
+    sg_003_abstraction_fail_pct: 60
+    abstraction_enabled: true           # false switches SG-003/CG-003 off
+    cg_001_min_yield_factor: 1.0
+    cg_002_min_categories_per_cycle: 3
+    cg_004_min_avg_word_count: 200
+    cg_006_min_word_count_compliance_pct: 90
+    cg_007_max_orphan_link_pct: 15
+
+# ---------------------------------------------------------------------------
+# Per-stage executor overrides.
+# ---------------------------------------------------------------------------
+stages:
+  # --- 1.x install / pre-flight ------------------------------------------
+  install_wizard:
+    model: gpt-5.4
+    skill: install-wizard
+
+  vault_spec_author:
+    model: gpt-5.4
+    skill: vault-spec
+
+  # --- 2.x pre-processing ------------------------------------------------
+  # Source-relevance is a cheap related/unrelated gate — run it with low
+  # reasoning effort to keep cost in line with the Anthropic haiku tier.
+  source_relevance:
+    model: gpt-5.4
+    args: ["-c", "model_reasoning_effort=low"]
+    skill: source-relevance
+    timeout_s: 300
+
+  # --- 3.x scout / research / verify -------------------------------------
+  scout:
+    model: gpt-5.4
+    skill: scout
+
+  topic_classifier:
+    model: gpt-5.4
+    args: ["-c", "model_reasoning_effort=low"]
+    skill: topic-classifier
+
+  dfs_prompt_gen:
+    model: gpt-5.4
+    skill: dfs-prompt-gen         # router may upgrade to gpt-5.5
+
+  note_writer:
+    model: gpt-5.4
+    skill: note-writer            # router may upgrade per-topic
+
+  note_tagger:
+    model: gpt-5.4
+    args: ["-c", "model_reasoning_effort=low"]
+    skill: note-tagger
+
+  verifier:
+    enabled: true
+    model: gpt-5.4
+    skill: verifier
+    timeout_s: 600
+    on_timeout: pending
+    output_filename: "cycle-{cycle:03d}-verifier.json"
+
+  source_manager:
+    enabled: true
+    decay_after_n_cycles: 3         # archive unlocked sources after N consecutive empty cycles
+    auto_promote_discovered: false  # true = no confirmation prompt when promoting new sources
+
+  # --- 3.9 end-of-cycle topic expansion (independent sub-stages) ---------
+  # Phase 1 (`topic_harvest`) is deterministic and takes no settings. This
+  # block configures Phase 2 (`topic_propose`) — an optional Codex-backed
+  # agent that proposes scope-bounded tangents from this cycle's notes.
+  # See specs/003-topic-harvest-stage/phase-2-semantic.md for the contract.
+  topic_propose:
+    enabled: false          # opt-in; flip true to activate
+    model: gpt-5.4          # relevance judgement, low reasoning
+    args: ["-c", "model_reasoning_effort=low"]
+    skill: topic-propose
+    timeout_s: 900
+    max_proposals: 10
+    max_degree: 2
+    relation_types:
+      - variant
+      - prerequisite
+      - contrast
+      - sibling
+      - downstream_effect
+      - user_question
+    on_missing_out_of_scope: skip
+    auto_promote: true
+
+  # --- 4.x post-cycle ----------------------------------------------------
+  cycle_report:
+    model: gpt-5.4
+    skill: cycle-report
+
+  final_report:
+    model: gpt-5.4
+    skill: final-report
+
+  # --- 5.x ask / write ---------------------------------------------------
+  ask_answer:
+    model: gpt-5.4
+    skill: ask-answer
+
+  doc_planner:
+    model: gpt-5.4
+    skill: doc-planner
+
+  doc_writer:
+    model: gpt-5.4
+    skill: doc-writer             # router may upgrade to gpt-5.5
+
+  # --- Utility -----------------------------------------------------------
+  # Model router itself is a dispatch decision — keep it cheap.
+  model_router:
+    model: gpt-5.4
+    args: ["-c", "model_reasoning_effort=low"]
+    skill: model-router
+
+  default_update_spec:
+    model: gpt-5.4
+    skill: default-update-spec
+
+# ---------------------------------------------------------------------------
+# Model router — upgrades specific stages to the strongest model when the
+# workload warrants it. On the Codex profile, "upgrade" means gpt-5.4 →
+# gpt-5.5 (Codex's strongest agentic coding model, per the /release notes).
+# ---------------------------------------------------------------------------
+model_router:
+  enabled: true
+  eligible_stages:
+    - dfs_prompt_gen
+    - note_writer
+    - doc_writer
+    - ask_answer
+  signals:
+    - input_tokens
+    - source_count
+    - cross_link_density
+    - citation_density
+    - topic_class
+    - complexity_flag
+  upgrade_rules:
+    # On upgrade, the router swaps the executor to gpt-5.5. Adjust the
+    # thresholds if you want to pay for the stronger model more or less
+    # aggressively.
+    upgrade_model: gpt-5.5
+    opus_if_tokens_over: 40000
+    opus_if_sources_over: 10
+
+# ---------------------------------------------------------------------------
+# Research loop limits. Runtime-agnostic (identical to the Claude profile).
+#
+# The per-run cycle cap is the canonical `pipeline.max_cycles` (above) — spec
+# 061. The deprecated `cycles.initial_max`/`update_max` seeds were REMOVED here
+# too (they silently won over the spec in the rc1 codebase-vault run: 12 → 6).
+# A vault that still carries them gets warn-and-honour ONLY when
+# `pipeline.max_cycles` is absent; otherwise the canonical key wins + a WARNING.
+# ---------------------------------------------------------------------------
+cycles:
+  # Verifier rejections that count as "stop trying"; exits the loop gracefully.
+  max_consecutive_verifier_rejections:
+    initial: 6
+    update: 3
+
+# ---------------------------------------------------------------------------
+# Research mode defaults. Identical to the Claude profile — the semantics
+# are the same regardless of which runtime answers.
+# ---------------------------------------------------------------------------
+research_modes:
+  bootstrap:
+    exit_condition: coverage_met
+    scout_bias: new_topics
+    note_action: create
+    wind_down:
+      budget_pct_trigger: 0.8
+      zero_scout_cycles_trigger: 2
+      min_cycles_before_wind_down: 2
+
+  refresh:
+    exit_condition: no_new_deltas
+    scout_bias: changes_since_snapshot
+    note_action: merge
+    new_topic_policy: backlog
+
+  expand:
+    exit_condition: coverage_met_or_no_deltas
+    scout_bias: both
+    note_action: create_or_merge
+    budget_split:
+      coverage_pct: 0.6
+      refresh_pct: 0.4
+    wind_down:
+      budget_pct_trigger: 0.8
+      zero_scout_cycles_trigger: 2
+      min_cycles_before_wind_down: 2
+    auto_tail_refresh: true
+
+# ---------------------------------------------------------------------------
+# Exit invariant. Runtime-agnostic.
+# ---------------------------------------------------------------------------
+exit_invariant:
+  block_on_stubs: true
+  try_resolve_before_abort: true
+
+# ---------------------------------------------------------------------------
+# Budget guard rails. Codex pricing differs from Anthropic's, so the dollar
+# figures below land in a different ballpark than settings.yaml's.
+# ---------------------------------------------------------------------------
+# The block the settings loader actually parses (spec 033). The older
+# top-level `budget:` block was never read by any code path — it is gone
+# (issue #230). Absent limits are SKIPPED by budget_guard, so a profile that
+# declared none ran unattended with no ceiling at all. These are runaway
+# ceilings, not targets; see settings.yaml for the full rationale.
+limits:
+  cycle_budget_usd: 5.00
+  cycle_budget_warn_at: 0.8
+  cycle_wallclock_budget_minutes: 90
+  # Codex meters tokens against an external plan cap, so the dollar figure is
+  # an estimate and the token tally is the real currency. Sized as a runaway
+  # ceiling for one cycle.
+  codex_token_budget: 1500000
+
+# ---------------------------------------------------------------------------
+# Vault commands. Runtime-agnostic.
+# ---------------------------------------------------------------------------
+commands:
+  ask: ask_answer
+  research: scout
+  write: doc_writer
+
+# ---------------------------------------------------------------------------
+# Citation / verifier policy (Principle IX). Runtime-agnostic.
+# ---------------------------------------------------------------------------
+citation:
+  tier1_required: true
+  tier2_required: true
+  render_sections:
+    tier1_heading: "Vault Sources"
+    tier2_heading: "Original Sources"

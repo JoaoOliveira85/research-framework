@@ -1,0 +1,13 @@
+usage: research-framework digest [-h] --vault VAULT
+                                 [--since SINCE | --last-week | --last-month | --last-quarter]
+                                 [--output OUTPUT]
+
+options:
+  -h, --help       show this help message and exit
+  --vault VAULT    Vault directory
+  --since SINCE    ISO8601 start date
+  --last-week      Digest the last 7 days
+  --last-month     Digest the last 30 days
+  --last-quarter   Digest the last 90 days
+  --output OUTPUT  Override output path (default:
+                   _pipeline/digests/digest-<start>--<end>.md)

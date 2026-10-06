@@ -1,0 +1,22 @@
+name: oreilly
+version: 0.1.0
+description: O'Reilly Learning content search (metadata-only, paywalled platform)
+triggers:
+  - type: url_pattern
+    pattern: "^https?://learning\\.oreilly\\.com/(?:search|library|api)/"
+entry_point: extractor.py
+preflight:
+  entry_point: preflight.py
+  timeout_seconds: 30
+default_value_tier: routine
+default_tier: basic
+schema_examples: few-shot.md
+source_id_from:
+  oreilly_queries: url
+user_owned:
+  - sources.yaml
+extraction_timeout_seconds: 180
+
+authentication:
+  env_vars: [OREILLY_API_KEY]
+failure_policy: block_cycle

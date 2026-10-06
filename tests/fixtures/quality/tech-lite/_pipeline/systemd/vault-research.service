@@ -1,0 +1,15 @@
+# tech-lite-quality-fixture — scheduled research
+# Install: cp this file to ~/.config/systemd/user/ && systemctl --user enable vault-research
+[Unit]
+Description=tech-lite-quality-fixture vault — research cycle
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/Users/dev/src/research-framework-022-us3/tests/fixtures/quality/tech-lite/vault research
+WorkingDirectory=/Users/dev/src/research-framework-022-us3/tests/fixtures/quality/tech-lite
+StandardOutput=append:/Users/dev/src/research-framework-022-us3/tests/fixtures/quality/tech-lite/_pipeline/research.log
+StandardError=append:/Users/dev/src/research-framework-022-us3/tests/fixtures/quality/tech-lite/_pipeline/research.log
+
+[Install]
+WantedBy=default.target

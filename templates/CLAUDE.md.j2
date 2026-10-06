@@ -1,0 +1,190 @@
+---
+_template_version: 1
+---
+# {{ spec.name }} — CLAUDE.md
+
+**Owner**: {{ spec.owner }}
+**Naming convention**: {{ spec.naming_convention }}
+**Domain**: {{ spec.scope.domain }}
+**Organization**: {{ spec.scope.organization }}
+
+This is the agent entry point for the {{ spec.name }} vault. Read this file before any
+research, write, or validation work. It declares the vault's scope, quality bar, note
+types, and data sources.
+
+{% if spec.scope.source_of_truth_rules -%}
+## Source-of-Truth Rule
+
+Sources do not have equal authority. Code wins on questions of current behaviour;
+Confluence/Jira are consulted for stated intent. When the two disagree, the note
+records both and flags the drift — it never silently picks one.
+
+{% for rule in spec.scope.source_of_truth_rules -%}
+- {{ rule }}
+{% endfor %}
+{% endif %}
+## Scope
+
+{% for boundary in spec.scope.boundaries -%}
+- In scope: {{ boundary }}
+{% endfor %}
+{% for excluded in spec.scope.out_of_scope -%}
+- Out of scope: {{ excluded }}
+{% endfor %}
+
+## Coverage Categories
+
+Every note you write MUST carry a `coverage_category: <slug>` frontmatter key
+pointing at EXACTLY ONE of the slugs below. This is how the orchestrator tracks
+progress against scope — without it, the fallback classifier has to guess, which
+spreads notes unevenly and exits the loop early.
+
+Pick the category whose description best matches the note's primary contribution
+(a single note can touch several scope items, but it should be *filed* under one).
+
+{% for cat in spec.coverage_targets.categories %}
+- **`{{ cat.name }}`** (target: {{ cat.target_count }} {{ cat.note_type }} notes){% if cat.display_name %} — {{ cat.display_name }}{% endif %}
+{% endfor %}
+
+## Quality Bar
+
+Every note MUST satisfy:
+
+- Follows the template section structure for its type (read `_templates/{type}.md`)
+- 200+ words (non-MOC notes)
+- Answers type-specific contextual questions (why/how/who)
+- All acronyms wikilinked on first occurrence in body
+- At least one source URL in frontmatter
+- `summary` ≤ 120 chars and specific
+- `related` field populated from wikilinks in body
+- Filename matches proposed_filenames from scout JSON
+
+{%- set ns = namespace(has_hard=false) -%}
+{%- for nt in spec.note_types -%}
+{%- if nt.resolved_source_policy() == 'hard' %}{% set ns.has_hard = true %}{% endif -%}
+{%- endfor -%}
+{%- if ns.has_hard %}
+For note types with `source_policy: hard` (service, flow, concept, decision), at
+least one `source_urls` entry MUST point at a code location (`https://github.com/...`
+or `file://.../<enumerated-repo>/...`).
+{%- endif %}
+
+## Note Types
+
+{% for nt in spec.note_types %}
+### {{ nt.name }}
+
+**Folder**: `{{ nt.folder }}/`
+**Min word count**: {{ nt.min_word_count }}
+**Source policy**: {{ nt.resolved_source_policy() }}{% if nt.resolved_source_policy() == "hard" %} (≥1 code source URL required){% endif %}
+
+{{ nt.description }}
+
+**Required sections**:
+{% for section in nt.required_sections -%}
+- `## {{ section }}`
+{% endfor %}
+**Contextual questions**:
+{% for q in nt.contextual_questions -%}
+- {{ q }}
+{% endfor %}
+{% endfor %}
+
+## Data Sources
+
+Ordered by priority (1 = primary). Code is the authoritative source of truth for
+behaviour; intent sources are consulted only to supplement code topics.
+
+{% for ds in spec.data_sources | sort(attribute='priority') -%}
+- **{{ ds.name }}** ({{ ds.type }}, priority {{ ds.priority }}, role **{{ ds.role }}**): {{ ds.description }}{% if ds.required %} — REQUIRED{% endif %}
+{% endfor %}
+
+## Search Dimensions
+
+All BFS scout passes must cover:
+
+{% for dim in spec.search_dimensions -%}
+- {{ dim }}
+{% endfor %}
+
+## Contextual Questions (all notes)
+
+{% for q in spec.scope.contextual_questions -%}
+- {{ q }}
+{% endfor %}
+
+{%- set code_examples = [] -%}
+{%- for ds in spec.data_sources -%}
+{%- if ds.priority == 1 and ds.role == 'behaviour' -%}
+{%- for r in ds.repos[:2] -%}{%- set _ = code_examples.append(r.url.rstrip('/') + '/...') -%}{%- endfor -%}
+{%- endif -%}
+{%- endfor -%}
+{%- if not code_examples -%}
+{%- for p in spec.code_source_url_patterns[:2] -%}{%- set _ = code_examples.append(p) -%}{%- endfor -%}
+{%- endif -%}
+{%- set code_examples = code_examples + ['file://.../<enumerated-repo>/...'] -%}
+{%- set intent_names = [] -%}
+{%- for ds in spec.data_sources -%}{%- if ds.role == 'intent' -%}{%- set _ = intent_names.append(ds.name) -%}{%- endif -%}{%- endfor -%}
+{%- set code_line = code_examples | map('string') | map('trim') | list -%}
+{%- set code_joined = code_line | join('`, `') -%}
+{%- if intent_names -%}
+{%- set intent_line = (intent_names | join(', ')) + ' URLs' -%}
+{%- else -%}
+{%- set intent_line = 'intent-source URLs (Confluence, Jira, Slack, etc.)' -%}
+{%- endif -%}
+## Autonomous Operation
+
+This vault is configured for autonomous operation. Proceed without asking
+for confirmation when:
+- Running research cycles, validation, health checks, or audit
+- Reading or writing files under `data_vault/`, `_pipeline/`, `raw_data/`
+- Fetching URLs for source health checks or raw data capture
+- Committing changes to git (with appropriate commit messages)
+
+Always ask before:
+- Deleting any note from `data_vault/`
+- Pushing to a git remote
+- Spending more than the per-run dollar cap (`pipeline.budget_usd` in `settings.yaml`) in a single session
+- Making changes outside the vault root directory
+
+## Citation Format
+
+When rendering citations in an answer or a note body, classify each URL and
+order them:
+
+{% if ns.has_hard -%}
+1. `[code]` — `{{ code_joined }}`
+2. `[intent]` — {{ intent_line }}
+3. `[domain]` — any other external URL (market research, industry reports)
+
+For notes where `intent_implementation_drift: true` in frontmatter, responses MUST
+name the disagreement explicitly ("code says X; intent says Y") rather than picking
+one silently.
+{%- else -%}
+1. `[vault]` — wikilinks to other notes in `data_vault/` (Tier 1, Principle IX)
+2. `[domain]` — external URLs listed in the note's `source_urls` frontmatter (Tier 2)
+
+Vault notes are the authoritative answer surface; external URLs are the origin
+of record cited by those notes.
+
+These tags belong to RENDERED citations only. A note's `source_urls`
+frontmatter is machine-read by the verifier: each entry is a bare URL, or a
+mapping with `url:`/`title:`/`credibility:`. Never write a `[tag]` prefix or a
+trailing ` — Title` into that field.
+
+## Applicability (optional frontmatter)
+
+A claim that holds only in one market, field, audience, product version or time window SHOULD say so in its own frontmatter:
+
+```yaml
+applicability:
+  market: EU
+  audience: beginners
+```
+
+Optional by design — omit it when the note is as broad as the vault, and use
+`all` for a dimension the claim does not narrow. It travels with the claim, so
+a downstream consumer reads the scope off the note instead of keeping its own
+table of which notes apply where. It is not a restatement of the note's type
+or folder.
+{%- endif %}

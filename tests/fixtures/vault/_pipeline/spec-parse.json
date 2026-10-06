@@ -1,0 +1,52 @@
+{
+  "name": "Test Vault",
+  "location": "/tmp/research_framework-test-vault",
+  "owner": "Test Author",
+  "scope": {
+    "domain": "testing, fixture data",
+    "organization": "Speckit test suite",
+    "boundaries": ["Test-only content"],
+    "out_of_scope": ["Production data"],
+    "contextual_questions": ["Why does this fixture exist?"]
+  },
+  "note_types": [
+    {
+      "name": "concept",
+      "description": "Abstract concepts and terminology",
+      "folder": "01 - Concepts",
+      "required_sections": ["Overview", "Key Details", "Relationships"],
+      "contextual_questions": ["What is this concept?"],
+      "min_word_count": 200
+    }
+  ],
+  "data_sources": [
+    {
+      "name": "Internal Wiki",
+      "type": "internal",
+      "description": "Company documentation",
+      "required": true,
+      "access_method": "web"
+    },
+    {
+      "name": "External Web",
+      "type": "external",
+      "description": "Public web content",
+      "required": true,
+      "access_method": "web"
+    }
+  ],
+  "search_dimensions": ["technical", "organizational", "domain", "market", "temporal"],
+  "coverage_targets": {
+    "categories": [
+      {"name": "concepts", "note_type": "concept", "target_count": 5, "met_count": 3, "required": true},
+      {"name": "services", "note_type": "concept", "target_count": 3, "met_count": 3, "required": true}
+    ],
+    "last_updated": "2026-04-16T14:30:00Z",
+    "cycle_number": 2
+  },
+  "budget": {"max_usd": 5.0, "max_cycles": 2, "warn_at_pct": 0.8},
+  "max_cycles": 2,
+  "naming_convention": "full_name",
+  "jira_project": null,
+  "access_modes": ["claude-code"]
+}

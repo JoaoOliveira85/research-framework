@@ -1,0 +1,18 @@
+{
+  "schema_version": "2.0",
+  "cycle": 2,
+  "phase": "research",
+  "timestamp": "2026-04-17T14:30:00Z",
+  "dimensions_covered": ["technical", "organizational", "domain", "market", "temporal"],
+  "topics_from_code": [
+    {"id": "CT-2-001", "topic_type": "service", "source_file": "acme-corp/oehk-service/README.md", "source_snippet": "lines 1-18"}
+  ],
+  "intent_from_confluence": [],
+  "proposed_filenames": [],
+  "sources_consulted": ["GitHub repos", "Confluence"],
+  "access_methods_used": {"acme-corp/oehk-service": "local"},
+  "termination_condition": "C",
+  "notes_created": ["OEHK (Order Engine Housekeeper).md"],
+  "unresolved_wikilinks": [],
+  "budget_consumed_usd": 251.00
+}

@@ -1,0 +1,66 @@
+{
+  "_doc": "Spec 056 hermetic replay. Keyed by '<task>__<executor>__<model>'. Each value is the recorded cell output: stdout (verbatim agent stdout), cost_usd, latency_ms. Engineered so the BEST executor differs by task: claude/sonnet wins scout (4/4 topics); codex wins note-writer (template-complete note); this pins SC-008 / T022. Do not edit without updating the spec-056 scoring contract tests.",
+
+  "scout__claude__sonnet": {
+    "stdout": "{\"schema_version\": \"2.0\", \"cycle\": 1, \"phase\": \"scout\", \"topics_found\": {\"new\": [\"HNSW graph index\", \"Product Quantization\", \"IVF inverted file\", \"Disk-backed ANN (DiskANN)\"]}}",
+    "cost_usd": 0.041,
+    "latency_ms": 5200
+  },
+  "scout__claude__haiku": {
+    "stdout": "{\"schema_version\": \"2.0\", \"cycle\": 1, \"phase\": \"scout\", \"topics_found\": {\"new\": [\"HNSW graph index\", \"Product Quantization\"]}}",
+    "cost_usd": 0.0072,
+    "latency_ms": 2100
+  },
+  "scout__codex__default": {
+    "stdout": "{\"schema_version\": \"2.0\", \"cycle\": 1, \"phase\": \"scout\", \"topics_found\": {\"new\": [\"HNSW graph index\", \"Product Quantization\", \"IVF inverted file\"]}}",
+    "cost_usd": 0.019,
+    "latency_ms": 4300
+  },
+  "scout__codex__high": {
+    "stdout": "{\"schema_version\": \"2.0\", \"cycle\": 1, \"phase\": \"scout\", \"topics_found\": {\"new\": [\"HNSW graph index\", \"Product Quantization\", \"IVF inverted file\"]}}",
+    "cost_usd": 0.058,
+    "latency_ms": 9100
+  },
+
+  "note-writer__claude__sonnet": {
+    "stdout": "---\ntype: concept\ntitle: \"HNSW (Hierarchical Navigable Small World)\"\n---\n\n## Summary\n\nHNSW is a graph-based approximate nearest-neighbour index.\n\n## Key Points\n\n- Multi-layer navigable small-world graph.\n- Logarithmic search complexity.\n\n## Details\n\nLayers are built with a probabilistic skip-list-like assignment.\n",
+    "cost_usd": 0.044,
+    "latency_ms": 6100
+  },
+  "note-writer__claude__haiku": {
+    "stdout": "---\ntype: concept\ntitle: \"HNSW (Hierarchical Navigable Small World)\"\n---\n\n## Summary\n\nHNSW is a graph index for nearest-neighbour search.\n\n## Key Points\n\n- Navigable small-world graph.\n",
+    "cost_usd": 0.0081,
+    "latency_ms": 2400
+  },
+  "note-writer__codex__default": {
+    "stdout": "---\ntype: concept\ntitle: \"HNSW (Hierarchical Navigable Small World)\"\n---\n\n## Summary\n\nHNSW is a graph-based approximate nearest-neighbour (ANN) index that organises\nvectors into a multi-layer navigable small-world graph.\n\n## Key Points\n\n- Multi-layer graph with long-range links in upper layers.\n- Greedy search from the top layer down gives logarithmic hops.\n\n## Details\n\nConstruction inserts each point at a randomly chosen maximum layer and connects\nit to its M nearest neighbours per layer; search descends layer by layer.\n\n## Sources\n\n- Malkov & Yashunin (2018), Efficient and robust approximate nearest neighbor\n  search using Hierarchical Navigable Small World graphs.\n",
+    "cost_usd": 0.021,
+    "latency_ms": 4800
+  },
+  "note-writer__codex__high": {
+    "stdout": "---\ntype: concept\ntitle: \"HNSW (Hierarchical Navigable Small World)\"\n---\n\n## Summary\n\nHNSW is a graph-based approximate nearest-neighbour (ANN) index.\n\n## Key Points\n\n- Multi-layer navigable small-world graph.\n- Logarithmic expected search complexity.\n\n## Details\n\nUpper layers hold long-range links; lower layers are dense. Search is a greedy\ndescent from the entry point.\n\n## Sources\n\n- Malkov & Yashunin (2018), HNSW.\n",
+    "cost_usd": 0.061,
+    "latency_ms": 10200
+  },
+
+  "verifier__claude__sonnet": {
+    "stdout": "{\"verdict\": \"accept\", \"reasons\": [\"Tier-2 source present in frontmatter; claims grounded.\"]}",
+    "cost_usd": 0.015,
+    "latency_ms": 1800
+  },
+  "verifier__claude__haiku": {
+    "stdout": "{\"verdict\": \"reject\", \"reasons\": [\"Hallucinated a citation not present in the draft frontmatter.\"]}",
+    "cost_usd": 0.003,
+    "latency_ms": 900
+  },
+  "verifier__codex__default": {
+    "stdout": "{\"verdict\": \"accept\", \"reasons\": [\"Source policy satisfied.\"]}",
+    "cost_usd": 0.011,
+    "latency_ms": 2600
+  },
+  "verifier__codex__high": {
+    "stdout": "{\"verdict\": \"accept\", \"reasons\": [\"Grounded; Principle IX satisfied.\"]}",
+    "cost_usd": 0.034,
+    "latency_ms": 5400
+  }
+}

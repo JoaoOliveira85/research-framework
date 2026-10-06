@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://research-framework.dev/contracts/020/manifest",
+  "title": "ModuleManifest",
+  "description": "Per-module declaration. Lives at <vault>/modules/<name>/manifest.yaml.",
+  "type": "object",
+  "required": [
+    "name",
+    "version",
+    "description",
+    "triggers",
+    "entry_point",
+    "default_value_tier",
+    "schema_examples",
+    "preflight"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Module identifier. Must equal the parent directory name."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+",
+      "description": "Module's own semver. Independent of bridge_version."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "One-line human-readable description."
+    },
+    "triggers": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/Trigger" }
+    },
+    "entry_point": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_./-]+\\.py$",
+      "description": "Python file relative to the module dir."
+    },
+    "default_value_tier": {
+      "type": "string",
+      "enum": ["routine", "important", "critical"]
+    },
+    "default_tier": {
+      "type": "string",
+      "description": "Optional D7 complexity hint. References a key in settings.yaml::tiers (typically 'basic', 'normal', 'flagship', but vault-author tiers are allowed)."
+    },
+    "schema_examples": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_./-]+\\.md$",
+      "description": "Few-shot file relative to the module dir."
+    },
+    "source_id_from": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "minLength": 1 },
+      "description": "Maps each sources.yaml top-level key to the record field used as source_id (FR-013b). Example: {\"youtube_channels\": \"url\", \"github_repos\": \"path\"}."
+    },
+    "user_owned": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Relative paths preserved on vault update if present (FR-025). sources.yaml is always preserved unconditionally."
+    },
+    "extraction_timeout_seconds": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 7200,
+      "default": 600,
+      "description": "Per-source hard wall-clock budget for the extractor subprocess (R21). Optional. Default 600. Vault authors can override via settings.yaml::stages.source_extraction.timeout_seconds."
+    },
+    "bridge_compat": {
+      "type": "object",
+      "description": "Reserved for future use. D6 currently does atomic refresh, not compat checks."
+    },
+    "preflight": {
+      "type": "object",
+      "required": ["entry_point"],
+      "additionalProperties": false,
+      "description": "Per-module preflight subprocess (spec 051 FR4). REQUIRED. Spawned once per cycle to validate this module's sources.yaml before extraction.",
+      "properties": {
+        "entry_point": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_./-]+\\.py$",
+          "description": "Preflight script relative to the module dir (e.g. 'preflight.py'). Mirrors the top-level extractor entry_point."
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300,
+          "default": 30,
+          "description": "Wall-clock cap for the preflight subprocess, enforced via terminate_process_tree."
+        }
+      }
+    },
+    "authentication": {
+      "description": "Optional env-var credentials this module requires (spec 038 FR-001/013). Absent, ``none``, or empty env_vars ⇒ no credentials needed.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": ["none"]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "env_vars": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "description": "Environment variables that MUST be set for this module. Each is MANDATORY when declared."
+            }
+          }
+        }
+      ]
+    },
+    "rate_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional rate-limit declaration (spec 038 FR-003). v1 is declare-only; client-side enforcement deferred.",
+      "properties": {
+        "requests_per_minute": { "type": "integer", "minimum": 1 },
+        "requests_per_hour": { "type": "integer", "minimum": 1 },
+        "burst": { "type": "string", "default": "none" },
+        "backoff": { "type": "string", "default": "exponential" }
+      }
+    },
+    "failure_policy": {
+      "type": "string",
+      "enum": ["block_cycle", "degrade_gracefully", "defer"],
+      "default": "block_cycle",
+      "description": "How the orchestrator handles module failures (spec 038 FR-004). Absent ⇒ block_cycle."
+    }
+  },
+  "$defs": {
+    "Trigger": {
+      "type": "object",
+      "required": ["type", "pattern"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["url_pattern", "path_pattern", "path_exists", "domain"]
+        },
+        "pattern": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

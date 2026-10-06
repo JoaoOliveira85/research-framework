@@ -1,0 +1,1 @@
+{"verdict": "reject", "violations": [{"code": "SYNTHETIC", "message": "fake_agent reject scenario"}], "suggested_fix": "Add tier-2 sources"}

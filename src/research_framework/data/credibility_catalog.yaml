@@ -1,0 +1,116 @@
+# Default credibility catalog (spec 066 FR1).
+#
+# Maps canonical citation domains to credibility tiers so the spec-055 verifier
+# stops 100%-rejecting honest project-canonical citations (the rc7 trap, #153).
+#
+# Tier vocabulary (operator-facing) → spec-055 Level (internal):
+#   tier_1 → primary       (authoritative origin / first-party docs / standards)
+#   tier_2 → corroborated  (reputable secondary: project sites, OSS hosting, authors)
+#   tier_3 → commentary    (likely-credible-but-not-authoritative floor; wildcards)
+#
+# Entry shape (shared with the vault override settings.yaml::credibility.trusted_domains):
+#   - domain: "<pattern>"        # required
+#     tier: tier_1|tier_2|tier_3 # required
+#     match_type: exact|host_suffix|host_path   # optional, default "exact"
+#     min_segments: <int>        # optional (host_path only, default 2)
+#     notes: "<free text>"       # optional, never read by the resolver
+#
+# Q6 invariant (validated at load): host_suffix wildcards in THIS default catalog
+# MUST be tier_3 — anyone can register a *.dev. The vault override may put a
+# wildcard at any tier (operator's prerogative, Q11).
+#
+# Growth = a YAML PR to the framework (Q3 — conservative; ~50-80 entries).
+
+entries:
+  # --- Wildcards — tier_3 (commentary) — "anyone can register / host here" ---
+  - { domain: "*.dev", tier: tier_3, match_type: host_suffix, notes: "freely-registrable project TLD (fastify.dev floor; promoted by exact entry)" }
+  - { domain: "*.io", tier: tier_3, match_type: host_suffix, notes: "freely-registrable TLD" }
+  - { domain: "*.github.io", tier: tier_3, match_type: host_suffix, notes: "GitHub Pages — any user" }
+  - { domain: "*.readthedocs.io", tier: tier_3, match_type: host_suffix, notes: "community-hosted docs" }
+  - { domain: "*.readme.io", tier: tier_3, match_type: host_suffix, notes: "hosted docs" }
+  - { domain: "*.substack.com", tier: tier_3, match_type: host_suffix, notes: "any author" }
+  - { domain: "*.medium.com", tier: tier_3, match_type: host_suffix, notes: "any author" }
+  - { domain: "*.wordpress.com", tier: tier_3, match_type: host_suffix, notes: "any author" }
+  - { domain: "*.blogspot.com", tier: tier_3, match_type: host_suffix, notes: "any author" }
+  - { domain: "*.apache.org", tier: tier_3, match_type: host_suffix, notes: "OSS foundation subprojects; promote specific ones via PR" }
+  - { domain: "*.edu", tier: tier_3, match_type: host_suffix, notes: "academic" }
+  - { domain: "*.gnu.org", tier: tier_3, match_type: host_suffix, notes: "GNU project sites" }
+
+  # --- Exact-match tier_1 (primary) — authoritative / first-party / standards ---
+  # Encyclopedic / reference
+  - { domain: "wikipedia.org", tier: tier_1, notes: "encyclopedic reference" }
+  - { domain: "en.wikipedia.org", tier: tier_1 }
+  - { domain: "developer.mozilla.org", tier: tier_1, notes: "MDN" }
+  - { domain: "archive.org", tier: tier_1 }
+  # Standards bodies
+  - { domain: "www.w3.org", tier: tier_1 }
+  - { domain: "datatracker.ietf.org", tier: tier_1 }
+  - { domain: "www.ietf.org", tier: tier_1 }
+  - { domain: "www.oasis-open.org", tier: tier_1 }
+  - { domain: "www.openapis.org", tier: tier_1 }
+  - { domain: "www.ecma-international.org", tier: tier_1 }
+  - { domain: "www.iso.org", tier: tier_1 }
+  # First-party vendor docs
+  - { domain: "docs.aws.amazon.com", tier: tier_1 }
+  - { domain: "aws.amazon.com", tier: tier_1 }
+  - { domain: "cloud.google.com", tier: tier_1 }
+  - { domain: "learn.microsoft.com", tier: tier_1 }
+  - { domain: "docs.microsoft.com", tier: tier_1 }
+  - { domain: "www.microsoft.com", tier: tier_1 }
+  - { domain: "docs.oracle.com", tier: tier_1 }
+  - { domain: "docs.python.org", tier: tier_1 }
+  - { domain: "docs.rs", tier: tier_1 }
+  - { domain: "pkg.go.dev", tier: tier_1 }
+  - { domain: "docs.docker.com", tier: tier_1 }
+  - { domain: "docs.github.com", tier: tier_1 }
+  - { domain: "kotlinlang.org", tier: tier_1 }
+  - { domain: "docs.spring.io", tier: tier_1 }
+  - { domain: "docs.djangoproject.com", tier: tier_1 }
+  - { domain: "www.djangoproject.com", tier: tier_1 }
+  - { domain: "sre.google", tier: tier_1 }
+  - { domain: "opentelemetry.io", tier: tier_1 }
+
+  # --- Exact-match tier_2 (corroborated) — reputable secondary / project / authors ---
+  # OSS hosting — host + >=1 path segment. `min_segments: 1` so a PERSON scopes
+  # too: `github.com/<user>` is a profile, and a profile is first-party evidence
+  # that someone ships code. At >=2 (spec 070 F2) any vault whose note type is
+  # "a person" lost every practitioner citation, while bare `github.com/` (zero
+  # segments) still correctly grounds nothing.
+  - { domain: "github.com", tier: tier_2, match_type: host_path, min_segments: 1, notes: "OSS hosting — profile or org/repo scoped" }
+  - { domain: "gitlab.com", tier: tier_2, match_type: host_path, min_segments: 1 }
+  - { domain: "codeberg.org", tier: tier_2, match_type: host_path, min_segments: 1 }
+  - { domain: "sourceforge.net", tier: tier_2, match_type: host_path, min_segments: 2 }
+  - { domain: "bitbucket.org", tier: tier_2, match_type: host_path, min_segments: 2 }
+  # Well-known project sites
+  - { domain: "fastify.dev", tier: tier_2 }
+  - { domain: "expressjs.com", tier: tier_2 }
+  - { domain: "vitejs.dev", tier: tier_2 }
+  - { domain: "nextjs.org", tier: tier_2 }
+  - { domain: "redis.io", tier: tier_2 }
+  - { domain: "clickhouse.com", tier: tier_2 }
+  - { domain: "duckdb.org", tier: tier_2 }
+  - { domain: "delta.io", tier: tier_2 }
+  - { domain: "docs.delta.io", tier: tier_2 }
+  - { domain: "swagger.io", tier: tier_2 }
+  - { domain: "pact.io", tier: tier_2 }
+  - { domain: "jepsen.io", tier: tier_2 }
+  - { domain: "axios-http.com", tier: tier_2 }
+  - { domain: "principlesofchaos.org", tier: tier_2 }
+  - { domain: "www.rabbitmq.com", tier: tier_2 }
+  - { domain: "www.postgresql.org", tier: tier_2 }
+  - { domain: "www.elastic.co", tier: tier_2 }
+  - { domain: "www.databricks.com", tier: tier_2 }
+  - { domain: "www.fluentd.org", tier: tier_2 }
+  - { domain: "docs.fluentd.org", tier: tier_2 }
+  - { domain: "www.asyncapi.com", tier: tier_2 }
+  - { domain: "refactoring.guru", tier: tier_2 }
+  - { domain: "cp-algorithms.com", tier: tier_2 }
+  - { domain: "launchdarkly.com", tier: tier_2 }
+  # Well-known tech authors
+  - { domain: "martinfowler.com", tier: tier_2 }
+  - { domain: "martin.kleppmann.com", tier: tier_2 }
+  - { domain: "kleppmann.com", tier: tier_2 }
+  - { domain: "samnewman.io", tier: tier_2 }
+  - { domain: "www.allthingsdistributed.com", tier: tier_2 }
+  - { domain: "tom-e-white.com", tier: tier_2 }
+  - { domain: "www.domainlanguage.com", tier: tier_2 }

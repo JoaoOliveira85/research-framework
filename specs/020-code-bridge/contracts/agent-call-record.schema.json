@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://research-framework.dev/contracts/020/agent-call-record",
+  "title": "AgentCallRecord",
+  "description": "Per-LLM-call audit record (FR-024, cross-cutting). Lives at _pipeline/cycles/cycle-NNN/agent-calls/<ts>-<stage>-<call-id>.json.",
+  "$comment": "SUPERSEDED (#295): the agent-calls/ directory this schema describes is real and actively written, but not in this shape — the shipped sidecar (scripts/agent_call.py) has always used the spec-028 fields (schema_version, agent_kind, exit_code, cycle, ...), never this schema's call_id/prompt/response/latency_ms/tokens_in/tokens_out shape. tests/fixtures/contracts/agent-call-sidecar-1.1.schema.json is the contract that actually matches what ships and is validated by tests/scripts/test_agent_call_sidecar_v1.py. Kept for spec-020 history rather than deleted, since the directory it names is real; do not wire new code to this shape.",
+  "type": "object",
+  "required": [
+    "stage",
+    "call_id",
+    "timestamp",
+    "model",
+    "prompt",
+    "response",
+    "latency_ms",
+    "tokens_in",
+    "tokens_out",
+    "cost_usd"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "stage": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Pipeline stage (e.g. 'schema_gen', 'scout', 'note_writer', 'verifier', 'source_extraction')."
+    },
+    "call_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Resolved model identifier (post-tier resolution per D7)."
+    },
+    "tier": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "string",
+          "description": "Resolved tier name (e.g. 'basic'); null when the executor used legacy model: field."
+        }
+      ]
+    },
+    "prompt": {
+      "type": "string",
+      "description": "Full prompt text. NOT truncated per FR-024."
+    },
+    "response": {
+      "type": "string",
+      "description": "Full response text. NOT truncated per FR-024."
+    },
+    "latency_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tokens_in": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "tokens_out": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "cost_usd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "error": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "string",
+          "description": "Traceback if the call failed; null on success."
+        }
+      ]
+    },
+    "retry_attempt": {
+      "type": "integer",
+      "enum": [1, 2],
+      "description": "Present for D9 retry-once contexts; absent otherwise."
+    }
+  }
+}

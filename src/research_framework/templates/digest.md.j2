@@ -1,0 +1,80 @@
+# Digest: {{ vault_identity }}  {{ start }} → {{ end }}
+_rendered-at: {{ rendered_at }}  ·  commit range: {{ git_base }}..{{ git_head }}
+
+## Strongest Signals
+{% if sections.strongest_signals -%}
+{% for note in sections.strongest_signals -%}
+- {{ note.wikilink }} — score {{ note.score }} = {{ note.inbound_links }} inbound + {{ note.source_drift_bonus }} source-drift + {{ note.freshness_points }} fresh — {{ note.summary }}
+{% endfor -%}
+{% else -%}
+No data in scope.
+{% endif %}
+
+## Gaps
+{% if sections.gaps -%}
+{% for gap in sections.gaps -%}
+- **{{ gap.category }}** ({{ gap.kind }}): {{ format_progress_pct(gap.progress_start) }} → {{ format_progress_pct(gap.progress_end) }} (target {{ gap.target | int }}) — last touched cycle {{ gap.last_cycle }}
+{% endfor -%}
+{% else -%}
+No regressions or stagnations in scope.
+{% endif %}
+
+## New Notes by Category
+{% if sections.new_notes_by_category -%}
+{% for ntype, count, samples in sections.new_notes_by_category -%}
+- {{ ntype }}: {{ count }} — {{ samples | join(', ') }}
+{% endfor -%}
+{% else -%}
+No data in scope.
+{% endif %}
+
+{% if not sections.omit_source_drift_section -%}
+## Source Quality Drift
+{% if sections.source_drift -%}
+{% for row in sections.source_drift -%}
+- **{{ row.name }}** — {{ row.signals | join('; ') }} — last cycle {{ row.last_cycle }}
+{% endfor -%}
+{% else -%}
+No data in scope.
+{% endif %}
+
+{% endif -%}
+## Coverage Delta
+{% if sections.coverage_delta -%}
+| category | start | end | Δ |
+| --- | ---: | ---: | ---: |
+{% for name, start_val, end_val, delta in sections.coverage_delta -%}
+| {{ name }} | {{ format_progress_pct(start_val) }} | {{ format_progress_pct(end_val) }} | {{ format_progress_delta(delta) }} |
+{% endfor -%}
+{% else -%}
+No data in scope.
+{% endif %}
+
+## Cost Summary
+{% if sections.cost_summary.per_cycle -%}
+- **Total**: ${{ "%.2f" | format(sections.cost_summary.total_usd) }}
+{% for kind, amount in sections.cost_summary.per_stage -%}
+- {{ kind }}: ${{ "%.2f" | format(amount) }}
+{% endfor -%}
+- Per-cycle: {{ sections.cost_summary.sparkline }} ({% for num, val in sections.cost_summary.per_cycle %}c{{ "%03d" | format(num) }}=${{ "%.2f" | format(val) }}{% if not loop.last %}, {% endif %}{% endfor %})
+{% else -%}
+No data in scope.
+{% endif %}
+
+## Cycle Index
+{% if sections.cycle_index -%}
+| cycle | ship date | summary | ship SHA |
+| --- | --- | --- | --- |
+{% for row in sections.cycle_index -%}
+| {{ row.number }} | {{ row.ship_date }} | {{ row.summary }} | {{ row.ship_sha }} |
+{% endfor -%}
+{% else -%}
+No data in scope.
+{% endif %}
+
+{% if sections.footer_warnings -%}
+---
+{% for warn in sections.footer_warnings -%}
+- ⚠ {{ warn }}
+{% endfor -%}
+{% endif %}

@@ -1,0 +1,5 @@
+# Quality harness fixture (spec 022): commit vault-shaped inputs; ignore cycle churn.
+_pipeline/cycles/
+_pipeline/prompts/
+_pipeline/quality/
+.quality-settings.tmp.yaml

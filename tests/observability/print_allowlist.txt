@@ -1,0 +1,3 @@
+src/research_framework/pipeline/timings.py:final report stdout contract
+src/research_framework/pipeline/research_plan.py:CLI usage error
+src/research_framework/pipeline/budget_guard.py:interactive prompt

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "research_vault/contracts/preflight.schema.json",
+  "title": "Source Preflight Result (FR-007)",
+  "description": "Pre-Phase-2 source connectivity snapshot written by pipeline/preflight.py and read by pipeline/preconditions.py (precondition #6). Standalone CLI: scripts/preflight_sources.py.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "framework_version",
+    "sources",
+    "required_unreachable_count",
+    "enrichment_unreachable_count",
+    "overall_status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "framework_version": { "type": "string" },
+    "sources": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/source_check" }
+    },
+    "required_unreachable_count": { "type": "integer", "minimum": 0 },
+    "enrichment_unreachable_count": { "type": "integer", "minimum": 0 },
+    "overall_status": { "enum": ["pass", "warn", "fail"] }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "overall_status": { "const": "fail" } }, "required": ["overall_status"] },
+      "then": { "properties": { "required_unreachable_count": { "type": "integer", "minimum": 1 } } }
+    },
+    {
+      "if": { "properties": { "overall_status": { "const": "pass" } }, "required": ["overall_status"] },
+      "then": {
+        "properties": {
+          "required_unreachable_count": { "const": 0 },
+          "enrichment_unreachable_count": { "const": 0 }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "source_check": {
+      "type": "object",
+      "required": ["name", "role", "type", "status", "checked_at", "elapsed_ms"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["required", "enrichment"] },
+        "type": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["ok", "degraded", "unreachable"] },
+        "detail": { "type": "string" },
+        "checked_at": { "type": "string", "format": "date-time" },
+        "elapsed_ms": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

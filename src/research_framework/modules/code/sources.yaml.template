@@ -1,0 +1,4 @@
+github_repos:
+  - path: /path/to/your/repo
+    label: Example repository
+    value_tier: routine

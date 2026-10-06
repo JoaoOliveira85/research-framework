@@ -1,0 +1,34 @@
+# O'Reilly module sources template (spec 020 / FR-015 opt-in tiers).
+#
+# Broad O'Reilly enrichment is OPT-IN via an explicit `tiers:` block — do not
+# uncomment unless you want automated tier-driven queries. Manual search URLs
+# under `oreilly_queries` always apply when listed.
+#
+# tiers:
+#   - name: routine
+#     queries:
+#       - q: LLM+agents+production
+#         label: LLM agents in production
+#
+# Representative queries below from legacy ~/Documents/feeds-vault/scripts/sources.yaml.
+# Copy to sources.yaml and edit labels / value_tier per your vault. Each entry uses
+# the learning.oreilly.com search URL convention (query in ?q=).
+oreilly_queries:
+  - url: https://learning.oreilly.com/search/?q=LLM+agents+production
+    label: LLM agents in production
+    value_tier: routine
+  - url: https://learning.oreilly.com/search/?q=AI+safety
+    label: AI safety and alignment
+    value_tier: routine
+  - url: https://learning.oreilly.com/search/?q=kubernetes+operators
+    label: Kubernetes operators
+    value_tier: routine
+  - url: https://learning.oreilly.com/search/?q=rust+async
+    label: Rust async programming
+    value_tier: routine
+  - url: https://learning.oreilly.com/search/?q=system+design+interview
+    label: System design interview prep
+    value_tier: routine
+  - url: https://learning.oreilly.com/search/?q=MCP+model+context+protocol
+    label: MCP model context protocol
+    value_tier: important

@@ -1,0 +1,8 @@
+pipeline:
+  max_cycles: 2
+  budget_usd: 10.0
+limits:
+  cycle_budget_usd: 10.0
+  tier_thresholds:
+    basic: 0.05
+    standard: 0.05

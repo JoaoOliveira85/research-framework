@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://research-framework.local/schemas/claims-export-1.0.json",
+  "title": "ClaimsExportV1",
+  "description": "The `research-framework export --claims` envelope (issue #189): one claim record per qualifying vault note, plumbing skipped by the framework's own rules, citation credibility resolved the way the verifier resolves it. Produced by research-framework (`vault.claims_export`), consumed by downstream importers such as consumer_pipeline's `pipeline/vault_import.py`. Evolution follows ADR-0013: append-only within 1.x (additionalProperties stays true, new fields are optional), a new schema file per major, `schema_version` carried in the payload so a consumer can refuse a major it does not know. This schema is the consumer's floor; `tests/contracts/test_claims_export_schema.py` validates REAL producer output against it.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "kind", "generated_at", "generator", "vault", "counts", "warnings", "claims"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+$",
+      "description": "`<major>.<minor>`. This schema accepts every 1.x payload and refuses any other major (ADR-0013 §2–§3)."
+    },
+    "kind": {
+      "type": "string",
+      "const": "claims-export",
+      "description": "Discriminator, so a consumer holding several research-framework payloads can tell them apart before looking further."
+    },
+    "generated_at": {
+      "type": "string",
+      "description": "ISO-8601 timestamp (UTC) of the export."
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "const": "research-framework" },
+        "version": { "type": "string", "description": "The framework version that produced the export." }
+      }
+    },
+    "vault": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["name", "corpus_dir", "note_types"],
+      "properties": {
+        "name": { "type": "string", "description": "The vault folder's name; no personal data is derived from it." },
+        "corpus_dir": { "type": "string", "description": "The corpus folder the claims were read from (`vault.corpus_dir`, default `data_vault`)." },
+        "note_types": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Note types the vault's spec declares; empty when the spec could not be read (see `warnings`)."
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["claims", "quarantined", "notes_scanned", "skipped"],
+      "properties": {
+        "claims": { "type": "integer", "minimum": 0 },
+        "quarantined": { "type": "integer", "minimum": 0, "description": "Claims in this export that come from `_pipeline/quarantine/` (0 unless `--include-quarantined`)." },
+        "notes_scanned": { "type": "integer", "minimum": 0 },
+        "skipped": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["scaffold", "exempt", "malformed", "no_frontmatter", "missing_fields"],
+          "properties": {
+            "scaffold": { "type": "integer", "minimum": 0, "description": "Generator-owned files: the index trio, `_templates/`, any `_`-prefixed path." },
+            "exempt": { "type": "integer", "minimum": 0, "description": "`verifier_status: exempt` and `note_type: alias` redirect stubs — the verifier's own exemption rule." },
+            "malformed": { "type": "integer", "minimum": 0, "description": "Frontmatter the canonical codec refused; each one is also a `warnings[]` line." },
+            "no_frontmatter": { "type": "integer", "minimum": 0 },
+            "missing_fields": { "type": "integer", "minimum": 0, "description": "No `type`, or an empty `summary` — nothing to claim." }
+          }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Degradations the consumer should know about: unreadable spec, malformed notes. Never a reason the export failed — a failure is a non-zero exit, not a warning."
+    },
+    "claims": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Claim" },
+      "description": "Sorted by `id`, so two exports of the same vault diff cleanly."
+    }
+  },
+  "$defs": {
+    "NullableString": {
+      "type": ["string", "null"]
+    },
+    "Claim": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "id", "note_path", "title", "claim", "note_type", "note_type_declared",
+        "tags", "verifier_status", "coverage_category", "template_version",
+        "created", "updated", "quarantined", "support_count", "sources"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "description": "Corpus-relative note path without its extension (`quarantine/<stem>` for a quarantined note). Stable across exports as long as the note is not moved." },
+        "note_path": { "type": "string", "minLength": 1, "description": "Vault-relative path of the note, e.g. `data_vault/concepts/<note>.md`." },
+        "title": { "type": "string" },
+        "claim": { "type": "string", "minLength": 1, "description": "The note's frontmatter `summary`, whitespace-normalised — the one-line claim the note supports." },
+        "note_type": { "type": "string", "minLength": 1, "description": "The note's `type` as written. Mapping onto a consumer taxonomy is the consumer's job." },
+        "note_type_declared": { "type": ["boolean", "null"], "description": "Whether `note_type` is one the vault's spec declares; null when the spec could not be read." },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "verifier_status": { "$ref": "#/$defs/NullableString", "description": "`verified` / `pending` / `rejected` as the verifier stage wrote it; null when the note carries none." },
+        "coverage_category": { "$ref": "#/$defs/NullableString" },
+        "template_version": { "$ref": "#/$defs/NullableString", "description": "The note-format template version the note was rendered from (spec 079)." },
+        "created": { "$ref": "#/$defs/NullableString" },
+        "updated": { "$ref": "#/$defs/NullableString" },
+        "quarantined": { "type": "boolean" },
+        "support_count": { "type": "integer", "minimum": 0, "description": "Number of citations with a URL — `len(sources)`." },
+        "sources": { "type": "array", "items": { "$ref": "#/$defs/Source" } }
+      }
+    },
+    "Source": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["url", "title", "accessed", "credibility_declared", "credibility", "coi"],
+      "properties": {
+        "url": { "type": "string", "minLength": 1 },
+        "title": { "$ref": "#/$defs/NullableString" },
+        "accessed": { "$ref": "#/$defs/NullableString" },
+        "credibility_declared": { "$ref": "#/$defs/NullableString", "description": "The `credibility` the citation itself carries, verbatim; null when undeclared." },
+        "credibility": {
+          "type": ["string", "null"],
+          "enum": ["primary", "corroborated", "commentary", "unvetted", null],
+          "description": "The effective level as the verifier resolves it (explicit → source default → catalog; COI-capped; off-field downgraded — spec 055/066/070). Null when nothing grounds the citation."
+        },
+        "coi": { "type": "boolean", "description": "The citation declared a conflict of interest." }
+      }
+    }
+  }
+}

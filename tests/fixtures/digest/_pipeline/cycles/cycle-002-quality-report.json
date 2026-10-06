@@ -1,0 +1,24 @@
+{
+  "schema_version": "1",
+  "cycle_number": 2,
+  "exit_status": "success",
+  "generated_at": "2026-06-03T12:00:00Z",
+  "cycle_finished_at": "2026-06-03T12:00:00Z",
+  "coverage_snapshot": {
+    "concepts": {
+      "target": 5,
+      "met": 2,
+      "fill_pct": 0.4
+    },
+    "services": {
+      "target": 4,
+      "met": 2,
+      "fill_pct": 0.5
+    },
+    "flows": {
+      "target": 3,
+      "met": 0,
+      "fill_pct": 0.0
+    }
+  }
+}

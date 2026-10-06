@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://research-framework.dev/contracts/020/validator-yaml",
+  "title": "Validator YAML rules",
+  "description": "Vault-author-facing declarative validator surface. Lives at <vault>/<module>.validators.yaml.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "facts": {
+      "type": "object",
+      "description": "Per-bucket constraints. Bucket names match the active FactsSchema's top-level properties.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "required": {
+            "type": "boolean",
+            "description": "Whether the bucket must be present in payload.facts."
+          },
+          "min_items": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Minimum array length (applies when bucket is an array)."
+          },
+          "max_items": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Maximum array length."
+          },
+          "min_length": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Minimum string length (applies when bucket is a string)."
+          },
+          "max_length": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "notable": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_items": { "type": "integer", "minimum": 0 },
+        "max_items": { "type": "integer", "minimum": 0 },
+        "require_evidence_ref": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, every notable[].evidence_ref must be non-empty (default behavior)."
+        }
+      }
+    }
+  }
+}

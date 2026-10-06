@@ -1,0 +1,91 @@
+usage: research-framework generate [-h] [--spec SPEC] [--output OUTPUT]
+                                   [--dry-run] [--resume] [--cycle CYCLE]
+                                   [--max-cycles MAX_CYCLES] [--more-cycles N]
+                                   [--max-usd MAX_USD]
+                                   [--max-usd-this-run USD] [--estimate-only]
+                                   [--skip-gate] [--prepopulate PREPOPULATE]
+                                   [--settings SETTINGS]
+                                   [--regenerate-plan-only]
+                                   [--legacy-cycle-runner] [--force-budget]
+                                   [--approve STAGE] [--approve-all]
+                                   [--reject STAGE]
+                                   [vault_dir]
+
+positional arguments:
+  vault_dir             Vault root directory. With --regenerate-plan-only,
+                        required unless --output is set; spec is read from
+                        <vault_dir>/research.spec.md.
+
+options:
+  -h, --help            show this help message and exit
+  --spec SPEC           Path to a spec file. Accepts either the simple
+                        research.spec.md format (recommended for new vaults)
+                        or the detailed vault-spec.md format (power users).
+                        Auto-detected. Not used with --regenerate-plan-only
+                        (always uses <vault>/research.spec.md).
+  --output OUTPUT       Override vault output directory
+  --dry-run             Phase 0/1 only
+  --resume              Skip Phase 0/1; enter Phase 2
+  --cycle CYCLE         Start at a specific cycle (--resume)
+  --max-cycles MAX_CYCLES
+                        LIFETIME cycle ceiling: the highest cycle NUMBER this
+                        vault may run, counted from cycle 1 — not a count of
+                        additional cycles (issue #239). On a vault whose next
+                        cycle is 7, `--max-cycles 5` runs nothing; use --more-
+                        cycles for 'N more from here'. Top of the spec-061
+                        ladder: beats settings.yaml `pipeline.max_cycles`.
+                        Honoured identically across generate / --resume /
+                        phase-3.
+  --more-cycles N       N more cycles from wherever this vault stands — the
+                        per-run reading of the cycle ceiling (issue #239).
+                        Resolves to `<next cycle> + N - 1` and occupies the
+                        same top rung as --max-cycles, so passing both is a
+                        usage error.
+  --max-usd MAX_USD     LIFETIME dollar ceiling, compared against every cycle
+                        this vault has ever run (issue #239) — not a budget
+                        for this run. Overrides settings.yaml
+                        `pipeline.budget_usd` (spec 061); omit for the
+                        settings value; 0 disables the cap.
+  --max-usd-this-run USD
+                        Ceiling on what THIS run adds, measured from the
+                        vault's spend when the run starts (issue #239).
+                        Independent of --max-usd: whichever ceiling is reached
+                        first ends the run. 0 disables it.
+  --estimate-only       Cost preflight (issue #238): print the per-stage spend
+                        the budget guard would project for the next cycle and
+                        exit WITHOUT dispatching anything. Exit 2 when no
+                        `limits.cycle_budget_usd` is resolved — an unattended
+                        run with no ceiling is the finding.
+  --skip-gate           Skip Phase 1 pytest gate (testing)
+  --prepopulate PREPOPULATE
+                        Directory of files to copy verbatim into the generated
+                        vault's _pipeline/ (feature 002 carry-forward — post-
+                        mortem, lessons-learned, budget-log from an archived
+                        vault).
+  --settings SETTINGS   Path to the settings.yaml to bake into the generated
+                        vault. Accepts ~/$VAR expansion and relative paths.
+                        When omitted, the bundled default profile
+                        (Anthropic/Claude) is used. Pass ./settings.codex.yaml
+                        to run against the OpenAI runtime, or
+                        ./settings.cursor.yaml for the flat-rate Cursor
+                        runtime.
+  --regenerate-plan-only
+                        Skip scaffolding and Phase 2/3: load
+                        <vault>/research.spec.md, infer the next cycle from
+                        _pipeline/coverage-targets.json (cycle_number+1, or 1
+                        if missing), write _pipeline/research-plan.md and the
+                        archived copy under _pipeline/cycles/, then run the
+                        plan narrator. Ignores --resume, --dry-run, --cycle,
+                        and other generate flags that affect Phase 2.
+  --legacy-cycle-runner
+                        DEPRECATED: pre-017 single-invocation note-writer path
+                        (removed). Emits a warning and fails — use the default
+                        pipeline instead.
+  --force-budget        Resume past BUDGET_PAUSED after operator
+                        acknowledgement (spec 033).
+  --approve STAGE       Headless approval for a gated stage (requires
+                        RF_APPROVE_<STAGE>_ACK=1).
+  --approve-all         Approve all pending gates (requires
+                        RF_APPROVE_ALL_ACK=1 headless).
+  --reject STAGE        Reject approval for stage; retains APPROVAL_REQUIRED
+                        marker.

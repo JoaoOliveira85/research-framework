@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "research_vault/contracts/probe-result.schema.json",
+  "title": "Queryability Probe Results (FR-020)",
+  "description": "Per-cycle list of probe outcomes written by pipeline/probes.py. Filename: cycle-NNN-probe-results.json. Agent step retrieves `candidates`; Python step computes `scored_candidates`, `answered`, and `partial`.",
+  "type": "object",
+  "required": ["schema_version", "cycle_number", "generated_at", "results", "score"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1" },
+    "cycle_number": { "type": "integer", "minimum": 1 },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/probe_result" }
+    }
+  },
+  "$defs": {
+    "probe_result": {
+      "type": "object",
+      "required": ["probe_id", "kind", "question", "candidates", "scored_candidates", "answered", "partial"],
+      "additionalProperties": false,
+      "properties": {
+        "probe_id": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["coverage", "cross_reference", "findability"] },
+        "question": { "type": "string", "minLength": 1 },
+        "keywords": { "type": "array", "items": { "type": "string" } },
+        "source_category": { "type": "string" },
+        "candidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["filename", "confidence"],
+            "additionalProperties": false,
+            "properties": {
+              "filename": { "type": "string", "pattern": "^[a-z0-9_-]+\\.md$" },
+              "confidence": { "enum": ["high", "medium", "low"] }
+            }
+          }
+        },
+        "scored_candidates": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              { "type": "string", "pattern": "^[a-z0-9_-]+\\.md$" },
+              { "type": "integer", "minimum": 0, "maximum": 3 }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "answered": { "type": "boolean" },
+        "partial": { "type": "boolean" },
+        "reason": { "type": "string" }
+      }
+    }
+  }
+}

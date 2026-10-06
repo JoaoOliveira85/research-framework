@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://research-framework.dev/contracts/020/signal-payload",
+  "title": "SignalPayload",
+  "description": "Per-source, per-version cache payload. Envelope is shared across modules; `facts` content shape is governed by the per-(vault, module) FactsSchema.",
+  "type": "object",
+  "required": [
+    "module",
+    "source_id",
+    "source_version",
+    "bridge_version",
+    "extracted_at",
+    "verdict",
+    "truncated",
+    "partial",
+    "facts",
+    "notable"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "module": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Module name that produced this payload. Must match a directory in <vault>/modules/."
+    },
+    "source_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable identifier for the source. Module-specific format (path for code, URL for youtube, etc.)."
+    },
+    "source_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version identifier opaque to the framework. Module-specific (SHA for code, transcript hash for youtube, etc.)."
+    },
+    "bridge_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+",
+      "description": "Framework version (semver) that produced this payload."
+    },
+    "extracted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp of extraction completion."
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["ok", "empty", "exhausted", "error"],
+      "description": "Extractor's verdict on the source."
+    },
+    "truncated": {
+      "type": "boolean",
+      "description": "True if `notable` was truncated to fit the 100 KB envelope cap."
+    },
+    "partial": {
+      "type": "boolean",
+      "description": "True if this payload is a salvaged partial output per D9 (verdict will be 'error')."
+    },
+    "facts": {
+      "type": "object",
+      "description": "Module-specific structured content. Shape governed by the active FactsSchema for (vault, module)."
+    },
+    "notable": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["observation", "confidence", "evidence_ref"],
+        "additionalProperties": false,
+        "properties": {
+          "observation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          },
+          "evidence_ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "e.g. 'src/api/UserController.java:42' or 'transcript:00:14:32'"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "partial": { "const": true } },
+        "required": ["partial"]
+      },
+      "then": {
+        "properties": { "verdict": { "const": "error" } }
+      }
+    }
+  ]
+}

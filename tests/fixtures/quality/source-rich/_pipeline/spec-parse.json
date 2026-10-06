@@ -1,0 +1,220 @@
+{
+  "name": "source-rich-quality-fixture",
+  "location": "/Users/dev/src/research-framework-022-us3/tests/fixtures/quality/source-rich",
+  "owner": "research-framework-tests",
+  "scope": {
+    "domain": "Curated high-quality sources with comfortable coverage targets for source-quality-pruning regression (FR-011).",
+    "organization": "Synthetic fixture",
+    "boundaries": [
+      "Official docs, papers, and org repos"
+    ],
+    "out_of_scope": [
+      "Low-signal scraper feeds"
+    ],
+    "contextual_questions": [],
+    "source_of_truth_rules": []
+  },
+  "note_types": [
+    {
+      "name": "service",
+      "description": "Service note",
+      "folder": "01 - Services",
+      "required_sections": [
+        "Overview",
+        "API Surface",
+        "Dependencies",
+        "Related"
+      ],
+      "contextual_questions": [],
+      "min_word_count": 60,
+      "source_policy": "",
+      "template_version": "1.0.0"
+    },
+    {
+      "name": "flow",
+      "description": "Flow note",
+      "folder": "02 - Flows",
+      "required_sections": [
+        "Overview",
+        "Trigger",
+        "Steps",
+        "Failure Modes",
+        "Related"
+      ],
+      "contextual_questions": [],
+      "min_word_count": 60,
+      "source_policy": "",
+      "template_version": "1.0.0"
+    },
+    {
+      "name": "concept",
+      "description": "Concept note",
+      "folder": "03 - Concepts",
+      "required_sections": [
+        "Overview",
+        "Mechanism",
+        "Trade-offs",
+        "Related"
+      ],
+      "contextual_questions": [],
+      "min_word_count": 60,
+      "source_policy": "",
+      "template_version": "1.0.0"
+    },
+    {
+      "name": "decision",
+      "description": "Decision note",
+      "folder": "04 - Decisions",
+      "required_sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Related"
+      ],
+      "contextual_questions": [],
+      "min_word_count": 60,
+      "source_policy": "",
+      "template_version": "1.0.0"
+    }
+  ],
+  "data_sources": [
+    {
+      "name": "official-docs",
+      "type": "external",
+      "description": "Curated official documentation",
+      "required": true,
+      "access_method": "",
+      "priority": 1,
+      "role": "behaviour",
+      "repos": [],
+      "phases": []
+    },
+    {
+      "name": "oreilly-shelf",
+      "type": "external",
+      "description": "Curated O'Reilly excerpts",
+      "required": true,
+      "access_method": "",
+      "priority": 1,
+      "role": "behaviour",
+      "repos": [],
+      "phases": []
+    },
+    {
+      "name": "arxiv-feed",
+      "type": "external",
+      "description": "Curated arXiv feed",
+      "required": true,
+      "access_method": "",
+      "priority": 2,
+      "role": "behaviour",
+      "repos": [],
+      "phases": []
+    },
+    {
+      "name": "github-org",
+      "type": "code",
+      "description": "Curated GitHub organization",
+      "required": true,
+      "access_method": "",
+      "priority": 1,
+      "role": "behaviour",
+      "repos": [],
+      "phases": []
+    },
+    {
+      "name": "confluence-space",
+      "type": "external",
+      "description": "Curated Confluence space",
+      "required": true,
+      "access_method": "",
+      "priority": 2,
+      "role": "behaviour",
+      "repos": [],
+      "phases": []
+    }
+  ],
+  "search_dimensions": [
+    "technical",
+    "organizational",
+    "domain"
+  ],
+  "coverage_targets": {
+    "last_updated": "",
+    "cycle_number": 0,
+    "categories": [
+      {
+        "name": "services",
+        "note_type": "service",
+        "target_count": 4,
+        "met_count": 0,
+        "required": true,
+        "expected_filenames": [],
+        "display_name": "",
+        "priority": 95
+      },
+      {
+        "name": "flows",
+        "note_type": "flow",
+        "target_count": 3,
+        "met_count": 0,
+        "required": true,
+        "expected_filenames": [],
+        "display_name": "",
+        "priority": 90
+      },
+      {
+        "name": "concepts",
+        "note_type": "concept",
+        "target_count": 3,
+        "met_count": 0,
+        "required": true,
+        "expected_filenames": [],
+        "display_name": "",
+        "priority": 85
+      },
+      {
+        "name": "decisions",
+        "note_type": "decision",
+        "target_count": 2,
+        "met_count": 0,
+        "required": true,
+        "expected_filenames": [],
+        "display_name": "",
+        "priority": 80
+      },
+      {
+        "name": "integrations",
+        "note_type": "service",
+        "target_count": 2,
+        "met_count": 0,
+        "required": true,
+        "expected_filenames": [],
+        "display_name": "",
+        "priority": 75
+      }
+    ]
+  },
+  "budget": {
+    "max_usd": 40.0,
+    "max_cycles": 3,
+    "warn_at_pct": 0.8
+  },
+  "max_cycles": 3,
+  "naming_convention": "full_name",
+  "jira_project": null,
+  "access_modes": [],
+  "settings": {
+    "default_executor": null,
+    "stages": {},
+    "commands": {
+      "ask": "ask",
+      "research": "research",
+      "write": "write"
+    }
+  },
+  "code_source_url_patterns": [],
+  "research_mode": "bootstrap",
+  "vault_corpus_dir": "data_vault",
+  "processors": {}
+}

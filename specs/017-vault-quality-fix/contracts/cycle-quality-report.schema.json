@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "research_vault/contracts/cycle-quality-report.schema.json",
+  "title": "Cycle Quality Report (FR-019)",
+  "description": "Per-cycle deterministic JSON written by pipeline/quality_report.py. Aggregates every gate result, coverage delta, queryability score, and trajectory. Consumed by humans, vault_audit.py, and CI pipelines. No agent judgment — all values are computed.",
+  "type": "object",
+  "required": [
+    "cycle_number",
+    "framework_version",
+    "generated_at",
+    "cycle_started_at",
+    "cycle_finished_at",
+    "gates",
+    "coverage_snapshot",
+    "notes_written",
+    "notes_accepted",
+    "notes_rejected",
+    "batches",
+    "queryability_score",
+    "queryability_trajectory",
+    "degraded_sources",
+    "retry_count",
+    "aborted",
+    "schema_version"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1" },
+    "cycle_number": { "type": "integer", "minimum": 1 },
+    "framework_version": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "cycle_started_at": { "type": "string", "format": "date-time" },
+    "cycle_finished_at": { "type": "string", "format": "date-time" },
+    "gates": {
+      "type": "object",
+      "description": "Keyed by gate_id (CG-001..CG-007, SG-001..SG-005). For SG gates that ran multiple times (one per batch), keys are suffixed '#N' (e.g. 'SG-004#1', 'SG-004#2').",
+      "patternProperties": {
+        "^[CS]G-\\d{3}(#\\d+)?$": { "$ref": "#/$defs/gate_result" }
+      },
+      "minProperties": 12,
+      "additionalProperties": false
+    },
+    "coverage_snapshot": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-z][a-z0-9_-]*$": {
+          "type": "object",
+          "required": ["target", "met", "fill_pct", "delta_this_cycle"],
+          "additionalProperties": false,
+          "properties": {
+            "target": { "type": "integer", "minimum": 0 },
+            "met": { "type": "integer", "minimum": 0 },
+            "fill_pct": { "type": "number", "minimum": 0, "maximum": 1 },
+            "delta_this_cycle": { "type": "integer" }
+          }
+        }
+      }
+    },
+    "notes_written": { "type": "integer", "minimum": 0 },
+    "notes_accepted": { "type": "integer", "minimum": 0 },
+    "notes_rejected": { "type": "integer", "minimum": 0 },
+    "batches": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^cycle-\\d{3}-batch-\\d{3}\\.json$" }
+    },
+    "queryability_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "queryability_trajectory": { "enum": ["improving", "stable", "regressing"] },
+    "degraded_sources": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "retry_count": { "type": "integer", "minimum": 0, "maximum": 2 },
+    "aborted": { "type": "boolean" },
+    "abort_reason": { "type": "string" },
+    "cg001_yield": {
+      "type": "object",
+      "description": "CG-001 cycle-yield model breakdown (spec 051 FR1). Optional — emitted only when the cycle ran the yield gate. The empirical record re-tuned against in 0.7.2.",
+      "required": ["target", "base", "cadence_bucket", "cadence_factor", "coverage_bucket", "coverage_factor", "actual", "exit_status"],
+      "additionalProperties": false,
+      "properties": {
+        "target": { "type": "integer", "minimum": 0 },
+        "base": { "type": "integer", "minimum": 0 },
+        "cadence_bucket": { "type": "string" },
+        "cadence_factor": { "type": "number" },
+        "coverage_bucket": { "type": "string" },
+        "coverage_factor": { "type": "number" },
+        "actual": { "type": "integer", "minimum": 0 },
+        "exit_status": { "type": "string" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "aborted": { "const": true } }, "required": ["aborted"] },
+      "then": {
+        "properties": { "retry_count": { "const": 2 } },
+        "required": ["abort_reason"]
+      }
+    }
+  ],
+  "$defs": {
+    "gate_result": {
+      "type": "object",
+      "required": ["gate_id", "status", "metric_name", "metric_value", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "gate_id": { "type": "string", "pattern": "^[CS]G-\\d{3}$" },
+        "status": { "enum": ["PASS", "WARN", "FAIL", "NA"] },
+        "metric_name": { "type": "string" },
+        "metric_value": { "type": ["number", "string", "boolean"] },
+        "threshold": { "type": ["number", "string", "null"] },
+        "message": { "type": "string" },
+        "correction_hint": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "FAIL" } }, "required": ["status"] },
+          "then": { "required": ["correction_hint"] }
+        }
+      ]
+    }
+  }
+}

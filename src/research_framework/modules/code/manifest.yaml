@@ -1,0 +1,23 @@
+name: code
+version: 0.1.1
+description: Local Git working-copy extraction (filesystem paths only — remote GitHub surfaces are the `github` module)
+triggers:
+  # LOCAL working copies only. The extractor does `git rev-parse HEAD` on a
+  # path on disk — it has NO remote-fetch path, so it deliberately does NOT
+  # claim github.com/gitlab.com URLs (the `github` module owns those). See the
+  # spec-020 amendment, Session 2026-06-08 (code vs github boundary).
+  - type: path_pattern
+    pattern: ".+/\\.git/HEAD$"
+entry_point: extractor.py
+preflight:
+  entry_point: preflight.py
+  timeout_seconds: 30
+default_value_tier: routine
+default_tier: basic
+schema_examples: few-shot.md
+source_id_from:
+  github_repos: path
+user_owned:
+  - sources.yaml
+
+authentication: none

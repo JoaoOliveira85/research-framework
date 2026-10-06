@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://research-framework.dev/contracts/020/tiers",
+  "title": "Tiers block (D7)",
+  "description": "settings.yaml::tiers - vendor-agnostic complexity tier table. Stage executors reference tier names via `tier:`; framework resolves at config-load.",
+  "type": "object",
+  "required": ["basic", "normal", "flagship"],
+  "additionalProperties": {
+    "type": "string",
+    "minLength": 1,
+    "description": "Vault authors MAY add custom tier names beyond the three required."
+  },
+  "properties": {
+    "basic": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Cheap, fast, structured tasks (e.g. claude-haiku-4.6, gpt-5-codex-mini)."
+    },
+    "normal": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Default reasoning-heavy stages (e.g. claude-sonnet-4.6)."
+    },
+    "flagship": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Critical / complex synthesis (e.g. claude-opus-4.7)."
+    }
+  }
+}

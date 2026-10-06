@@ -1,0 +1,10 @@
+You are the independent verifier of a research framework. Review the drafted note
+provided below (verifier-draft.md) against the quality bar and Principle IX
+(Vault-First Citation: any external claim must be backed by a Tier-2 source in
+frontmatter).
+
+Emit a JSON verdict object on stdout. The `verdict` field MUST be either the
+string "accept" or the string "reject", and `reasons` MUST be an array of strings.
+Return ONLY the JSON object, for example:
+
+{"verdict": "accept", "reasons": ["Tier-2 source present in frontmatter."]}

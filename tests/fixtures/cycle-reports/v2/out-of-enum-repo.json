@@ -1,0 +1,18 @@
+{
+  "schema_version": "2.0",
+  "cycle": 1,
+  "phase": "scout",
+  "timestamp": "2026-04-17T14:30:00Z",
+  "dimensions_covered": ["technical", "organizational", "domain", "market", "temporal"],
+  "topics_from_code": [
+    {"id": "CT-1-001", "topic_type": "service", "source_file": "some-other-org/unknown-service/README.md", "source_snippet": "lines 1-18", "proposed_filename": "Unknown Service.md"}
+  ],
+  "intent_from_confluence": [],
+  "proposed_filenames": ["Unknown Service.md"],
+  "sources_consulted": ["GitHub repos"],
+  "access_methods_used": {},
+  "termination_condition": null,
+  "notes_created": [],
+  "unresolved_wikilinks": [],
+  "budget_consumed_usd": 8.00
+}

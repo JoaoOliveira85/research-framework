@@ -1,0 +1,20 @@
+{
+  "last_updated": "2026-04-16T14:30:00Z",
+  "cycle_number": 2,
+  "categories": [
+    {
+      "name": "concepts",
+      "note_type": "concept",
+      "target_count": 5,
+      "met_count": 3,
+      "required": true
+    },
+    {
+      "name": "services",
+      "note_type": "service",
+      "target_count": 3,
+      "met_count": 3,
+      "required": true
+    }
+  ]
+}

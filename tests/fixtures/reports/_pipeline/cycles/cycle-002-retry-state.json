@@ -1,0 +1,5 @@
+{
+  "retry_count": 2,
+  "aborted": true,
+  "abort_reason": "CG-001 yield miss"
+}

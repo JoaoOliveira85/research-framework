@@ -1,0 +1,23 @@
+name: reddit
+version: 0.1.0
+description: Reddit subreddit and post extraction via public RSS feeds (no API key)
+triggers:
+  - type: url_pattern
+    pattern: "^https?://(?:www\\.)?reddit\\.com/r/[A-Za-z0-9_]+/?(?:\\.rss)?(?:\\?.*)?$"
+  - type: url_pattern
+    pattern: "^https?://(?:www\\.)?reddit\\.com/r/[A-Za-z0-9_]+/comments/[A-Za-z0-9]+"
+entry_point: extractor.py
+preflight:
+  entry_point: preflight.py
+  timeout_seconds: 30
+default_value_tier: routine
+default_tier: basic
+schema_examples: few-shot.md
+source_id_from:
+  reddit_subreddits: url
+  reddit_posts: url
+user_owned:
+  - sources.yaml
+extraction_timeout_seconds: 180
+
+authentication: none
