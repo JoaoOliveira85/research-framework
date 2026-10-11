@@ -17,7 +17,7 @@ for every committed baseline).
   "fixture": "tech-lite",
   "baseline_commit": "1b34c2b40e7a8…",
   "last_updated": "2026-05-21T15:00:00Z",
-  "last_updated_by": "Joao Oliveira",
+  "last_updated_by": "Example Owner",
   "last_updated_reason": "Initial baseline at spec 022 ship.",
   "coverage_targets_hash": "sha256:def456abcdef…",
   "metrics": {

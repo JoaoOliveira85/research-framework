@@ -123,7 +123,7 @@ illustrate that the JSON shape supports it.)
   "framework_version": 1,
   "vault_spec": {
     "name": "AI Knowledge Vault",
-    "owner": "João Oliveira",
+    "owner": "Example Owner",
     "corpus_dir": "data_vault"
   },
   "manifest_status": {
