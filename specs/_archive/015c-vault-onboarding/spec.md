@@ -109,7 +109,7 @@ $ research_vault onboard ~/Documents/reference-vault
   $ research_vault parse-spec ~/Documents/reference-vault reference-vault-spec.md
   wrote /Users/.../reference-vault/_pipeline/spec-parse.json
     name: Tech Knowledge Vault
-    owner: João Oliveira
+    owner: Example Owner
     note_types: 2
     data_sources: 4
 

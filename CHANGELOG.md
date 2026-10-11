@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Package metadata declared MIT while `LICENSE.md` is the GNU AGPL v3; `pyproject.toml` now declares `AGPL-3.0-or-later`, matching the licence text.
+
 ## [1.0.0] - 2026-10-06
 
 **First public release.** This repository was recreated from the framework's

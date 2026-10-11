@@ -1,11 +1,11 @@
 ---
 name: Reference Vault
 location: ~/Documents/reference-vault
-owner: João Pedro Oliveira
+owner: Example Owner
 
 scope:
   domain: "computer science and software engineering — concepts, algorithms, data structures, languages, frameworks, architectures, databases, infrastructure, tools, and practices"
-  organization: "Personal technical reference (maintained by João Pedro Oliveira)"
+  organization: "Personal technical reference (maintained by Example Owner)"
   boundaries:
     - "Technology-agnostic CS/SWE concepts (CAP, ACID, concurrency models, consistency, etc.)"
     - "Algorithms and data structures with canonical complexity characteristics"

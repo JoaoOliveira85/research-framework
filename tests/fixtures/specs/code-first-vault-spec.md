@@ -1,7 +1,7 @@
 ---
 name: Codebase Vault (Code-First)
 location: ~/Documents/codebase-vault-v2
-owner: João Pedro Oliveira
+owner: Example Owner
 
 scope:
   domain: "Acme Corp Platform team — business logic, services, flows, decisions, risks, org context, products, market"

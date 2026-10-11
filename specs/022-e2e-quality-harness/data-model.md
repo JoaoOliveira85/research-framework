@@ -127,7 +127,7 @@ Schema (versioned, see § 6 below for full contract):
   "fixture": "tech-lite",
   "baseline_commit": "abc123…",
   "last_updated": "2026-05-21T15:00:00Z",
-  "last_updated_by": "Joao Oliveira",
+  "last_updated_by": "Example Owner",
   "last_updated_reason": "Initial baseline at spec 022 ship.",
   "coverage_targets_hash": "sha256:def456…",
   "metrics": {

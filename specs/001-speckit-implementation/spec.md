@@ -3,7 +3,7 @@
 **Feature Branch**: `001-speckit-implementation`
 **Created**: 2026-04-16
 **Status**: Active
-**Input**: Implementation plan v1.0.0 authored by João Pedro Oliveira
+**Input**: Implementation plan v1.0.0 authored by the maintainer
 
 ## User Scenarios & Testing *(mandatory)*
 
