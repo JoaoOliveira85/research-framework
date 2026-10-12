@@ -1,7 +1,7 @@
 # research-framework Development Guidelines
 
-Auto-generated from all feature plans; hand-corrected 2026-10-06 to the
-**v1.0.0** public release. `CHANGELOG.md` is the record of what
+Auto-generated from all feature plans; hand-corrected 2026-10-12 to the
+**v1.0.1** patch release of the public line. `CHANGELOG.md` is the record of what
 shipped and `docs/ROADMAP.md` the record of what comes next; the "Active
 Technologies" bullets below are the spec-kit agent-context digest of each
 shipped plan and read as a ledger, oldest first. Where this file and a
@@ -414,8 +414,8 @@ catch stale references.
 - `docs/ROADMAP.md` — shipped registry, the v1.3.0 / v1.4.0 tiers and
   the Deferred table. **Source of truth for "what comes next".**
 - `docs/TODO.md` — scratchpad. Often empty. Triage to ROADMAP.
-- `CHANGELOG.md` — every user-visible change. Read [1.0.0] for the most
-  recent shipped scope. `[Unreleased]` is where in-flight work lands.
+- `CHANGELOG.md` — every user-visible change. Read [1.0.0] for the public
+  release's scope and [1.0.1] for the latest fixes. `[Unreleased]` is where in-flight work lands.
 - `docs/RELEASE.md` — release process (version tags and `workflow_dispatch`
   only; heading date = tag date; the Migration-notes rule;
   what `./vault update` does and does not rewrite).
