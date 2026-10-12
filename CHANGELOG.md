@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Package metadata declared MIT while `LICENSE.md` is the GNU AGPL v3; `pyproject.toml` now declares `AGPL-3.0-or-later`, matching the licence text.
+- `tests/docs/test_one_source_per_fact.py` no longer reports test-count drift when test collection fails (e.g. `jsonschema` missing); it names the uncollectable modules and points to `pip install -e '.[dev]'` (#3).
 
 ## [1.0.0] - 2026-10-06
 
