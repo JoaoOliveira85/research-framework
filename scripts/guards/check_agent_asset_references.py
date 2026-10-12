@@ -42,10 +42,20 @@ import sys
 import tempfile
 from pathlib import Path
 
-from research_framework.generator.scaffold import scaffold
-from research_framework.generator.scripts import copy_scripts
-from research_framework.generator.templates import render_all
-from research_framework.spec.schema import (
+try:  # imported as ``scripts.guards.<module>`` (tests) or run as a script
+    from ._checkout_package import require_checkout_package
+except ImportError:
+    from _checkout_package import require_checkout_package
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+# Before the package imports below: a stale install / other worktree must fail
+# loudly, not be judged as if it were this checkout (issue #2).
+require_checkout_package(_REPO_ROOT)
+
+from research_framework.generator.scaffold import scaffold  # noqa: E402
+from research_framework.generator.scripts import copy_scripts  # noqa: E402
+from research_framework.generator.templates import render_all  # noqa: E402
+from research_framework.spec.schema import (  # noqa: E402
     BudgetConfig,
     CommandsConfig,
     CoverageCategory,

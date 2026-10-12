@@ -53,6 +53,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+try:  # imported as ``scripts.guards.<module>`` (tests) or run as a script
+    from ._checkout_package import require_checkout_package
+except ImportError:
+    from _checkout_package import require_checkout_package
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SRC_ROOT = _REPO_ROOT / "src" / "research_framework"
 _CLI_ROOT = _SRC_ROOT / "cli"
@@ -182,6 +187,7 @@ def discover_flags() -> list[ParserFlag]:
     """Walk the built parser, descending into every subparser."""
     if str(_REPO_ROOT / "src") not in sys.path:
         sys.path.insert(0, str(_REPO_ROOT / "src"))
+    require_checkout_package(_REPO_ROOT)
     from research_framework.cli import build_parser
 
     return _walk(build_parser(), "(root)")

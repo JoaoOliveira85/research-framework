@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Guards that import `research_framework` (`agent-asset-references`, `parser-flag-consumers`, and the `run_all.py` battery) judged whichever copy Python resolved — a stale editable install or another worktree — instead of the checkout under test (#2). They now exit `2` with "imported research_framework from <X>, expected <repo>/src; reinstall with pip install -e ." when the package is not under `<repo>/src`.
 - Package metadata declared MIT while `LICENSE.md` is the GNU AGPL v3; `pyproject.toml` now declares `AGPL-3.0-or-later`, matching the licence text.
 - `tests/docs/test_one_source_per_fact.py` no longer reports test-count drift when test collection fails (e.g. `jsonschema` missing); it names the uncollectable modules and points to `pip install -e '.[dev]'` (#3).
 

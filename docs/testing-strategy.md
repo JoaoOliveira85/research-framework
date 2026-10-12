@@ -58,12 +58,12 @@ pytest -m e2e              # tier-5/6 e2e only
 ruff check .               # lint baseline (must be zero)
 ```
 
-<!-- test-count: not_e2e=4303 total=4333 e2e_only=30 refreshed=2026-10-12 -->
+<!-- test-count: not_e2e=4312 total=4342 e2e_only=30 refreshed=2026-10-12 -->
 **This is the one place in the repo a test count is committed** — every
 other doc that mentions a count (README, CLAUDE.md, CONTRIBUTING.md,
 ARCHITECTURE.md, `docs/RELEASE.md`) points here instead of quoting its
-own copy. Today that's **4303** fast-loop tests (`pytest -m "not e2e"`),
-**4333** total (`pytest --collect-only -q`), **30** deselected as `e2e`.
+own copy. Today that's **4312** fast-loop tests (`pytest -m "not e2e"`),
+**4342** total (`pytest --collect-only -q`), **30** deselected as `e2e`.
 `tests/docs/test_one_source_per_fact.py` re-collects the suite and
 fails if the comment above no longer matches — when it fails, update
 the comment **and** the three bolded numbers in this paragraph
@@ -694,6 +694,16 @@ a new flag. It is a floor, not a proof: a flag threaded into a non-CLI
 function that then ignores it still passes, which was the shape of both
 `--target-topics` and `--budget-cap` — catching *that* needs dataflow
 analysis. What it does close is the flag that never leaves `cli/` at all.
+
+**Wrong-checkout package (issue #2).** A guard run as a script gets
+`scripts/guards/` on `sys.path[0]`, not `src/`, so `import research_framework`
+resolves through site-packages: a stale editable install or a sibling worktree
+is judged in place of the checkout under test. `scripts/guards/_checkout_package.py`
+asserts the package resolves under `<repo>/src`; `run_all.py`,
+`check_agent_asset_references.py` and `parser_flag_consumers.py` call it and
+exit `2` with "imported research_framework from <X>, expected <repo>/src;
+reinstall with pip install -e ." instead of reporting on another tree. Exit `2`
+means the environment is wrong; `1` still means the guard found a defect.
 
 **The cycle-runner seam (issue #86).**
 `tests/_helpers/test_cycle_runner_seam_guard.py` rejects any `monkeypatch` or
