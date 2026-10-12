@@ -95,6 +95,7 @@ CHANGELOG heading convention too (D14).
 | private 1.2.0 | 2026-09-08 | Verify verdict semantics — flag classes, the vault's own note format, a real FAIL path (#327); one budget ladder for every run verb, `pause show\|clear`, `--estimate-only` (#331); `budget_usd: 0` = unlimited (#320); `pipeline status --json`, empty-branch cleanup (#321); CI on tags and by hand only (#323, #324); guard battery + agent-asset lint + JSON-schema wiring + branch retention v0 (#326); CLI-binary fake + parser-flag consumer guard (#329); spec index, archive and trunk specs 075–079 (#328); constitution 1.5.0; review-backlog minors (#332). |
 
 | **1.0.0** | 2026-10-06 | **First public release** — private 1.2.0 plus the post-1.2.0 work (run receipt 080, review fixes), in a recreated repository with personal and workplace details removed. |
+| **1.0.1** | 2026-10-12 | Patch: guards fail loudly when `research_framework` is not the checkout under test (#2); the test-count guard names uncollectable modules instead of reporting drift (#3); package metadata declares `AGPL-3.0-or-later`. |
 ---
 
 ## v1.1.0 — the weekly pipeline runs unattended (operator)

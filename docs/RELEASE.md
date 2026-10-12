@@ -179,10 +179,10 @@ Python package.
 ### Full vault install (recommended for end users)
 
 ```bash
-# Current stable is v1.0.0 (2026-10-06); check the Releases page for newer
-curl -L https://github.com/JoaoOliveira85/research-framework/releases/download/v1.0.0/research-framework-1.0.0.tar.gz \
+# Current stable is v1.0.1 (2026-10-12); check the Releases page for newer
+curl -L https://github.com/JoaoOliveira85/research-framework/releases/download/v1.0.1/research-framework-1.0.1.tar.gz \
   | tar -xzf - -C /tmp
-cd /tmp/research-framework-1.0.0
+cd /tmp/research-framework-1.0.1
 ./install.sh ~/vaults/my-vault
 ```
 
@@ -198,7 +198,7 @@ overwrite your edits). The bundle carries all six settings profiles
 
 ```bash
 pip install \
-  https://github.com/JoaoOliveira85/research-framework/releases/download/v1.0.0/research_framework-1.0.0-py3-none-any.whl
+  https://github.com/JoaoOliveira85/research-framework/releases/download/v1.0.1/research_framework-1.0.1-py3-none-any.whl
 ```
 
 Or directly from the repo (always-latest):
