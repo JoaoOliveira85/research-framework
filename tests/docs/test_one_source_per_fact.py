@@ -190,6 +190,35 @@ def _prose_count_restatement() -> tuple[int, int, int]:
     return bolded[0], bolded[1], bolded[2]
 
 
+_COLLECTION_ERROR_LINE_RE = re.compile(
+    r"^ERROR(?: collecting)?\s+(\S+\.py)", re.MULTILINE
+)
+_DEV_EXTRAS_HINT = (
+    "Install the dev extras (pip install -e '.[dev]') so every test module "
+    "imports; this is an environment problem, not docs drift."
+)
+
+
+def _collection_problem(returncode: int, output: str) -> str | None:
+    """Why a ``pytest --collect-only`` run can't be trusted, or ``None``.
+
+    pytest exits 0 (collected) or 5 (nothing collected); anything else, or any
+    ``ERROR <module>.py`` line, means modules were skipped and the count is low.
+    """
+    modules = sorted(set(_COLLECTION_ERROR_LINE_RE.findall(output)))
+    if modules:
+        return (
+            f"{len(modules)} module(s) failed to collect: {', '.join(modules)}. "
+            f"{_DEV_EXTRAS_HINT}"
+        )
+    if returncode not in (0, 5):
+        return (
+            f"`pytest --collect-only` exited with exit code {returncode}; "
+            f"tail of output:\n{output[-500:]}\n{_DEV_EXTRAS_HINT}"
+        )
+    return None
+
+
 def _live_collected_counts() -> tuple[int, int]:
     """(not_e2e, total) from a real ``pytest --collect-only`` run."""
 
@@ -214,6 +243,8 @@ def _live_collected_counts() -> tuple[int, int]:
             env={**os.environ, "PYTHONWARNINGS": "ignore"},
         )
         out = result.stdout
+        problem = _collection_problem(result.returncode, out)
+        assert problem is None, problem
         m = re.search(r"(\d+)/(\d+)\s+tests? collected \((\d+) deselected\)", out)
         if m:
             return int(m.group(1)), int(m.group(2)), int(m.group(3))
@@ -255,6 +286,51 @@ def test_testing_strategy_count_prose_matches_marker() -> None:
         f"restatement disagree: marker={marker} prose={prose} — someone "
         "edited one without the other."
     )
+
+
+# ---------------------------------------------------------------------------
+# Collection-error detection (#3): a module that fails to import (e.g. the dev
+# extra ``jsonschema`` is missing) silently shrinks the live count, which the
+# drift guard above would blame on the docs. The decision is a pure function
+# of pytest's return code and output, so it is tested with canned output.
+# ---------------------------------------------------------------------------
+
+_COLLECTION_ERROR_OUTPUT = """\
+tests/a/test_ok.py::test_one
+tests/a/test_ok.py::test_two
+
+==================================== ERRORS ====================================
+_________ ERROR collecting tests/contracts/test_claims_export_schema.py _________
+ImportError while importing test module 'tests/contracts/test_x.py'.
+E   ModuleNotFoundError: No module named 'jsonschema'
+=========================== short test summary info ============================
+ERROR tests/contracts/test_claims_export_schema.py
+ERROR tests/contracts/test_json_schema_validation.py - ModuleNotFoundError: ...
+!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!
+2 tests collected, 2 errors in 0.5s
+"""
+
+
+def test_collection_problem_names_uncollectable_modules_and_dev_extras() -> None:
+    msg = _collection_problem(2, _COLLECTION_ERROR_OUTPUT)
+    assert msg is not None
+    assert "tests/contracts/test_claims_export_schema.py" in msg
+    assert "tests/contracts/test_json_schema_validation.py" in msg
+    assert "pip install -e '.[dev]'" in msg
+    assert "drifted" not in msg
+
+
+def test_collection_problem_flags_bad_returncode_without_error_lines() -> None:
+    msg = _collection_problem(3, "INTERNALERROR> boom\n")
+    assert msg is not None
+    assert "exit code 3" in msg
+    assert "pip install -e '.[dev]'" in msg
+
+
+@pytest.mark.parametrize("returncode", [0, 5])
+def test_collection_problem_accepts_clean_collection(returncode: int) -> None:
+    clean = "tests/a.py::t\n\n1 test collected\n"
+    assert _collection_problem(returncode, clean) is None
 
 
 # ---------------------------------------------------------------------------
