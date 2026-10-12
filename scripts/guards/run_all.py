@@ -38,6 +38,11 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+try:  # imported as ``scripts.guards.run_all`` (tests) or run as a script
+    from ._checkout_package import require_checkout_package
+except ImportError:
+    from _checkout_package import require_checkout_package
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Tier-2 lint/guard test modules that scan this repo's own tree (specs,
@@ -63,6 +68,7 @@ GUARD_TEST_PATHS: tuple[str, ...] = (
     "tests/benchmark/unit/test_build_exclusion.py",
     "tests/cli/test_parser_flag_consumer_guard.py",
     "tests/cli/test_exit_code_contract.py",
+    "tests/scripts/test_guard_checkout_package.py",
 )
 
 
@@ -159,6 +165,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.list:
         _list_guards(guards)
         return 0
+
+    # Guards import ``research_framework`` in subprocesses that inherit this
+    # interpreter's environment; a stale install or another worktree would be
+    # judged in place of this checkout (issue #2). Fail before any guard runs.
+    require_checkout_package(_REPO_ROOT)
 
     missing = missing_guard_paths()
     if missing:
