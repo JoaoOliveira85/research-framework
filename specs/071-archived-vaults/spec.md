@@ -113,6 +113,9 @@ side effect:
   and the matching `pipeline.runner.run_*` functions.
 - `research-framework generate --regenerate-plan-only` (it rewrites
   `_pipeline/research-plan.md`).
+- `research-framework ask --escalate` (`./vault ask --escalate`, issue #15),
+  before its ask is dispatched: escalation exists only to research. `ask`
+  without `--escalate` is a query and stays open.
 - A fresh `generate` whose vault comes from the settings profile's
   `output_dir` or the spec's `location` rather than `--output`: the guard runs
   as soon as that directory is known, before scaffolding.

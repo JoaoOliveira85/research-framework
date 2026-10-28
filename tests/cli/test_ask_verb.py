@@ -351,6 +351,36 @@ def test_strict_settings_refuses_the_ask_before_any_dispatch(
     assert "default_agnet" in err and "strict_settings" in err
 
 
+def test_an_archived_vault_refuses_the_escalation_before_any_dispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """#26 / spec 071: an archived vault takes no research, and `--escalate`
+    exists only to research, so it is refused before the paid ask."""
+    vault = _vault(tmp_path)
+    _edit_settings(vault, lambda s: s.update(archived=True))
+    cycles = _record_cycles(monkeypatch)
+
+    rc = _ask(vault, "--escalate")
+
+    assert rc == 2
+    assert cycles == []
+    assert _answers(vault) == []
+    assert "is archived" in capsys.readouterr().err
+
+
+def test_an_archived_vault_still_answers_without_escalate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Spec 071: an archived vault stays fully queryable."""
+    vault = _vault(tmp_path)
+    _edit_settings(vault, lambda s: s.update(archived=True))
+    cycles = _record_cycles(monkeypatch)
+
+    assert _ask(vault) == 0
+    assert cycles == []
+    assert len(_answers(vault)) == 1
+
+
 def test_strict_settings_accepts_the_shipped_ask_block(tmp_path: Path) -> None:
     """`inherit_args` / `retry` in `stages.ask` are known keys, not refusals."""
     vault = _vault(tmp_path)
