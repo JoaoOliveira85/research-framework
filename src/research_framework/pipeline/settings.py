@@ -1377,6 +1377,7 @@ _EXECUTOR_KEYS = (
     "script_path",  # type: script
     "variant",  # opencode
     "agent",  # opencode
+    "env",  # extra runtime-process variables, e.g. OPENCODE_PERMISSION (#15)
 )
 
 # Stage-specific blocks, each read by the stage named. Keys that ship but are
@@ -1399,7 +1400,9 @@ _STAGE_SPECIFIC: dict[str, dict[str, Any]] = {
 
 def _build_schema() -> dict[str, Any]:
     executor = dict.fromkeys(_EXECUTOR_KEYS)
-    stage_common = {**executor, "enabled": None, "tier": None}
+    # ``inherit_args`` is read from the stage only (``false`` drops
+    # ``default_executor.args`` for that stage, #15).
+    stage_common = {**executor, "enabled": None, "tier": None, "inherit_args": None}
 
     hints = get_type_hints(VaultSettings)
     schema: dict[str, Any] = {}
@@ -1490,6 +1493,7 @@ _INERT_PATHS: tuple[tuple[str, ...], ...] = tuple(
         "default_executor.on_fail",
         "default_executor.retry",
         "stages.*.skill",
+        "stages.*.retry",  # the ask stage declares `retry: 0` (#15)
         "stages.source_manager.auto_promote_discovered",
         "stages.verifier.on_timeout",
         "stages.verifier.output_filename",
