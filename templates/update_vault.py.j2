@@ -28,91 +28,31 @@ def _run_python(script: str, *args: str) -> int:
 
 
 def _reindex() -> int:
-    notes_by_folder: dict[str, list[tuple[str, str]]] = {}
-    concepts: list[tuple[str, str]] = []
-    edges: list[tuple[str, str]] = []
-    type_counts: dict[str, int] = {}
+    """Rebuild the Layer 1 indexes with the package indexer.
 
-    try:
-        import yaml
-    except ImportError:
-        print("ERROR: PyYAML is required to rebuild index files", file=sys.stderr)
-        return 2
-
-    for note in sorted(DATA_VAULT.rglob("*.md")):
-        text = note.read_text(encoding="utf-8")
-        if not text.startswith("---"):
-            continue
-        # The closing delimiter is a `---` LINE. A `---` inside a value (a slug
-        # URL such as `kafka---a-guide`) is not one.
-        lines = text.split("\n")
-        close = next(
-            (i for i in range(1, len(lines)) if lines[i].rstrip() == "---"), None
+    The same entry point as ``./vault reindex``: there is one writer of
+    ``_index.md`` / ``_concepts.md`` / ``_graph.md`` and of the ``AGENTS.md``
+    topic index, and it lives in ``research_framework.vault.indexer``. This
+    script does not carry a copy. The package is looked up in the vault's own
+    ``.venv`` (where ``./vault`` finds it), else in the running interpreter.
+    """
+    venv_python = ROOT / ".venv" / "bin" / "python"
+    python = str(venv_python) if venv_python.exists() else sys.executable
+    probe = subprocess.run(
+        [python, "-c", "import research_framework.vault.indexer"],
+        capture_output=True,
+    )
+    if probe.returncode != 0:
+        print(
+            f"ERROR: research-framework is not installed for {python}; "
+            f"run: cd {ROOT} && .venv/bin/pip install research-framework",
+            file=sys.stderr,
         )
-        if close is None:
-            continue
-        try:
-            fm = yaml.safe_load("\n".join(lines[1:close])) or {}
-        except yaml.YAMLError:
-            continue
-        if not isinstance(fm, dict):
-            continue
-
-        title = str(fm.get("title", note.stem))
-        summary = str(fm.get("summary", ""))
-        notes_by_folder.setdefault(note.parent.name, []).append((title, summary))
-
-        note_type = str(fm.get("type", "unknown"))
-        type_counts[note_type] = type_counts.get(note_type, 0) + 1
-        if note_type == "concept":
-            concepts.append((title, summary))
-
-        related = fm.get("related") or []
-        if isinstance(related, list):
-            for target in related:
-                target_name = str(target).strip("[]")
-                if target_name:
-                    edges.append((title, target_name))
-
-    index_lines = [f"# Index — {{ spec.name }}", ""]
-    for folder in sorted(notes_by_folder):
-        index_lines.append(f"## {folder}")
-        index_lines.append("")
-        for title, summary in sorted(notes_by_folder[folder]):
-            index_lines.append(f"- [[{title}]] — {summary}")
-        index_lines.append("")
-    (ROOT / "_index.md").write_text("\n".join(index_lines), encoding="utf-8")
-
-    concept_lines = [f"# Concepts — {{ spec.name }}", ""]
-    for title, summary in sorted(concepts):
-        concept_lines.append(f"- [[{title}]] — {summary}")
-    (ROOT / "_concepts.md").write_text("\n".join(concept_lines), encoding="utf-8")
-
-    graph_lines = [f"# Graph — {{ spec.name }}", "", "## Edges", ""]
-    for source, target in sorted(edges):
-        graph_lines.append(f"- [[{source}]] -> [[{target}]]")
-    (ROOT / "_graph.md").write_text("\n".join(graph_lines), encoding="utf-8")
-
-    agents_file = ROOT / "AGENTS.md"
-    if agents_file.exists():
-        text = agents_file.read_text(encoding="utf-8")
-        topic_lines = [
-            "## Topic Index",
-            "",
-            *[f"- {note_type}: {count}" for note_type, count in sorted(type_counts.items())],
-            "",
-        ]
-        topic_block = "\n".join(topic_lines)
-        if "## Topic Index" in text:
-            before, _, rest = text.partition("## Topic Index")
-            _, _, after = rest.partition("## ")
-            new_text = before + topic_block + ("## " + after if after else "")
-        else:
-            new_text = text.rstrip() + "\n\n" + topic_block
-        agents_file.write_text(new_text, encoding="utf-8")
-
-    print("[reindex] rebuilt _index.md, _concepts.md, _graph.md")
-    return 0
+        return 2
+    rc = subprocess.run(
+        [python, "-m", "research_framework.cli", "reindex", "--vault", str(ROOT)]
+    ).returncode
+    return rc if rc >= 0 else 2
 
 
 def _cmd_validate(_: argparse.Namespace) -> int:
