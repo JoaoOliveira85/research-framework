@@ -158,6 +158,29 @@ def test_verifier_inputs_come_from_the_vault_spec(tmp_path: Path) -> None:
     assert service["source_policy"] == "hard"
 
 
+def test_verifier_inputs_follow_the_spec_file_over_a_stale_cache(
+    tmp_path: Path,
+) -> None:
+    """Read through ``load_parsed_spec`` (#9): a cache that no longer matches
+    the spec file is re-parsed, not trusted."""
+    from research_framework.pipeline.verifier import _verifier_inputs
+
+    vault = tmp_path / "v"
+    (vault / "_pipeline").mkdir(parents=True)
+    (vault / "_pipeline" / "spec-parse.json").write_text(
+        json.dumps({"note_types": [{"name": "glossary", "source_policy": "hard"}]}),
+        encoding="utf-8",
+    )  # unstamped: written before the spec below dropped the glossary type
+    (vault / "research.spec.md").write_text(
+        '---\nname: "Verifier Vault"\nowner: "test"\ntopic: "A topic"\n---\n',
+        encoding="utf-8",
+    )
+
+    inputs = _verifier_inputs(vault, "---\ntype: glossary\n---\nBody.\n")
+
+    assert inputs["source_policy"] == "soft"
+
+
 def test_verifier_inputs_fall_back_to_the_framework_defaults(tmp_path: Path) -> None:
     from research_framework.pipeline.verifier import _verifier_inputs
     from research_framework.spec.validator import DEFAULT_REPO_URL_PATTERNS

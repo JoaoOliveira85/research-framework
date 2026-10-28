@@ -459,11 +459,13 @@ def _verifier_inputs(vault_dir: Path, note_text: str) -> dict[str, Any]:
     """The inputs the verifier rules need for one note, read from the vault.
 
     The source-policy rule needs the note type's policy and the code source
-    URL patterns. They come from ``_pipeline/spec-parse.json`` (the cycle's
-    structured spec); a type the spec does not declare, or a vault without a
-    readable spec, falls back to the framework defaults — the hard note types
-    and :data:`~research_framework.spec.validator.DEFAULT_REPO_URL_PATTERNS`.
+    URL patterns. They come from the cycle's parsed spec, read through
+    :func:`~research_framework.spec.parsed.load_parsed_spec` (#9); a type the
+    spec does not declare, or a vault without a readable spec, falls back to
+    the framework defaults — the hard note types and
+    :data:`~research_framework.spec.validator.DEFAULT_REPO_URL_PATTERNS`.
     """
+    from research_framework.spec.parsed import ParsedSpecError, load_parsed_spec
     from research_framework.spec.schema import HARD_NOTE_TYPES
     from research_framework.spec.validator import DEFAULT_REPO_URL_PATTERNS
 
@@ -472,14 +474,10 @@ def _verifier_inputs(vault_dir: Path, note_text: str) -> dict[str, Any]:
     except FrontmatterParseError:
         note_type = ""
     spec: dict[str, Any] = {}
-    spec_path = vault_dir / "_pipeline" / "spec-parse.json"
     try:
-        loaded = json.loads(spec_path.read_text(encoding="utf-8"))
-        spec = loaded if isinstance(loaded, dict) else {}
-    except FileNotFoundError:
-        pass
-    except (OSError, json.JSONDecodeError) as exc:
-        _LOG.warning("verifier: unreadable %s (%s); using defaults", spec_path, exc)
+        spec = load_parsed_spec(vault_dir)
+    except ParsedSpecError as exc:
+        _LOG.warning("verifier: no readable parsed spec (%s); using defaults", exc)
     declared = {
         str(nt.get("name")): str(nt.get("source_policy") or "")
         for nt in spec.get("note_types") or []
