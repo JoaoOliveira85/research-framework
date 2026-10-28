@@ -7,6 +7,23 @@ import sys
 from pathlib import Path
 
 
+def refuse_if_archived(vault_dir: Path) -> int | None:
+    """Print the spec-071 refusal to stderr and return exit 2, else ``None``.
+
+    The CLI-layer half of the archived guard (spec 048 keeps operator output
+    out of ``pipeline/``): the text and the rule live in
+    ``pipeline.archived``; this only presents them. Call it before any side
+    effect from a verb that writes research content.
+    """
+    from ..pipeline.archived import ARCHIVED_EXIT, archived_refusal_message
+
+    message = archived_refusal_message(vault_dir)
+    if message is None:
+        return None
+    print(f"error: {message}", file=sys.stderr)
+    return ARCHIVED_EXIT
+
+
 def force_line_buffered_stdio() -> None:
     """Reconfigure stdout/stderr to line-buffered mode (see cli.py history)."""
     for stream in (sys.stdout, sys.stderr):

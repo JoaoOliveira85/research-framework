@@ -16,7 +16,7 @@ from ..spec.schema import SpecValidationError
 from ..spec.simple import load as load_spec
 from ..spec.validator import validate
 from ._budget_resolve import BudgetError, resolve_cycle_budget_from_path
-from ._common import _run_phase1_gate
+from ._common import _run_phase1_gate, refuse_if_archived
 from .research_cycles import _regenerate_plan_only
 from .research_phase3 import _prepopulate_pipeline, _run_phase3
 from .research_resume import _resume
@@ -29,7 +29,6 @@ def _estimate_only_for_generate(args: argparse.Namespace) -> int:
     number ``--resume`` would resolve — so the estimate belongs to the run the
     operator is actually about to start, not to cycle 1 of a hypothetical one.
     """
-    from ..pipeline.archived import refuse_if_archived
     from .research_cycles import _estimate_only
     from .research_resume import _resolve_resume_cycle, _resume_vault_dir
 
@@ -47,8 +46,6 @@ def _estimate_only_for_generate(args: argparse.Namespace) -> int:
 
 
 def _cmd_generate(args: argparse.Namespace) -> int:
-    from ..pipeline.archived import refuse_if_archived
-
     if args.regenerate_plan_only:
         # Issue #26: it rewrites `_pipeline/research-plan.md`, which an archived
         # vault must not gain.

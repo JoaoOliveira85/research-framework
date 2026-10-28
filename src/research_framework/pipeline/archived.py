@@ -14,7 +14,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-import sys
 from pathlib import Path
 
 _LOG = logging.getLogger(__name__)
@@ -65,18 +64,6 @@ def archived_refusal_message(vault_dir: Path) -> str | None:
         "`re-grade`) and still takes framework upgrades (`./vault update`).\n"
         f"To resume research, set `archived: false` in {vault_dir}/settings.yaml."
     )
-
-
-def refuse_if_archived(vault_dir: Path) -> int | None:
-    """CLI guard: print the refusal to stderr and return exit 2, else ``None``.
-
-    Call it before any side effect from a verb that writes research content.
-    """
-    message = archived_refusal_message(vault_dir)
-    if message is None:
-        return None
-    print(f"error: {message}", file=sys.stderr)
-    return ARCHIVED_EXIT
 
 
 # --------------------------------------------------------------------------
