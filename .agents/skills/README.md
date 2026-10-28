@@ -5,6 +5,12 @@ orchestrator (or a slash command, or a maintainer's subagent) invokes against
 an LLM. Skill files keep prompts out of Python source and make every agent
 interaction reproducible and auditable.
 
+These files ship in the wheel and the bundle only; a generated vault holds no
+copy. A stage prompt that needs a skill's instructions inlines them from the
+installed package with `research_framework._assets.skill_instructions(name)`
+(frontmatter dropped), so the rendered prompt is complete on every runtime and
+a `SKILL.md` planted in a vault changes nothing (#12).
+
 Two guards keep this directory honest: `docs/prompts/README.md` (generated
 by `scripts/render_prompt_corpus.py`) records every skill file's sha256 in
 its "Recorded, not copied" table, so a prompt cannot change without the

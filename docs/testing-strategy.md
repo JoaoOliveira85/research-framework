@@ -806,7 +806,7 @@ CHANGELOG-regression-link guards green with no allowlist entries.
 | Empty scout abort | `…::test_empty_scout_queue_aborts_via_sg001` | 5 |
 | SG-005 / frontmatter | `…::test_sg005_failure_triggers_correction_batch` | 5 |
 | Asymmetric batch tail | `…::test_asymmetric_tail_batch_serializes` | 5 |
-| SKILL preflight repair | `…::test_corrupted_skill_file_self_repairs_in_preflight` | 5 |
+| Vault skill file ignored | `…::test_a_vault_skill_file_is_neither_read_nor_repaired_by_a_cycle` | 5 |
 | Multi-cycle coverage | `test_multi_cycle_e2e.py::test_three_cycles_progress_coverage` | 6 |
 | Cycle handoff | `…::test_cycle_two_picks_up_where_cycle_one_left_off` | 6 |
 | Cross-cycle corrections | `…::test_correction_loop_across_cycles` | 6 |

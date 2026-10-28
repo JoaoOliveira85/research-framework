@@ -676,7 +676,7 @@ research-framework/
 │   ├── templates/             # spec / plan / tasks templates
 │   └── scripts/bash/          # speckit workflow scripts
 ├── .agents/
-│   └── skills/                # Agent skills (cycle-report, install-wizard, etc.)
+│   └── skills/                # Agent skills (cycle-report, install-wizard, etc.); shipped in the wheel + bundle only, inlined into stage prompts — never copied into a vault
 └── dist-templates/            # Bundle template files
 ```
 
