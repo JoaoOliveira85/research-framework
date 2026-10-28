@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from pathlib import Path
 
 import yaml
@@ -96,7 +97,12 @@ def default_settings_path() -> Path:
     return asset_path("settings.yaml")
 
 
-def skill_instructions(name: str) -> str:
+_STUB_EXAMPLES = re.compile(r"^#+ Examples\s*\n+\*\(Stub\.\)\*\s*$", re.MULTILINE)
+
+
+def skill_instructions(
+    name: str, *, heading_offset: int = 0, skills_root: Path | None = None
+) -> str:
     """Return the instructions of the packaged ``.agents/skills/<name>/SKILL.md``.
 
     Stage prompts inline this text so a rendered prompt is self-contained: an
@@ -104,18 +110,43 @@ def skill_instructions(name: str) -> str:
     not load skill files cannot do, and a generated vault holds none (#12).
     The file is read from the package (or the source tree in dev mode) and
     never from a vault, so a ``SKILL.md`` planted in a vault changes nothing.
-    The YAML frontmatter is metadata about the skill, not instructions, and is
-    dropped.
 
-    Raises :class:`FileNotFoundError` when the package carries no such skill.
+    The YAML frontmatter is metadata about the skill, not instructions, and is
+    dropped, as is an ``Examples`` section that holds only ``*(Stub.)*``.
+    ``heading_offset`` demotes every Markdown heading outside code fences, so
+    the skill nests under the prompt section that embeds it.
+
+    Raises :class:`FileNotFoundError` when the package carries no such skill
+    and :class:`ValueError` when its frontmatter is never closed — a broken
+    packaged skill must stop the stage, not leak YAML into a prompt.
+    ``skills_root`` overrides the packaged ``.agents/skills`` (tests).
     """
     from research_framework.vault.frontmatter import split_frontmatter
 
-    path = asset_path(".agents") / "skills" / name / "SKILL.md"
+    root = skills_root if skills_root is not None else asset_path(".agents") / "skills"
+    path = root / name / "SKILL.md"
     text = path.read_text(encoding="utf-8")
-    split = split_frontmatter(text)
-    body = split[1] if split is not None else text
-    return body.strip()
+    if text.split("\n", 1)[0].rstrip() == "---":
+        split = split_frontmatter(text)
+        if split is None:
+            raise ValueError(f"{path}: YAML frontmatter is never closed")
+        text = split[1]
+    text = _STUB_EXAMPLES.sub("", text).strip()
+    if heading_offset:
+        text = _demote_headings(text, heading_offset)
+    return text
+
+
+def _demote_headings(text: str, offset: int) -> str:
+    out: list[str] = []
+    in_fence = False
+    for line in text.split("\n"):
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+        elif not in_fence and re.match(r"#{1,6} ", line):
+            line = "#" * offset + line
+        out.append(line)
+    return "\n".join(out)
 
 
 # Legacy alias map retained for a single purpose: producing a helpful error
