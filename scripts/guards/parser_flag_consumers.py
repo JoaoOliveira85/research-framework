@@ -87,6 +87,12 @@ ALLOWLIST: dict[str, str] = {
     "digest last_quarter": (
         "control flow: as --last-week, resolved to a date pair in cli/digest.py."
     ),
+    "regenerate-agents notice_only": (
+        "control flow: cli/vault.py branches to pipeline.archived."
+        "sync_archived_notice (which reads settings.yaml itself) instead of "
+        "re-rendering the commands; the choice, not the flag, reaches the "
+        "pipeline."
+    ),
     "generate approve_all": (
         "control flow: cli/budget_resume.py decides whether to clear a paused "
         "budget marker; the decision, not the flag, reaches the pipeline."

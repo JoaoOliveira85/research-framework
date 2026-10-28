@@ -319,7 +319,22 @@ def build_parser() -> argparse.ArgumentParser:
     ra.add_argument(
         "--force",
         action="store_true",
-        help="Skip the confirmation prompt and write immediately",
+        help=(
+            "Skip the confirmation prompt and write immediately. NOTE: this "
+            "overwrites every selected .claude/commands/*.md from the framework "
+            "templates, discarding local customisations."
+        ),
+    )
+    ra.add_argument(
+        "--notice-only",
+        dest="notice_only",
+        action="store_true",
+        help=(
+            "Only add or remove the archived-vault notice (settings.yaml "
+            "`archived`) in CLAUDE.md, AGENTS.md and the /research command. "
+            "Rewrites nothing else, so customised commands survive; needs no "
+            "spec-parse.json and no --force."
+        ),
     )
     ra.set_defaults(func=_cmd_regenerate_agents)
 

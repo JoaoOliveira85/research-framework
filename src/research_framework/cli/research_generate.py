@@ -29,7 +29,7 @@ def _estimate_only_for_generate(args: argparse.Namespace) -> int:
     number ``--resume`` would resolve — so the estimate belongs to the run the
     operator is actually about to start, not to cycle 1 of a hypothetical one.
     """
-    from ..pipeline.orchestrator import is_archived
+    from ..pipeline.archived import refuse_if_archived
     from .research_cycles import _estimate_only
     from .research_resume import _resolve_resume_cycle, _resume_vault_dir
 
@@ -40,15 +40,8 @@ def _estimate_only_for_generate(args: argparse.Namespace) -> int:
     # Spec 071, same single rule called earlier: an archived vault will never
     # run another cycle, so pricing one and reporting it "safe to leave
     # unattended" would answer a question the operator cannot act on.
-    if is_archived(vault_dir):
-        print(
-            f"error: {vault_dir} is archived — no research cycle may run "
-            "against it, so there is no next cycle to price.\n"
-            f"Set `archived: false` in {vault_dir / 'settings.yaml'} to resume "
-            "research.",
-            file=sys.stderr,
-        )
-        return 2
+    if (archived_rc := refuse_if_archived(vault_dir)) is not None:
+        return archived_rc
     cycle = args.cycle if getattr(args, "cycle", None) else _resolve_resume_cycle(args)
     return _estimate_only(vault_dir, cycle)
 
@@ -202,6 +195,12 @@ def _cmd_generate(args: argparse.Namespace) -> int:
     # is still the last-word override; `output_from_settings` beats the spec
     # default; spec location is the floor.
     vault_dir = args.output or output_from_settings or spec.location
+
+    # Spec 071 / issue #26: the guard above only sees `--output`. A vault named
+    # by `output_dir:` in the settings profile or by the spec's own location is
+    # known only now, and everything below scaffolds into it.
+    if (archived_rc := refuse_if_archived(Path(vault_dir))) is not None:
+        return archived_rc
 
     # Validate with the vault context so spec 069 FR1 declared-source backing
     # runs (every source must trigger-match a module or be a strategy_hint).

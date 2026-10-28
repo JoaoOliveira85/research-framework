@@ -255,6 +255,23 @@ def resolve_installer(archive: Path) -> Path | None:
     return None
 
 
+def sync_agent_notice(vault: Path) -> list[Path]:
+    """Bring the archived-vault notice in line after an upgrade (issue #26).
+
+    Adds the notice to ``CLAUDE.md`` / ``AGENTS.md`` / the ``/research``
+    command of an archived vault and drops it from one that is not. Touches
+    nothing but the marked blocks, so it is safe on customised files. Best
+    effort: it must never fail an upgrade.
+    """
+    from .archived import sync_archived_notice
+
+    try:
+        return sync_archived_notice(vault)
+    except OSError as exc:  # pragma: no cover - defensive
+        _LOG.warning("could not sync the archived notice: %s", exc)
+        return []
+
+
 def sync_vault_scripts(vault: Path, *, source: Path | None = None) -> list[str]:
     """Refresh vault-local ``scripts/`` from the installed package. Returns the
     basenames actually changed.

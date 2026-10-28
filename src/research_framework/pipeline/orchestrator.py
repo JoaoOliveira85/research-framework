@@ -1009,6 +1009,14 @@ def run_cycles(
         )
 
     for cycle in range(start_cycle, max_cycles + 1):
+        # The flag can flip while this loop runs (an operator archiving the
+        # vault mid-run). Stop before the next cycle starts: it is a requested
+        # stop, not a structural abort, so no aborted marker is written and the
+        # cycle that already finished keeps its own commit.
+        if (refusal := archived_refusal_message(vault_dir)) is not None:
+            _LOG.error("[orchestrator] stopping before cycle %d: %s", cycle, refusal)
+            _finalise(ARCHIVED_EXIT, f"vault archived before cycle {cycle}")
+            return ARCHIVED_EXIT
         _LOG.info(f"[orchestrator] starting cycle {cycle}/{max_cycles}")
         try:
             rc = run_single_cycle(

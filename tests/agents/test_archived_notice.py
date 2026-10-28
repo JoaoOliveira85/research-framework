@@ -63,6 +63,20 @@ def test_fresh_render_of_an_archived_vault_carries_the_notice(vault: Path) -> No
         assert "archived: false" in text, f"{name}: must say how to reverse it"
 
 
+def test_fresh_render_gives_the_research_command_the_notice(vault: Path) -> None:
+    """`generate` writes `.claude/commands/research.md` through `write_agents`."""
+    _set_archived(vault, True)
+    (vault / ".claude" / "commands" / "research.md").unlink()
+    parsed = json.loads((vault / "_pipeline" / "spec-parse.json").read_text("utf-8"))
+
+    render_all(SpecConfig.from_dict(parsed), vault)
+
+    text = (vault / ".claude" / "commands" / "research.md").read_text("utf-8")
+    assert MARKER in text
+    assert text.index(MARKER) > text.index("# /research")
+    assert "archived: false" in text
+
+
 def test_regenerate_agents_adds_the_notice_to_all_three(vault: Path) -> None:
     _set_archived(vault, True)
     assert _regenerate(vault) == 0
