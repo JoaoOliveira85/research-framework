@@ -163,17 +163,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     vault = Path(args.vault)
-    spec_path = vault / "_pipeline" / "spec-parse.json"
-    if not spec_path.exists():
-        print(
-            f"check_trunk_inversion: spec-parse.json not found: {spec_path}",
-            file=sys.stderr,
-        )
-        return 2
     spec = _parsed_spec(vault)
     if not isinstance(spec, dict):
         print(
-            "check_trunk_inversion: spec-parse.json is not a mapping", file=sys.stderr
+            f"check_trunk_inversion: no usable spec-parse.json (or spec) in {vault}",
+            file=sys.stderr,
         )
         return 2
 

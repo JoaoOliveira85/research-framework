@@ -49,7 +49,9 @@ def cmd_regenerate_shim(args: argparse.Namespace) -> int:
         print(f"ERROR: missing {spec_path}", file=sys.stderr)
         return 2
     try:
-        spec = SpecConfig.from_dict(load_parsed_spec(vault_dir))
+        spec = SpecConfig.from_dict(
+            load_parsed_spec(vault_dir, write_cache=True, strict=True)
+        )
     except Exception as exc:
         print(f"ERROR: cannot load spec: {exc}", file=sys.stderr)
         return 2

@@ -143,7 +143,7 @@ def _cmd_regenerate_agents(args: argparse.Namespace) -> int:
         return 2
 
     try:
-        spec_dict = load_parsed_spec(vault_root)
+        spec_dict = load_parsed_spec(vault_root, write_cache=True, strict=True)
     except ParsedSpecError as exc:
         print(f"error: spec-parse.json unavailable: {exc}", file=sys.stderr)
         return 2

@@ -25,7 +25,7 @@ def _load_spec_for_scout_gates(vault_dir: Path):
     from research_framework.spec.schema import SpecConfig
 
     try:
-        return SpecConfig.from_dict(load_parsed_spec(vault_dir))
+        return SpecConfig.from_dict(load_parsed_spec(vault_dir, write_cache=True))
     except (ParsedSpecError, TypeError, KeyError):
         pass
     spec_md = vault_dir / "research.spec.md"

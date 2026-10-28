@@ -26,7 +26,6 @@ from typing import Literal
 
 from .spec.parsed import (
     ParsedSpecError,
-    find_spec_file,
     load_parsed_spec,
     spec_parse_path,
 )
@@ -531,8 +530,19 @@ above, then re-run `research_framework onboard {vault}` to continue.*
 
 
 def _find_existing_spec(vault: Path) -> Path | None:
-    """Return the first spec file found in the vault, or None."""
-    return find_spec_file(vault)
+    """Return the first spec file found in the vault, or None.
+
+    Unlike the loader's probe this also accepts a hand-named ``*-spec.md``;
+    ``_step_parse_spec`` hands the result to the loader as ``spec_file=`` so it
+    is recorded in the cache.
+    """
+    canonical = vault / f"{vault.name}-spec.md"
+    if canonical.exists():
+        return canonical
+    for p in sorted(vault.glob("*-spec.md")):
+        return p
+    research = vault / "research.spec.md"
+    return research if research.exists() else None
 
 
 def _step_draft_spec(vault: Path) -> StepResult:
@@ -584,7 +594,7 @@ def _step_parse_spec(vault: Path) -> StepResult:
     cmd = f"research_framework parse-spec {vault} {spec_file.name}"
     before = spec_parse_json.read_bytes() if spec_parse_json.exists() else None
     try:
-        load_parsed_spec(vault)
+        load_parsed_spec(vault, write_cache=True, strict=True, spec_file=spec_file)
     except ParsedSpecError as exc:
         _print_cmd(cmd)
         return StepResult(

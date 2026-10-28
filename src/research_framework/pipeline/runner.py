@@ -779,7 +779,7 @@ def _read_parsed_spec(vault: Path) -> tuple[dict[str, Any] | None, str | None]:
     that belongs to an older spec.
     """
     try:
-        return load_parsed_spec(vault), None
+        return load_parsed_spec(vault, write_cache=True), None
     except ParsedSpecError as exc:
         return None, str(exc)
 

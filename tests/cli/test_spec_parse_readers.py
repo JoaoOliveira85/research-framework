@@ -144,3 +144,110 @@ def test_parse_spec_verb_stamps_the_cache(vault: Path) -> None:
     assert rc == 0
     assert doc["spec_sha256"] == spec_file_sha256(spec)
     assert doc["parser_version"] == PARSER_VERSION
+
+
+def _broken_spec(vault: Path) -> None:
+    (vault / "research.spec.md").write_text("---\nname: only\n---\n", encoding="utf-8")
+
+
+def _primed(vault: Path, **extra: object) -> bytes:
+    """A good, stamped cache for a valid spec; returns its bytes."""
+    from research_framework.spec.parsed import load_parsed_spec
+
+    (vault / "research.spec.md").write_text(
+        _spec("V", corpus="notes"), encoding="utf-8"
+    )
+    doc = load_parsed_spec(vault, write_cache=True)
+    if extra:
+        spec_parse_path(vault).write_text(json.dumps({**doc, **extra}))
+    return spec_parse_path(vault).read_bytes()
+
+
+def test_corpus_resolver_keeps_the_declared_folder_when_the_spec_is_invalid(
+    vault: Path,
+) -> None:
+    from research_framework.vault.corpus import corpus_dir_name
+
+    _primed(vault)
+    _broken_spec(vault)
+
+    assert corpus_dir_name(vault) == "notes"
+
+
+def test_corpus_resolver_is_read_only(vault: Path) -> None:
+    from research_framework.vault.corpus import corpus_dir_name
+
+    (vault / "research.spec.md").write_text(_spec("V", corpus="notes"))
+    corpus_dir_name(vault)
+
+    assert not spec_parse_path(vault).exists()
+
+
+def test_claims_export_loader_is_read_only(vault: Path) -> None:
+    from research_framework.vault.claims_export import _load_spec
+
+    (vault / "research.spec.md").write_text(_spec("V"))
+    warnings: list[str] = []
+
+    assert _load_spec(vault, warnings) is not None
+    assert not spec_parse_path(vault).exists()
+
+
+def test_runner_declared_sources_survive_an_invalid_spec(vault: Path) -> None:
+    from research_framework.pipeline.runner import _declared_sources
+
+    _primed(vault, data_sources=[{"name": "Web", "type": "external"}])
+    _broken_spec(vault)
+
+    assert _declared_sources(vault) == ["Web"]
+
+
+def test_runner_refreshes_a_stale_cache_on_disk(vault: Path) -> None:
+    from research_framework.pipeline.runner import _read_parsed_spec
+
+    (vault / "research.spec.md").write_text(_spec("V", owner="bob"))
+    _stale_cache(vault, owner="alice")
+
+    doc, error = _read_parsed_spec(vault)
+
+    assert error is None and doc["owner"] == "bob"
+    assert json.loads(spec_parse_path(vault).read_text())["owner"] == "bob"
+
+
+def test_onboard_stays_strict_when_the_spec_is_invalid_despite_a_cache(
+    vault: Path,
+) -> None:
+    (vault / "data_vault").mkdir()
+    _primed(vault)
+    _broken_spec(vault)
+
+    assert _step_parse_spec(vault).status == "aborted"
+
+
+def test_onboard_accepts_a_hand_named_spec_and_records_it(vault: Path) -> None:
+    (vault / "data_vault").mkdir()
+    (vault / "my-notes-spec.md").write_text(_spec("V"), encoding="utf-8")
+
+    assert _step_parse_spec(vault).status == "done"
+    assert json.loads(spec_parse_path(vault).read_text())["spec_file"] == (
+        "my-notes-spec.md"
+    )
+    assert _step_parse_spec(vault).status == "skipped"
+
+
+def test_regenerate_agents_stays_strict_when_the_spec_is_invalid(
+    vault: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import argparse
+
+    from research_framework.cli.vault import _cmd_regenerate_agents
+
+    _primed(vault)
+    _broken_spec(vault)
+
+    rc = _cmd_regenerate_agents(
+        argparse.Namespace(vault_path=vault, agent=None, force=True)
+    )
+
+    assert rc == 2
+    assert "spec-parse.json" in capsys.readouterr().err

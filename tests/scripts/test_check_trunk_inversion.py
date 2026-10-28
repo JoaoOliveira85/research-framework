@@ -127,6 +127,28 @@ def test_no_branch_used_does_not_fail(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_a_spec_without_a_cache_is_enough(tmp_path: Path) -> None:
+    """The gate no longer requires spec-parse.json to exist: the loader builds
+    it from the spec file."""
+    vault = _stage(
+        tmp_path,
+        [
+            {"source": "GitHub repos", "role": "behaviour", "verdict": "NOT_REACHED"},
+            {"source": "Confluence", "role": "intent", "verdict": "USED"},
+        ],
+    )
+    (vault / "_pipeline" / "spec-parse.json").unlink()
+    (vault / "research.spec.md").write_bytes(
+        (FIXTURE / "research.spec.md").read_bytes()
+    )
+
+    result = _run(str(vault))
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "GitHub repos" in result.stdout
+    assert not (vault / "_pipeline" / "spec-parse.json").exists()  # read-only
+
+
 def test_missing_ledger_exits_2(tmp_path: Path) -> None:
     vault = tmp_path / "vault"
     (vault / "_pipeline").mkdir(parents=True)
