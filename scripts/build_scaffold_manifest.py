@@ -71,7 +71,10 @@ _NAME_TO_KIND: dict[str, str] = {
 # and cannot self-reference their own version).
 _USER_OWNED_PATTERNS: tuple[str, ...] = (
     "data_vault/",
-    "_templates/",  # user-owned templates including concept.md and CHANGELOG.md
+    # Note templates (`_templates/<type>.md`) are framework-owned and re-rendered
+    # on every scaffold / `./vault update` (issue #20). The registry beside them
+    # carries a hand-edited Version History, so it alone stays user-owned.
+    "_templates/CHANGELOG.md",
     "vault",  # path-specific shell script
     "_pipeline/coverage-targets.json",  # contains runtime timestamps
     "_pipeline/spec-parse.json",  # per-vault parsed spec; framework MUST NOT overwrite

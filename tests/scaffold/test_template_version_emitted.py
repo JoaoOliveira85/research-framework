@@ -63,10 +63,6 @@ def _scaffold_markdown_files(vault: Path) -> list[Path]:
         # Skip user-note template files that use template_version (not _template_version)
         if rel.startswith("_templates/") and rel != "_templates/CHANGELOG.md":
             continue
-        # Feature 017 (US8): per-vault note templates inside data_vault/_templates/
-        # are user-customizable (mirror legacy _templates/ semantics).
-        if rel.startswith("data_vault/_templates/"):
-            continue
         results.append(p)
     return sorted(results)
 

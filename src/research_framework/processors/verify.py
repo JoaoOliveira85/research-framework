@@ -597,11 +597,12 @@ def _resolve_required_frontmatter(
     """Explicit argument > spec config > the vault's templates > the default.
 
     ``template_dirs`` is searched in order and the FIRST directory that
-    declares anything wins. A generated vault has two ``_templates/``
-    directories — the corpus one holds section skeletons with no frontmatter at
-    all, the vault-root one holds the frontmatter-bearing note-type templates —
-    so "the first directory that exists" is the wrong rule and "the first that
-    says something" is the right one.
+    declares anything wins. A generated vault has one ``_templates/`` — at the
+    vault root, framework-owned, holding the frontmatter-bearing note-type
+    templates. Vaults scaffolded before issue #20 also carry a corpus-level one
+    of section skeletons with no frontmatter at all; "the first directory that
+    exists" would be the wrong rule for those, "the first that says something"
+    is the right one.
     """
     if required_frontmatter is not None:
         return tuple(str(k) for k in required_frontmatter)
@@ -804,11 +805,12 @@ def verify(
     if fail_threshold is None:
         fail_threshold = float(cfg.get("fail_threshold", 0.20))
     # ``vault`` is normally the corpus directory; the frontmatter-bearing
-    # note-type templates the generator renders live one level up, beside it.
+    # note-type templates the generator renders live one level up, beside it
+    # (``vault / "_templates"`` covers a caller that passes the vault root).
     template_dirs = (
         (note_templates_dir,)
         if note_templates_dir is not None
-        else (vault / "_templates", vault.parent / "_templates")
+        else (vault.parent / "_templates", vault / "_templates")
     )
     required = _resolve_required_frontmatter(
         required_frontmatter=required_frontmatter,

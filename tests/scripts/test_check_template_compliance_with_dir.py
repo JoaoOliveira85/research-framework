@@ -1,6 +1,7 @@
-"""RED tests (T084): template lookup prefers `data_vault/_templates/` then fallback.
+"""Template lookup reads the vault-root `_templates/` then falls back (T084, #20).
 
-Green after T086 updates `scripts/check_template_compliance.py` resolution order.
+Note templates are framework-owned and live only at the vault root; a leftover
+`data_vault/_templates/` is not consulted.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ def _run(vault: Path) -> subprocess.CompletedProcess[str]:
 
 
 def _write_conflicting_templates_and_note(vault: Path) -> None:
-    """Vault note satisfies `data_vault` template sections only — not root."""
+    """Vault note satisfies the root template; a stale corpus copy disagrees."""
     dv_tmpl = vault / "data_vault" / "_templates"
     root_tmpl = vault / "_templates"
     concepts = vault / "data_vault" / "concepts"
@@ -33,11 +34,11 @@ def _write_conflicting_templates_and_note(vault: Path) -> None:
     concepts.mkdir(parents=True, exist_ok=True)
 
     (dv_tmpl / "concept.md").write_text(
-        "## Custom DataVault Section\n\n",
+        "## Stale Corpus Section\n\n",
         encoding="utf-8",
     )
     (root_tmpl / "concept.md").write_text(
-        "---\ntype: concept\n---\n\n## Overview\n\n",
+        "---\ntype: concept\n---\n\n## Custom Root Section\n\n",
         encoding="utf-8",
     )
     (concepts / "sample.md").write_text(
@@ -47,13 +48,13 @@ def _write_conflicting_templates_and_note(vault: Path) -> None:
         'source_urls: ["https://example.com/a"]\n'
         'summary: "Short summary for validation."\n'
         "---\n\n"
-        "## Custom DataVault Section\n\n"
+        "## Custom Root Section\n\n"
         "Body.\n",
         encoding="utf-8",
     )
 
 
-def test_prefers_data_vault_templates_over_root(tmp_path: Path) -> None:
+def test_reads_root_templates_and_ignores_the_corpus_copy(tmp_path: Path) -> None:
     vault = tmp_path / "v_pref"
     _write_conflicting_templates_and_note(vault)
     result = _run(vault)
@@ -95,3 +96,19 @@ def test_both_template_dirs_missing_exits_2_without_traceback(
     result = _run(vault)
     assert result.returncode == 2
     assert "Traceback" not in result.stderr
+
+
+def test_a_missing_section_is_judged_against_the_root_template(
+    tmp_path: Path,
+) -> None:
+    vault = tmp_path / "v_root_only"
+    _write_conflicting_templates_and_note(vault)
+    note = vault / "data_vault" / "concepts" / "sample.md"
+    note.write_text(
+        note.read_text().replace("## Custom Root Section", "## Other Heading")
+    )
+
+    result = _run(vault)
+
+    assert result.returncode == 1, (result.stdout, result.stderr)
+    assert "Custom Root Section" in result.stdout

@@ -8,6 +8,7 @@ via the vault venv Python.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -17,12 +18,14 @@ import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 _LOG = logging.getLogger(__name__)
 
 __all__ = (
     "Decision",
+    "TemplateRefresh",
+    "refresh_root_templates",
     "compare_versions",
     "decide",
     "is_user_owned",
@@ -301,6 +304,66 @@ def sync_vault_scripts(vault: Path, *, source: Path | None = None) -> list[str]:
         except OSError as exc:  # pragma: no cover - advisory
             _LOG.warning("could not refresh vault script %s: %s", src_file.name, exc)
     return changed
+
+
+@dataclass(frozen=True)
+class TemplateRefresh:
+    """What :func:`refresh_root_templates` changed, as vault-relative paths."""
+
+    rendered: tuple[str, ...]
+    removed: tuple[str, ...]
+
+
+def refresh_root_templates(vault: Path) -> TemplateRefresh | None:
+    """Re-render ``<vault>/_templates/`` from the vault's spec (issue #20).
+
+    Note templates are framework-owned and live only at the vault root, so
+    ``./vault update`` always re-renders them (overwriting operator edits) and
+    records the versions in ``_templates/CHANGELOG.md``. It also removes the
+    ``<corpus>/_templates/<type>.md`` files an older scaffold wrote — only
+    those whose text is exactly what that writer produced; an operator's own or
+    edited file stays, and so does the directory if it is not empty.
+
+    The spec comes from ``_pipeline/spec-parse.json`` (what the pipeline itself
+    runs on), falling back to ``research.spec.md``. Returns ``None`` — touching
+    nothing — when neither loads: like :func:`sync_vault_scripts` this is a
+    regenerable artefact and must never fail an upgrade.
+    """
+    from research_framework.generator.templates import (
+        remove_legacy_corpus_templates,
+        render_note_type_templates,
+    )
+
+    spec = _load_vault_spec(vault)
+    if spec is None:
+        return None
+    try:
+        rendered = render_note_type_templates(spec, vault)
+        removed = remove_legacy_corpus_templates(spec, vault)
+    except OSError as exc:  # pragma: no cover - advisory
+        _LOG.warning("could not refresh vault note templates: %s", exc)
+        return None
+    return TemplateRefresh(
+        rendered=tuple(p.relative_to(vault).as_posix() for p in rendered),
+        removed=tuple(removed),
+    )
+
+
+def _load_vault_spec(vault: Path) -> Any | None:
+    """The vault's :class:`SpecConfig`, or ``None`` when it cannot be loaded."""
+    from research_framework.spec.schema import SpecConfig
+    from research_framework.spec.simple import load as load_spec
+
+    parse = vault / "_pipeline" / "spec-parse.json"
+    try:
+        if parse.is_file():
+            return SpecConfig.from_dict(json.loads(parse.read_text(encoding="utf-8")))
+        spec_file = vault / "research.spec.md"
+        if spec_file.is_file():
+            return load_spec(spec_file, location=vault)
+    except Exception as exc:  # noqa: BLE001 - any unreadable spec means "skip"
+        _LOG.warning("could not load the vault spec for template refresh: %s", exc)
+    return None
 
 
 def resolve_local_version(vault: Path) -> str:

@@ -331,6 +331,22 @@ changed = vault_update.sync_vault_scripts(Path(os.environ["RV_UPDATE_VAULT"]))
 if changed:
     print(f"[update] refreshed {len(changed)} vault script(s): {', '.join(changed)}")
 RVSYNC
+    # Note templates (`_templates/<type>.md`) are framework-owned: re-render them
+    # from the vault's spec, record the versions in `_templates/CHANGELOG.md`, and
+    # drop the corpus-level copies an older scaffold wrote (issue #20).
+    RV_UPDATE_VAULT="${VAULT_DIR}" "${VENV_PYTHON}" - <<'RVTMPL'
+import os
+from pathlib import Path
+
+from research_framework.pipeline import vault_update
+
+result = vault_update.refresh_root_templates(Path(os.environ["RV_UPDATE_VAULT"]))
+if result is not None:
+    if result.rendered:
+        print(f"[update] re-rendered {len(result.rendered)} note template(s): {', '.join(result.rendered)}")
+    if result.removed:
+        print(f"[update] removed {len(result.removed)} corpus-level template(s): {', '.join(result.removed)}")
+RVTMPL
     # A git archive of the repo carries the MAINTAINER dev-setup install.sh at
     # its root (it runs `pip install -e` and would try to pip-install this
     # vault); the end-user installer lives in dist-templates/. A release tarball

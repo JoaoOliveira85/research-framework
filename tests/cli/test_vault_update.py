@@ -448,3 +448,36 @@ def test_a_dirty_check_that_fails_is_not_reported_as_a_dirty_tree(
     assert "Working tree is dirty" not in combined
     assert "could not check the working tree" in combined
     assert "Upgrading framework from" not in combined, "the upgrade went ahead"
+
+
+def test_update_rerenders_root_templates_and_removes_corpus_copies(
+    upgrade_vault: Path,
+    local_framework_repo: LocalFrameworkRepo,
+) -> None:
+    """Issue #20: the shim's update verb refreshes the framework-owned templates."""
+    root_tmpl = upgrade_vault / "_templates" / "concept.md"
+    root_tmpl.parent.mkdir(exist_ok=True)
+    root_tmpl.write_text("stale\n", encoding="utf-8")
+    corpus_tmpl = upgrade_vault / "data_vault" / "_templates"
+    corpus_tmpl.mkdir(parents=True)
+    # Exactly what the removed corpus-level writer emitted for a bare note type.
+    (corpus_tmpl / "concept.md").write_text(
+        "# concept\n\n> Template for concept notes. Required sections below.\n\n"
+        "### Contextual questions\n\n",
+        encoding="utf-8",
+    )
+    (corpus_tmpl / "mine.md").write_text("# operator's own\n", encoding="utf-8")
+    _run_git("git", "add", "-A", "-f", cwd=upgrade_vault)
+    _run_git("git", "commit", "-m", "seed old templates", cwd=upgrade_vault)
+
+    proc, _elapsed = _run_vault_update(
+        upgrade_vault,
+        "--auto-confirm",
+        env=_update_env(local_framework_repo, ref="v0.3.1"),
+    )
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "type: concept" in root_tmpl.read_text(encoding="utf-8")
+    assert (upgrade_vault / "_templates" / "CHANGELOG.md").is_file()
+    assert not (corpus_tmpl / "concept.md").exists()
+    assert (corpus_tmpl / "mine.md").read_text() == "# operator's own\n"

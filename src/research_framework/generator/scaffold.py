@@ -13,11 +13,8 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from .. import __version__ as _FRAMEWORK_VERSION
 from .._assets import asset_path, default_settings_path
 from ..spec.parsed import stamp_parsed_spec, write_parsed_spec
-from ..spec.schema import NoteTypeConfig, SpecConfig
-
-
-def _template_stem(nt: NoteTypeConfig) -> str:
-    return nt.name.replace(" ", "_").lower()
+from ..spec.schema import SpecConfig
+from .templates import remove_legacy_corpus_templates, render_note_type_templates
 
 
 def _write_data_vault_index_placeholders(data_vault: Path) -> None:
@@ -43,36 +40,6 @@ def _write_data_vault_index_placeholders(data_vault: Path) -> None:
         p = data_vault / name
         if not p.exists():
             p.write_text(text, encoding="utf-8")
-
-
-def _write_data_vault_note_type_templates(
-    data_vault: Path, note_types: list[NoteTypeConfig]
-) -> None:
-    """Emit one Markdown template per note type under ``data_vault/_templates/``.
-
-    Idempotent: skips files that already exist so user edits survive re-scaffold.
-    """
-    tmpl_root = data_vault / "_templates"
-    tmpl_root.mkdir(parents=True, exist_ok=True)
-    for nt in note_types:
-        dest = tmpl_root / f"{_template_stem(nt)}.md"
-        if dest.exists():
-            continue
-        lines = [
-            f"# {nt.name}",
-            "",
-            f"> Template for {nt.name} notes. Required sections below.",
-            "",
-        ]
-        for section in nt.required_sections:
-            lines.append(f"## {section}")
-            lines.append("")
-        lines.append("### Contextual questions")
-        lines.append("")
-        for q in nt.contextual_questions:
-            lines.append(f"- {q}")
-        lines.append("")
-        dest.write_text("\n".join(lines), encoding="utf-8")
 
 
 def should_preserve_user_owned_file(vault_dir: Path, rel_path: str) -> bool:
@@ -203,9 +170,12 @@ def scaffold(
         (data_vault / nt.folder).mkdir(parents=True, exist_ok=True)
 
     _write_data_vault_index_placeholders(data_vault)
-    _write_data_vault_note_type_templates(data_vault, spec.note_types)
 
-    (vault_dir / "_templates").mkdir(exist_ok=True)
+    # Note templates live once, at the vault root, and are framework-owned: always
+    # re-rendered here and by `./vault update`. A re-scaffold also clears the
+    # corpus-level copies an older framework wrote (issue #20).
+    render_note_type_templates(spec, vault_dir)
+    remove_legacy_corpus_templates(spec, vault_dir)
 
     # .claude/commands/ for /ask + /research + /write slash commands.
     (vault_dir / ".claude" / "commands").mkdir(parents=True, exist_ok=True)

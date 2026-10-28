@@ -211,7 +211,7 @@
       "kind": "markdown",
       "template_version": 1,
       "rendered_sha256": "100eb51f006442cdafa5fd088e459d21057777f75cd606c825c3334665f29d77",
-      "is_user_owned_after_first_write": true
+      "is_user_owned_after_first_write": false
     },
     {
       "path": "data_vault/_concepts.md",
@@ -232,13 +232,6 @@
       "kind": "markdown",
       "template_version": 1,
       "rendered_sha256": "56b332edc6e8f5d40ab65340b4b933315a8ae64ae0ecd53b60eefc89fec796fc",
-      "is_user_owned_after_first_write": true
-    },
-    {
-      "path": "data_vault/_templates/concept.md",
-      "kind": "markdown",
-      "template_version": 1,
-      "rendered_sha256": "e2f66bb169e564a6bbed2c0cbd1682291295cfc5b1cca893106856f2d503c9f2",
       "is_user_owned_after_first_write": true
     },
     {
