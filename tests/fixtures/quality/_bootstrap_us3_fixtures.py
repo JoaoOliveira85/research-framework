@@ -688,21 +688,14 @@ FIXTURE_META = {
 
 
 def _settings_yaml(vault_dir: Path) -> str:
-    responses = (vault_dir / "fake_agent_responses").resolve()
     return textwrap.dedent(
-        f"""\
+        """\
         pipeline:
           gates:
             cg_003_warn_pct: 30
             cg_003_fail_pct: 60
           note_writer_batch_size: 6
           max_batches_per_cycle: 10
-        cycle:
-          runner:
-            fake_agent_responses_dir: "{responses}"
-            max_cycles: 3
-        budget:
-          max_cycles: 3
         default_executor:
           runtime: claude
           model: sonnet
