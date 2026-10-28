@@ -53,7 +53,10 @@ _LOG = logging.getLogger(__name__)
 #: is absent or different from this value is treated as stale and rebuilt.
 #: ``tests/spec/test_parsed_spec_cache.py`` pins the top-level key set so a
 #: shape change without a bump fails the suite.
-PARSER_VERSION = 1
+#:
+#: History: 1 — content-hash cache (#9); 2 — ``DataSourceConfig.to_dict()``
+#: emits ``role_declared: false`` for a source with no declared ``role`` (#17).
+PARSER_VERSION = 2
 
 #: Where the cache lives, relative to the vault root.
 SPEC_PARSE_RELPATH = Path("_pipeline") / "spec-parse.json"

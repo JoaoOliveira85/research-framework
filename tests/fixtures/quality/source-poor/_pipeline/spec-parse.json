@@ -87,6 +87,7 @@
       "access_method": "",
       "priority": 1,
       "role": "behaviour",
+      "role_declared": false,
       "repos": [],
       "phases": []
     }
@@ -173,6 +174,6 @@
   "vault_corpus_dir": "data_vault",
   "processors": {},
   "spec_sha256": "f8a24534e47c5b53550d936000368ec3e2a18d0b73552d61d52428b81a617bc4",
-  "parser_version": 1,
+  "parser_version": 2,
   "spec_file": "research.spec.md"
 }

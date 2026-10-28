@@ -323,12 +323,41 @@ def test_spec_edited_during_the_parse_is_not_stamped_as_current(
     assert load_parsed_spec(vault)["owner"] == "edited-mid-parse"
 
 
-# Always-present top-level keys of SpecConfig.to_dict() at PARSER_VERSION == 1
+def test_a_version_1_cache_predating_role_declared_is_rebuilt(tmp_path: Path) -> None:
+    """Version 1 caches carry no ``role_declared`` (#17), so every defaulted role
+    would read as declared and label Tier-2 citations with a parser default."""
+    v = tmp_path / "roles-vault"
+    (v / "_pipeline").mkdir(parents=True)
+    (v / "research.spec.md").write_text(
+        "---\n"
+        'name: "Roles Vault"\n'
+        'owner: "alice"\n'
+        'topic: "A topic whose source declares no role"\n'
+        "sources:\n"
+        '  - name: "Web"\n'
+        "    type: external\n"
+        "---\n\nBody.\n",
+        encoding="utf-8",
+    )
+    load_parsed_spec(v, write_cache=True)
+    v1_sources = [
+        {k: val for k, val in ds.items() if k != "role_declared"}
+        for ds in _cache(v)["data_sources"]
+    ]
+    _rewrite_cache(v, parser_version=1, data_sources=v1_sources)
+
+    doc = load_parsed_spec(v)
+
+    assert [ds.get("role_declared") for ds in doc["data_sources"]] == [False]
+
+
+# Always-present top-level keys of SpecConfig.to_dict() at PARSER_VERSION == 2
+# (version 2: DataSourceConfig.to_dict() emits ``role_declared: false``, #17)
 # (``forbidden_filename_prefixes`` is emitted only when non-empty). Changing the
 # parsed shape means a cache written earlier is wrong about it: bump
 # PARSER_VERSION in spec/parsed.py, then update this set and the version below.
 _SHAPE_AT_VERSION = (
-    1,
+    2,
     frozenset(
         {
             "access_modes",
