@@ -176,10 +176,13 @@ stages:
   # retry: a failed ask is reported, not paid for twice.
   ask:
     inherit_args: false     # drops --dangerously-skip-permissions
-    # opencode has no read-only CLI flag. Its built-in `plan` agent denies
-    # edits; shell commands follow opencode's own permission config, and
-    # without --dangerously-skip-permissions nothing is auto-approved.
+    # opencode has no read-only CLI flag, and its built-in `plan` agent only
+    # denies edits (bash, webfetch and task stay allowed). The deny list is
+    # passed in OPENCODE_PERMISSION, which opencode merges over every agent's
+    # rules; `opencode agent list` shows the effective result.
     agent: plan
+    env:
+      OPENCODE_PERMISSION: '{"bash": "deny", "edit": "deny", "webfetch": "deny", "websearch": "deny", "codesearch": "deny", "task": "deny"}'
     timeout_s: 600
     retry: 0
 

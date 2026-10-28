@@ -19,6 +19,8 @@ adapters.
 from __future__ import annotations
 
 import importlib.util
+import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -110,6 +112,112 @@ def test_the_ask_stage_argv_carries_no_write_or_run_flag(
     assert not bad, f"{profile.name}: stages.ask argv carries {bad}: {argv}"
 
 
+#: What the opencode ask agent must not be able to do: run a shell (which
+#: could start `./vault cycle`), fetch, spawn a sub-agent, or edit.
+_OPENCODE_MUST_DENY = frozenset({"bash", "webfetch", "task", "edit"})
+
+
+def _opencode_permission(executor: dict[str, Any]) -> dict[str, Any]:
+    import json
+
+    raw = (executor.get("env") or {}).get("OPENCODE_PERMISSION")
+    assert raw, "stages.ask must set OPENCODE_PERMISSION for opencode"
+    return json.loads(raw)
+
+
+def _opencode_denied(executor: dict[str, Any]) -> set[str]:
+    return {k for k, v in _opencode_permission(executor).items() if v == "deny"}
+
+
+def test_stage_env_reaches_the_runtime_process(
+    agent_call, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`stages.<stage>.env` is published to the spawned runtime's environment."""
+    dump = tmp_path / "env.txt"
+    stub = tmp_path / "claude"
+    stub.write_text(
+        f'#!/bin/sh\nprintf "%s" "$ASK_PROBE" > {dump}\ncat > /dev/null\n',
+        encoding="utf-8",
+    )
+    stub.chmod(0o755)
+    monkeypatch.setenv("CLAUDE_BIN", str(stub))
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / "settings.yaml").write_text(
+        "default_executor:\n  runtime: claude\n  model: sonnet\n"
+        "stages:\n  ask:\n    env:\n      ASK_PROBE: published\n",
+        encoding="utf-8",
+    )
+    prompt = tmp_path / "p.md"
+    prompt.write_text("hi", encoding="utf-8")
+
+    assert agent_call.run(vault, "ask", prompt) == 0
+    assert dump.read_text(encoding="utf-8") == "published"
+
+
+def test_stage_env_must_map_strings_to_strings(agent_call) -> None:
+    settings = {"stages": {"ask": {"env": {"X": 1}}}}
+    with pytest.raises(ValueError, match="env"):
+        agent_call._resolve_executor(settings, "ask")
+
+
+_OPENCODE = shutil.which("opencode")
+
+
+@pytest.mark.skipif(_OPENCODE is None, reason="opencode binary not installed")
+def test_the_opencode_ask_agent_is_denied_shell_fetch_task_and_edit(
+    agent_call, tmp_path: Path
+) -> None:
+    """The OUTCOME, read back from opencode itself — not just the flags.
+
+    `opencode agent list` prints each agent's effective permission rules; it
+    makes no model call. XDG dirs point at empty temp dirs so the operator's
+    own opencode config cannot mask or supply the deny.
+    """
+    import json
+    import re
+    import subprocess
+
+    executor = _ask_executor(agent_call, REPO_ROOT / "settings.opencode.yaml")
+    env = {**os.environ, **(executor.get("env") or {})}
+    for name in (
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_STATE_HOME",
+        "XDG_CACHE_HOME",
+    ):
+        d = tmp_path / name
+        d.mkdir()
+        env[name] = str(d)
+    project = tmp_path / "vault"
+    project.mkdir()
+    out = subprocess.run(
+        [_OPENCODE, "agent", "list"],
+        cwd=project,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=True,
+    ).stdout
+    parts = re.split(r"^(\S+) \((?:primary|subagent|all)\)\s*$", out, flags=re.M)
+    agents = {parts[i]: parts[i + 1] for i in range(1, len(parts) - 1, 2)}
+    rules = json.loads(agents[executor["agent"]])
+
+    def effective(permission: str) -> str:
+        # opencode evaluates the LAST matching rule; `*` covers every tool.
+        hits = [
+            r["action"]
+            for r in rules
+            if r["permission"] in (permission, "*") and r["pattern"] == "*"
+        ]
+        return hits[-1]
+
+    for permission in sorted(_OPENCODE_MUST_DENY):
+        assert effective(permission) == "deny", (permission, rules)
+    assert effective("read") == "allow"
+
+
 def _value_after(argv: list[str], flag: str) -> str:
     assert flag in argv, argv
     return argv[argv.index(flag) + 1]
@@ -133,6 +241,8 @@ def test_the_ask_stage_argv_is_read_only_for_its_runtime(
     elif runtime == "cursor-agent":
         assert _value_after(argv, "--mode") == "ask"
     elif runtime == "opencode":
+        # `plan` alone only denies edits; the deny list rides in the env.
         assert _value_after(argv, "--agent") == "plan"
+        assert _opencode_denied(executor) >= _OPENCODE_MUST_DENY
     else:  # pragma: no cover - a new runtime must add its own read-only rule
         pytest.fail(f"{profile.name}: no read-only rule for runtime {runtime!r}")
