@@ -138,8 +138,6 @@ def _coerce_str_list(value: Any) -> list[str]:
     return [str(v) for v in value]
 
 
-
-
 def _format_exit(exit_code: int, exit_reason: str | None) -> str:
     """Map the cycle_runner exit codes (0/1/2) onto human labels."""
     labels = {
