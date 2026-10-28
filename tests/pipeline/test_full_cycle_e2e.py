@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from research_framework.pipeline.cycle_runner import run_cycle_steps
-from tests._helpers.vault_factory import build_minimal_vault, install_bundled_skill
+from tests._helpers.vault_factory import build_minimal_vault
 
 pytestmark = pytest.mark.e2e
 
@@ -161,10 +161,15 @@ def test_empty_scout_queue_aborts_via_sg001(
     assert not notes, f"no notes should be written after empty-scout abort, got {notes}"
 
 
-def test_corrupted_skill_file_self_repairs_in_preflight(
+def test_a_vault_skill_file_is_neither_read_nor_repaired_by_a_cycle(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Skill preflight must restore a corrupted SKILL.md from bundled assets."""
+    """A broken SKILL.md in the vault neither stops a cycle nor gets rewritten.
+
+    Stage prompts carry their own instructions from the package (#12), so a
+    cycle has no skill-file preflight: it used to restore the file from the
+    bundle and write a ``cycle-NNN-skill-check.json`` sidecar.
+    """
     monkeypatch.setenv("FAKE_AGENT_SCENARIO", "happy")
     vault = build_minimal_vault(
         tmp_path,
@@ -172,30 +177,16 @@ def test_corrupted_skill_file_self_repairs_in_preflight(
         num_targets_per_category=2,
         max_cycles=1,
     )
-    skill_path = install_bundled_skill(vault, "scout")
-
-    skill_path.write_text(
-        "not: valid: yaml:\n\tweird tabs and: colons:\n# missing description\n",
-        encoding="utf-8",
-    )
+    skill_path = vault / ".agents" / "skills" / "scout" / "SKILL.md"
+    skill_path.parent.mkdir(parents=True)
+    broken = "not: valid: yaml:\n\tweird tabs and: colons:\n# missing description\n"
+    skill_path.write_text(broken, encoding="utf-8")
 
     rc = run_cycle_steps(vault, cycle_num=1, budget_cap=100.0, max_cycles=1)
-    assert rc in (0, 1), (
-        f"expected cycle to recover after skill auto-repair; got {rc}. "
-        "If this asserts, skill_check.validate_and_repair_skills did not restore "
-        "from the bundled copy."
-    )
 
-    restored = skill_path.read_text(encoding="utf-8")
-    assert "name: scout" in restored, (
-        "expected restored skill to contain bundled frontmatter (name: scout)"
-    )
-
-    sidecar = vault / "_pipeline" / "cycle-001-skill-check.json"
-    assert sidecar.is_file()
-    doc = json.loads(sidecar.read_text(encoding="utf-8"))
-    repaired = doc.get("repaired") or []
-    assert repaired, f"expected at least one repair record; got {doc!r}"
+    assert rc in (0, 1), f"a vault skill file must not stop a cycle; got {rc}"
+    assert skill_path.read_text(encoding="utf-8") == broken
+    assert not (vault / "_pipeline" / "cycle-001-skill-check.json").exists()
 
 
 def test_sg005_failure_triggers_correction_batch(

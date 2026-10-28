@@ -81,6 +81,12 @@ def test_generate_dry_run_end_to_end(sample_spec_path: Path, tmp_path: Path) -> 
     assert len(coverage["categories"]) == 2
     assert all(c["met_count"] == 0 for c in coverage["categories"])
 
+    # A vault holds no skill files (#12): stage prompts carry their
+    # instructions from the package, so there is nothing for an agent runtime
+    # to auto-discover and rewrite, and nothing to restore.
+    assert not (vault / ".agents").exists()
+    assert not list(vault.rglob("SKILL.md"))
+
 
 def test_generate_invalid_spec_exits_2(tmp_path: Path) -> None:
     """Invalid spec → exit 2 with field-level error messages."""
