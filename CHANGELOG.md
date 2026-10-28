@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `./vault regenerate-shim --force` failed in every vault installed from the wheel with `FileNotFoundError: Scaffold manifest not found at 'dist-templates/scaffold-manifest.json'` (#34). The manifest now ships in the wheel under `_data/dist-templates/` and `default_manifest_path()` resolves it from there (then the repo checkout); `RESEARCH_VAULT_MANIFEST` still overrides. (tests: `tests/pipeline/test_scaffold_manifest_packaged.py`, `tests/build/test_manifest_packaged.py`)
+- The Layer-1 indexes (`_index.md`, `_concepts.md`, `_graph.md`) linked notes by `title`, which is a dead link whenever the title is not a spelling of the file name (`[[Transactional Outbox Pattern]]` for `outbox_pattern.md`). Every link is now `[[stem|Title]]` (`[[stem]]` when they are equal; `[[Folder/stem|Title]]` when two notes share a stem), built from a resolver that follows `scripts/validate_vault.py`. File names, `##` headings and sections are unchanged (#16). (test: `tests/vault/test_indexer_golden.py`)
+- A note with no front matter (or with malformed front matter) was dropped from the indexes; it is now listed under its file stem and counted as type `unknown` in the `AGENTS.md` topic index. Tooling markdown (`_pipeline/`, hidden folders, root `AGENTS.md`/`CLAUDE.md`/`README.md`/`CONTRIBUTING.md`) is not mistaken for a note when the corpus is the vault root. (test: `tests/vault/test_indexer_golden.py`)
+- `_graph.md` no longer writes an edge to a note that does not exist, and an aliased link (`[[stem|label]]`) is read as an edge to `stem` instead of to the literal text `stem|label`. A note with no outgoing links still has no edges (fixed in #287). An entry with no summary no longer ends in a dangling ` — `. (test: `tests/vault/test_indexer_golden.py`)
+- `inbound_link_counts` (stub classifier, digest "strongest signals") counted only links spelt as the exact title, so a note linked by file stem looked orphaned; it now counts links that resolve to the note by stem, path or title.
 
 ### Migration notes
 
@@ -39,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In a vault with a `tiers:` block, a stage that sets `tier: basic` (no `model:`) now runs on `tiers.basic` rather than its executor's default model. That includes `schema_gen` / `source_extraction`, which `settings.yaml`-derived vaults ship with `tier: basic` — latent until those stages dispatch through `agent_call` (today neither does).
 - A stage that sets `tier: basic` together with `model:` keeps its `model:` and warns; remove `tier:`. `tier: normal`/`flagship` together with `model:` no longer loads — keep one.
 - `limits.tier_thresholds` is now keyed by model tier name: `tier_thresholds.standard` / `.expert` no longer match any new sidecar (an untiered call records `""`), so re-key those thresholds to `basic` / `normal` / `flagship` — or drop them.
+- Run `./vault reindex` (or let the next cycle do it) to rewrite the Layer-1 files in the new link form. Nothing else needs to change; a consumer that matched `[[Title]]` literally in `_index.md` / `_concepts.md` / `_graph.md` should read the label after the `|`.
 
 ## [1.0.1] - 2026-10-12
 

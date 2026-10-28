@@ -1,10 +1,17 @@
-"""Layer 1 rebuild — regenerates _index.md, _concepts.md, _graph.md from Layer 2."""
+"""Layer 1 rebuild — regenerates _index.md, _concepts.md, _graph.md from Layer 2.
+
+Every link these files carry is ``[[stem|Title]]``: the target is the note's file
+stem (what the validator and Obsidian resolve), the label is its title. The file
+names, ``##`` headings and section structure are unchanged.
+"""
 
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from research_framework.pipeline.wikilinks import _resolve_titlecase_stem
 from research_framework.vault.corpus import corpus_dir
 from research_framework.vault.frontmatter import (
     FrontmatterParseError,
@@ -13,22 +20,31 @@ from research_framework.vault.frontmatter import (
 
 _WIKILINK_RE = re.compile(r"\[\[([^\]]+)\]\]")
 
+# Framework documents that sit beside the notes when the corpus is the vault
+# root (``vault.corpus_dir: "."``); they have no front matter and are not notes.
+_ROOT_DOCS = frozenset({"AGENTS.md", "CLAUDE.md", "README.md", "CONTRIBUTING.md"})
+
 
 def _parse_frontmatter(path: Path) -> tuple[dict | None, str]:
+    """Return ``(frontmatter, body)``.
+
+    ``frontmatter`` is ``{}`` for a readable note with none (or with malformed
+    YAML) and ``None`` only when the file cannot be read at all. A note without
+    front matter is still a note: it is listed under its file stem instead of
+    dropping out of the indexes.
+    """
     try:
         fm, body = parse_frontmatter(path)
     except UnicodeDecodeError:
-        # Not UTF-8: skip it like any other unparseable note rather than abort
+        # Not UTF-8: skip it like any other unreadable note rather than abort
         # the whole rebuild.
         return None, ""
     except (OSError, FrontmatterParseError):
         try:
-            return None, path.read_text(encoding="utf-8")
+            return {}, path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             return None, ""
-    if not fm:
-        return None, body
-    return fm, body
+    return fm or {}, body
 
 
 def _is_note_path(data_vault: Path, path: Path) -> bool:
@@ -39,6 +55,113 @@ def _is_note_path(data_vault: Path, path: Path) -> bool:
     if path.name in ("_index.md", "_concepts.md", "_graph.md"):
         return False
     return True
+
+
+def _is_unfielded_non_note(rel: Path) -> bool:
+    """Whether a front-matter-less file is tooling rather than a note.
+
+    Only consulted for files with no front matter: with the corpus at the vault
+    root, ``_pipeline/`` reports, hidden folders and the framework's own root
+    documents are all markdown without front matter and must not be indexed.
+    """
+    if any(p.startswith(("_", ".")) for p in rel.parts):
+        return True
+    return len(rel.parts) == 1 and rel.name in _ROOT_DOCS
+
+
+@dataclass
+class _Note:
+    rel: str  # posix path under the corpus, no suffix: "01 - Concepts/Foo"
+    stem: str
+    title: str
+    summary: str
+    folder: str
+    category: str
+    ntype: str
+    links: set[str] = field(default_factory=set)  # raw targets, as written
+    link: str = ""  # how the Layer-1 files link to this note
+
+
+def _display(title: str) -> str:
+    """A title safe to use as the label of a wikilink."""
+    return " ".join(title.replace("|", "/").replace("[", "(").replace("]", ")").split())
+
+
+def _load_notes(data_vault: Path) -> list[_Note]:
+    """Every note under *data_vault*, in path order, each with its rendered link."""
+    notes: list[_Note] = []
+    for path in sorted(data_vault.rglob("*.md")):
+        if not _is_note_path(data_vault, path):
+            continue
+        fm, body = _parse_frontmatter(path)
+        if fm is None:
+            continue
+        rel_path = path.relative_to(data_vault)
+        if not fm and _is_unfielded_non_note(rel_path):
+            continue
+        title = str(fm.get("title", path.stem))
+        notes.append(
+            _Note(
+                rel=rel_path.with_suffix("").as_posix(),
+                stem=path.stem,
+                title=title,
+                summary=_truncate_summary(str(fm.get("summary", ""))),
+                folder=path.parent.name,
+                category=str(fm.get("coverage_category", "") or "").strip() or title,
+                ntype=str(fm.get("type", "unknown")),
+                links=_outgoing_links(fm, body),
+            )
+        )
+    stem_count: dict[str, int] = {}
+    for n in notes:
+        stem_count[n.stem.lower()] = stem_count.get(n.stem.lower(), 0) + 1
+    for n in notes:
+        # Two notes can share a stem in different folders; the path keeps the
+        # link unambiguous (the validator accepts ``Folder/Note``).
+        target = n.stem if stem_count[n.stem.lower()] == 1 else n.rel
+        label = _display(n.title)
+        n.link = f"[[{target}]]" if label == target else f"[[{target}|{label}]]"
+    return notes
+
+
+class _Resolver:
+    """Map a wikilink target, as a note wrote it, to the note it points at.
+
+    Follows the validator's lookup (``scripts/validate_vault.py::
+    _related_target_resolves``): relative path, then file stem — case-insensitive,
+    with space to ``_``/``-`` variants via ``wikilinks._resolve_titlecase_stem`` —
+    and finally the note title, because notes also link by title.
+    """
+
+    def __init__(self, notes: list[_Note]) -> None:
+        self._by_path: dict[str, _Note] = {}
+        self._by_stem: dict[str, _Note] = {}
+        self._by_title: dict[str, _Note] = {}
+        for n in notes:  # path order: the first claimant of a name wins
+            self._by_path.setdefault(n.rel.lower(), n)
+            self._by_stem.setdefault(n.stem.lower(), n)
+            self._by_title.setdefault(n.title.strip().lower(), n)
+
+    def resolve(self, raw: str) -> _Note | None:
+        target = raw.split("|", 1)[0].split("#", 1)[0].strip()
+        if not target:
+            return None
+        lower = target.lower()
+        if lower in self._by_path:
+            return self._by_path[lower]
+        stem = _resolve_titlecase_stem(lower.rsplit("/", 1)[-1], set(self._by_stem))
+        if stem is not None:
+            return self._by_stem[stem]
+        return self._by_title.get(lower)
+
+    def edges(self, note: _Note) -> list[_Note]:
+        """The notes *note* links to: resolved, deduplicated, sorted by title."""
+        found: dict[str, _Note] = {}
+        for raw in note.links:
+            hit = self.resolve(raw)
+            if hit is not None:
+                found[hit.rel] = hit
+        return sorted(found.values(), key=lambda n: (n.title.lower(), n.rel))
 
 
 def _truncate_summary(text: str, limit: int = 120) -> str:
@@ -85,28 +208,20 @@ def inbound_link_counts(vault_dir: Path) -> dict[str, int]:
     heavily-linked graph anchors from deletion.
 
     Returns ``{title: inbound_count}`` for every note — anchors with zero
-    inbound links are present with a count of ``0``. Links whose label is not a
-    note title are ignored.
+    inbound links are present with a count of ``0``. A link counts toward the
+    note it resolves to (by file stem, relative path or title); one that
+    resolves to no note is ignored.
     """
     data_vault = corpus_dir(vault_dir)
     if not data_vault.is_dir():
         return {}
 
-    outgoing: dict[str, set[str]] = {}
-    for note in sorted(data_vault.rglob("*.md")):
-        if not _is_note_path(data_vault, note):
-            continue
-        fm, body = _parse_frontmatter(note)
-        if fm is None:
-            continue
-        title = str(fm.get("title", note.stem))
-        outgoing[title] = _outgoing_links(fm, body)
-
-    counts: dict[str, int] = dict.fromkeys(outgoing, 0)
-    for targets in outgoing.values():
-        for dst in targets:
-            if dst in counts:
-                counts[dst] += 1
+    notes = _load_notes(data_vault)
+    resolver = _Resolver(notes)
+    counts: dict[str, int] = dict.fromkeys((n.title for n in notes), 0)
+    for note in notes:
+        for dst in resolver.edges(note):
+            counts[dst.title] += 1
     return counts
 
 
@@ -173,43 +288,28 @@ def rebuild_all(vault_dir: Path) -> dict[str, Path]:
     else:
         pulled = _pull_root_index_stubs(vault_dir)
 
-    notes_by_folder: dict[str, list[tuple[str, str, Path, str]]] = {}
-    by_title: dict[str, str] = {}
-    coverage_to_titles: dict[str, list[str]] = {}
-    outgoing: dict[str, set[str]] = {}
+    notes = _load_notes(data_vault)
+    resolver = _Resolver(notes)
+    notes_by_folder: dict[str, list[_Note]] = {}
+    notes_by_category: dict[str, list[_Note]] = {}
     type_counts: dict[str, int] = {}
+    for n in notes:
+        notes_by_folder.setdefault(n.folder, []).append(n)
+        notes_by_category.setdefault(n.category, []).append(n)
+        type_counts[n.ntype] = type_counts.get(n.ntype, 0) + 1
 
-    for note in sorted(data_vault.rglob("*.md")):
-        if not _is_note_path(data_vault, note):
-            continue
-        fm, body = _parse_frontmatter(note)
-        if fm is None:
-            continue
-        title = str(fm.get("title", note.stem))
-        summary = _truncate_summary(str(fm.get("summary", "")))
-        folder = note.parent.name
-        cat = str(fm.get("coverage_category", "") or "").strip() or title
-        notes_by_folder.setdefault(folder, []).append((title, summary, note, cat))
-        by_title[title] = title
-        coverage_to_titles.setdefault(cat, []).append(title)
-
-        ntype = str(fm.get("type", "unknown"))
-        type_counts[ntype] = type_counts.get(ntype, 0) + 1
-
-        outgoing[title] = _outgoing_links(fm, body)
-
-    all_titles_sorted = sorted(by_title.keys())
+    def by_title(group: list[_Note]) -> list[_Note]:
+        return sorted(group, key=lambda n: (n.title.lower(), n.rel))
 
     # _index.md — grouped by folder; omit empty groups
     index_lines = [f"# Index — {vault_dir.name}", ""]
     for folder in sorted(notes_by_folder.keys()):
-        entries = sorted(notes_by_folder[folder], key=lambda t: t[0].lower())
-        if not entries:
-            continue
         index_lines.append(f"## {folder}")
         index_lines.append("")
-        for title, summary, _, _ in entries:
-            index_lines.append(f"- [[{title}]] — {summary}")
+        for n in by_title(notes_by_folder[folder]):
+            index_lines.append(
+                f"- {n.link} — {n.summary}" if n.summary else f"- {n.link}"
+            )
         index_lines.append("")
     index_body = "\n".join(index_lines).rstrip() + "\n"
     if "_index.md" in pulled:
@@ -222,11 +322,11 @@ def rebuild_all(vault_dir: Path) -> dict[str, Path]:
 
     # _concepts.md — one section per coverage_category
     concept_lines = [f"# Concepts — {vault_dir.name}", ""]
-    for cat in sorted(coverage_to_titles.keys(), key=str.lower):
+    for cat in sorted(notes_by_category.keys(), key=str.lower):
         concept_lines.append(f"## {cat}")
         concept_lines.append("")
-        for t in sorted(set(coverage_to_titles[cat]), key=str.lower):
-            concept_lines.append(f"- [[{t}]]")
+        for n in by_title(notes_by_category[cat]):
+            concept_lines.append(f"- {n.link}")
         concept_lines.append("")
     concepts_body = "\n".join(concept_lines).rstrip() + "\n"
     if "_concepts.md" in pulled:
@@ -243,17 +343,19 @@ def rebuild_all(vault_dir: Path) -> dict[str, Path]:
     # the vault" whenever a note's real outgoing set was empty, so a note
     # with zero outgoing links rendered an edge to ALL of them instead — the
     # opposite of the truth, disagreeing with :func:`inbound_link_counts`
-    # (which reads the same :func:`_outgoing_links` edges and is documented
-    # to agree with this emission), and O(n^2) noise in a large vault. A note
-    # with no outgoing links now renders with no targets, honestly.
+    # (which reads the same edges) and O(n^2) noise in a large vault. A note
+    # with no outgoing links renders with no targets, honestly. A target that
+    # resolves to no note is not an edge: writing it out would put a dead link
+    # in the index.
     graph_lines = [f"# Graph — {vault_dir.name}", ""]
-    for title in all_titles_sorted:
-        graph_lines.append(f"## {title}")
+    for n in sorted(notes, key=lambda n: (n.title, n.rel)):
+        graph_lines.append(f"## {n.title}")
         graph_lines.append("")
-        targets = sorted(outgoing.get(title, set()), key=str.lower)
+        targets = resolver.edges(n)
         for dst in targets:
-            graph_lines.append(f"- [[{dst}]]")
-        graph_lines.append("")
+            graph_lines.append(f"- {dst.link}")
+        if targets:
+            graph_lines.append("")
     graph_body = "\n".join(graph_lines).rstrip() + "\n"
     if "_graph.md" in pulled:
         graph_body = (
