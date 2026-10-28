@@ -7,6 +7,7 @@ writes a canned cycle-priority line and appends to ``_pipeline/narrator-incident
 from __future__ import annotations
 
 import importlib.util
+import logging
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,6 +18,7 @@ from ..spec.parser import parse
 from ..spec.schema import SpecValidationError
 from .research_plan import ResearchPlan
 
+_LOG = logging.getLogger(__name__)
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -69,11 +71,21 @@ def _bootstrap_scripts_agent_call(vault_dir: Path | None = None):
 
 
 def _skill_instructions() -> str:
-    """The narrator's instructions, read from the package — never a vault (#12)."""
+    """The narrator's instructions, read from the package — never a vault (#12).
+
+    The narrator is advisory, so a missing or broken packaged skill does not
+    stop the cycle: it is logged as an error and a short canned instruction
+    stands in.
+    """
     try:
-        return skill_instructions("research-plan-narrator")
-    except FileNotFoundError:
-        pass
+        body = skill_instructions("research-plan-narrator", heading_offset=2)
+        return f"## Narrator instructions\n\n{body}"
+    except (FileNotFoundError, ValueError) as exc:
+        _LOG.error(
+            "research-plan-narrator skill unavailable in the package (%s); "
+            "narrating from the canned fallback instruction",
+            exc,
+        )
     return (
         "You are the research-plan narrator. Output at most 200 words of plain "
         "Markdown prose (no headings). Explain why the current cycle focus and "
