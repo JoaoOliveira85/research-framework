@@ -305,3 +305,48 @@ def test_settings_cursor_claude_yaml_bundled_in_wheel_data() -> None:
     text = path.read_text()
     assert "runtime: cursor-agent" in text
     assert "claude-4.6-sonnet-medium-thinking" in text
+
+
+class TestSkillInstructions:
+    """``skill_instructions`` inlines a packaged skill into a stage prompt (#12)."""
+
+    @staticmethod
+    def _skill(root: Path, name: str, text: str) -> Path:
+        path = root / name / "SKILL.md"
+        path.parent.mkdir(parents=True)
+        path.write_text(text, encoding="utf-8")
+        return root
+
+    def test_a_missing_skill_fails_loudly(self, tmp_path: Path) -> None:
+        with pytest.raises(FileNotFoundError):
+            _assets.skill_instructions("no-such-skill", skills_root=tmp_path)
+
+    def test_every_packaged_skill_name_used_by_a_stage_resolves(self) -> None:
+        for name in ("verifier", "topic-propose", "research-plan-narrator"):
+            assert _assets.skill_instructions(name).strip()
+
+    def test_frontmatter_is_dropped(self, tmp_path: Path) -> None:
+        root = self._skill(tmp_path, "s", "---\nname: s\n---\n\n# Role\n\nDo it.\n")
+        assert _assets.skill_instructions("s", skills_root=root) == "# Role\n\nDo it."
+
+    def test_a_skill_without_frontmatter_is_returned_whole(self, tmp_path: Path) -> None:
+        root = self._skill(tmp_path, "s", "# Role\n\nDo it.\n")
+        assert _assets.skill_instructions("s", skills_root=root) == "# Role\n\nDo it."
+
+    def test_unclosed_frontmatter_fails_loudly(self, tmp_path: Path) -> None:
+        root = self._skill(tmp_path, "s", "---\nname: s\n\n# Role\n\nDo it.\n")
+        with pytest.raises(ValueError, match="frontmatter"):
+            _assets.skill_instructions("s", skills_root=root)
+
+    def test_headings_are_demoted_outside_code_fences(self, tmp_path: Path) -> None:
+        root = self._skill(
+            tmp_path,
+            "s",
+            "# Role\n\n## Step\n\n```bash\n# a shell comment\n```\n",
+        )
+        text = _assets.skill_instructions("s", skills_root=root, heading_offset=2)
+        assert text == "### Role\n\n#### Step\n\n```bash\n# a shell comment\n```"
+
+    def test_a_stub_examples_section_is_dropped(self, tmp_path: Path) -> None:
+        root = self._skill(tmp_path, "s", "# Role\n\nDo it.\n\n# Examples\n\n*(Stub.)*\n")
+        assert _assets.skill_instructions("s", skills_root=root) == "# Role\n\nDo it."

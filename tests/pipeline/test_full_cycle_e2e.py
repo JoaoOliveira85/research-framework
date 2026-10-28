@@ -224,3 +224,24 @@ def test_sg005_failure_triggers_correction_batch(
         assert (second_batch.get("correction_directive_in") or "").strip(), (
             "expected second batch prompt to carry a correction directive"
         )
+
+
+def test_cycle_prompts_carry_the_plan_and_batch_contracts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The prompts a cycle dispatches are self-contained (#12): the scout's
+    carries the research plan, each batch's the batch-only and skip rules."""
+    monkeypatch.setenv("FAKE_AGENT_SCENARIO", "happy")
+    vault = build_minimal_vault(
+        tmp_path, num_categories=2, num_targets_per_category=2, max_cycles=1
+    )
+
+    rc = run_cycle_steps(vault, cycle_num=1, budget_cap=100.0, max_cycles=1)
+    assert rc in (0, 1), f"expected CONTINUE/TERMINATE, got {rc}"
+
+    cdir = vault / "_pipeline" / "cycles"
+    scout = (cdir / "cycle-001-scout-prompt.rendered.md").read_text(encoding="utf-8")
+    assert "## Research Plan" in scout and "## Cycle focus" in scout
+    batch = (cdir / "cycle-001-batch-001-dfs.md").read_text(encoding="utf-8")
+    assert "Work ONLY the topics in `## Batch topics (JSON)`" in batch
+    assert "## Exclusions (binding)" in batch
