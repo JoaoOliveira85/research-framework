@@ -8,7 +8,6 @@ via the vault venv Python.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
@@ -328,9 +327,10 @@ def refresh_root_templates(vault: Path) -> TemplateRefresh | None:
     those whose text is exactly what that writer produced; an operator's own or
     edited file stays, and so does the directory if it is not empty.
 
-    The spec comes from ``_pipeline/spec-parse.json`` (what the pipeline itself
-    runs on), falling back to ``research.spec.md``. Returns ``None`` — touching
-    nothing — when neither loads: like :func:`sync_vault_scripts` this is a
+    The spec is the parsed spec the pipeline itself runs on
+    (``spec.parsed.load_parsed_spec``: ``_pipeline/spec-parse.json`` while it
+    matches the spec file, else a fresh parse). Returns ``None`` — touching
+    nothing — when it cannot be loaded: like :func:`sync_vault_scripts` this is a
     regenerable artefact and must never fail an upgrade.
     """
     from research_framework.generator.templates import (
@@ -360,18 +360,19 @@ def refresh_root_templates(vault: Path) -> TemplateRefresh | None:
 
 
 def _load_vault_spec(vault: Path) -> Any | None:
-    """The vault's :class:`SpecConfig`, or ``None`` when it cannot be loaded."""
-    from research_framework.spec.schema import SpecConfig
-    from research_framework.spec.simple import load as load_spec
+    """The vault's :class:`SpecConfig`, or ``None`` when it cannot be loaded.
 
-    parse = vault / "_pipeline" / "spec-parse.json"
+    Read through :func:`~research_framework.spec.parsed.load_parsed_spec` (#9),
+    leniently and without writing the cache: a stale ``spec-parse.json`` is
+    re-parsed from the spec file, and a spec that no longer parses falls back
+    to the last good parse.
+    """
+    from research_framework.spec.parsed import load_parsed_spec
+    from research_framework.spec.schema import SpecConfig
+
     try:
-        if parse.is_file():
-            return SpecConfig.from_dict(json.loads(parse.read_text(encoding="utf-8")))
-        spec_file = vault / "research.spec.md"
-        if spec_file.is_file():
-            return load_spec(spec_file, location=vault)
-    except Exception as exc:  # noqa: BLE001 - any unreadable spec means "skip"
+        return SpecConfig.from_dict(load_parsed_spec(vault))
+    except Exception as exc:  # noqa: BLE001 - ParsedSpecError or a bad cache: skip
         _LOG.warning("could not load the vault spec for template refresh: %s", exc)
     return None
 

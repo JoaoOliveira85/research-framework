@@ -712,6 +712,26 @@ def test_update_honours_a_custom_corpus_dir(tmp_path: Path) -> None:
     assert not (vault / "corpus" / "_templates").exists()
 
 
+def test_update_renders_from_the_current_spec_not_a_stale_cache(
+    tmp_path: Path,
+) -> None:
+    """The spec is read through ``load_parsed_spec`` (#9), so a cache that no
+    longer matches the vault's spec file is re-parsed rather than trusted."""
+    vault = tmp_path / "v"
+    scaffold(_spec(two_types=True), vault)  # unstamped cache: concept + Case Law
+    for rendered in (vault / "_templates").glob("*.md"):
+        rendered.unlink()
+    (vault / "research.spec.md").write_text(
+        SAMPLE_SPEC.read_text(encoding="utf-8"), encoding="utf-8"
+    )  # the spec now declares concept only
+
+    result = refresh_root_templates(vault)
+
+    assert result is not None
+    note_templates = {p for p in result.rendered if p != "_templates/CHANGELOG.md"}
+    assert note_templates == {"_templates/concept.md"}
+
+
 def test_update_without_a_loadable_spec_changes_nothing(tmp_path: Path) -> None:
     vault = tmp_path / "bare"
     (vault / "_templates").mkdir(parents=True)
