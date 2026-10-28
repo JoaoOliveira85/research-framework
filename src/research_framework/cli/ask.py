@@ -43,6 +43,18 @@ def _ask_command_path(vault: Path) -> Path:
     return vault / ".claude" / "commands" / f"{stem}.md"
 
 
+def _has_ask_stage(vault: Path) -> bool:
+    """True when settings.yaml declares a ``stages.ask`` mapping."""
+    import yaml
+
+    try:
+        data = yaml.safe_load((vault / "settings.yaml").read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return False
+    stages = data.get("stages") if isinstance(data, dict) else None
+    return isinstance(stages, dict) and isinstance(stages.get("ask"), dict)
+
+
 def _next_cycle(vault: Path) -> int:
     """The cycle an escalation runs: the one after the last completed cycle."""
     highest = _highest_completed_cycle(vault)
@@ -149,6 +161,20 @@ def _cmd_ask(args: argparse.Namespace) -> int:
             f"error: {command_path} predates the {GAP_LINE_PREFIX} gap contract "
             "(it may still tell the agent to start research itself). Refresh "
             f"it with `research-framework regenerate-agents {vault} --agent ask`.",
+            file=sys.stderr,
+        )
+        return 2
+
+    if not _has_ask_stage(vault):
+        # Without the block the dispatch inherits default_executor — on the
+        # shipped claude profile, bypassPermissions — so a vault that
+        # refreshed ask.md but not settings.yaml would ask with full
+        # permissions, and could run the research it was told not to.
+        print(
+            f"error: {vault / 'settings.yaml'} has no `stages.ask` block, so the "
+            "ask agent would run with default_executor's permissions. Copy the "
+            "`stages.ask` block from the matching shipped settings profile "
+            "(CHANGELOG, issue #15 migration notes) and re-run.",
             file=sys.stderr,
         )
         return 2

@@ -47,7 +47,26 @@ sources:
 def _vault(tmp_path: Path, **kw: Any) -> Path:
     vault = build_minimal_vault(tmp_path, **kw)
     (vault / "research.spec.md").write_text(_SPEC, encoding="utf-8")
+    _edit_settings(vault, lambda s: s["stages"].update({"ask": _ASK_STAGE}))
     return vault
+
+
+#: The read-only block every shipped profile carries; ``ask`` refuses a vault
+#: without one rather than dispatch with default_executor's permissions.
+_ASK_STAGE = {
+    "inherit_args": False,
+    "args": ["--tools", "Read,Grep,Glob", "--strict-mcp-config"],
+    "retry": 0,
+}
+
+
+def _edit_settings(vault: Path, change: Any) -> None:
+    import yaml
+
+    path = vault / "settings.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    change(data)
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
 
 def _record_cycles(
@@ -251,6 +270,57 @@ def test_the_lifetime_dollar_ceiling_refuses_the_escalation(
     assert cycles == []
     assert len(_answers(vault)) == 1
     assert "pipeline.budget_usd" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("escalate", [True, False])
+def test_a_vault_without_a_stages_ask_block_is_refused_before_any_dispatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+    escalate: bool,
+) -> None:
+    """Without the block the headless ask inherits default_executor — on the
+    shipped claude profile, bypassPermissions — so a vault that refreshed its
+    ask.md but not its settings would dispatch with full permissions."""
+    vault = _vault(tmp_path)
+    _edit_settings(vault, lambda s: s["stages"].pop("ask"))
+    cycles = _record_cycles(monkeypatch)
+
+    rc = _ask(vault, *(["--escalate"] if escalate else []))
+
+    assert rc == 2
+    assert cycles == []
+    assert _answers(vault) == []
+    err = capsys.readouterr().err
+    assert "stages.ask" in err and "CHANGELOG" in err
+
+
+@pytest.mark.parametrize(
+    "budget",
+    [pytest.param(0, id="zero"), pytest.param(None, id="unset")],
+)
+def test_a_zero_or_unset_budget_usd_means_no_lifetime_pre_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, budget: int | None
+) -> None:
+    """Spec 061: a zero or absent `pipeline.budget_usd` is UNLIMITED."""
+    vault = _vault(tmp_path)
+
+    def _set(settings: dict) -> None:
+        if budget is None:
+            settings["pipeline"].pop("budget_usd", None)
+        else:
+            settings["pipeline"]["budget_usd"] = budget
+
+    _edit_settings(vault, _set)
+    calls = vault / "_pipeline" / "cycles" / "cycle-001" / "agent-calls"
+    calls.mkdir(parents=True)
+    (calls / "scout.json").write_text(json.dumps({"cost_usd": 1000.0}))
+    cycles = _record_cycles(monkeypatch)
+
+    rc = _ask(vault, "--escalate")
+
+    assert rc == 0
+    assert len(cycles) == 1, "no lifetime ceiling means the cycle must start"
 
 
 def test_a_missing_vault_is_named_in_the_error(
