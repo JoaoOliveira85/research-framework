@@ -134,7 +134,11 @@ features the keys configure, which live in their own specs (`033`, `061`,
 - **FR-007**: The resolved settings object MUST be immutable.
 - **FR-008**: Executor resolution precedence MUST be
   `stages.<stage>` > `default_executor` > built-in default for scalars, and
-  **additive** (default ++ stage) for `args`.
+  **additive** (default ++ stage) for `args` — unless the stage sets
+  `inherit_args: false`, in which case the stage's `args` are the whole list
+  (issue #15: appending cannot take a permission away, and codex refuses a
+  second `--sandbox`). `env` is a scalar: the stage's mapping replaces the
+  default's.
 - **FR-009**: The cycle-limit ladder MUST be, highest first: the CLI flag,
   `pipeline.max_cycles` / `pipeline.budget_usd`, the deprecated
   `cycles.initial_max` / `cycles.update_max` (honoured with a warning only
@@ -238,7 +242,7 @@ Types are YAML types. "Reader" is the subsystem that consumes the key;
 | `dimensions` | list[str] | `[]` | — |
 | `communication.mode` | enum | `cli` | — |
 
-**`default_executor` and `stages.<name>`** (the same shape; stage wins, `args` concatenates)
+**`default_executor` and `stages.<name>`** (the same shape; stage wins, `args` concatenates unless `inherit_args: false`)
 
 | Key | Type | Default | Reader |
 | --- | --- | --- | --- |
@@ -246,6 +250,10 @@ Types are YAML types. "Reader" is the subsystem that consumes the key;
 | `runtime` | str | `claude` | dispatch |
 | `model` | str | `sonnet` | dispatch |
 | `args` | list[str] | `[]` | dispatch (additive) |
+| `inherit_args` (stages only) | bool | `true` | dispatch: `false` drops `default_executor.args` for this stage (issue #15) |
+| `env` | map[str, str] | `{}` | dispatch: extra variables for the runtime process, e.g. `OPENCODE_PERMISSION` for the read-only `ask` stage (issue #15) |
+| `agent` | str | — | dispatch, opencode only: `--agent <name>` |
+| `retry` | int | `1` | declared in every profile; `agent_call.py` does not read it today (the `ask` stage sets `0`) |
 | `timeout_s` | int | `3600` | dispatch, and the runner's own raw read (`075` FR-025) |
 | `skill` | str \| null | `null` | prompt rendering |
 | `base_url` / `api_path` | str | `http://127.0.0.1:11434` / `/v1/chat/completions` | HTTP dispatch only |
