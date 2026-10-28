@@ -18,7 +18,7 @@ import pytest
 from research_framework.agents import render_agent
 from research_framework.pipeline.ask_escalation import (
     GAP_LINE_PREFIX,
-    Gap,
+    GapLineError,
     parse_gap_line,
 )
 from research_framework.spec.parser import parse
@@ -35,7 +35,17 @@ _FRAMEWORK_COMMANDS = (
     re.compile(r"/pipeline\b"),
     re.compile(r"--budget-cap"),
     re.compile(r"--target-topics"),
+    # Any vault-local script run as `./<name>`.
+    re.compile(r"\./[\w-]+(\.py)?\b"),
 )
+
+#: Lines a rendered command may carry although a pattern above matches them.
+#: `/research` tells the agent to run the vault's validators after writing a
+#: note. `update_vault.py validate` runs the vault-local check scripts
+#: (template compliance, code-source coverage, drift, validate_vault) offline:
+#: it starts no research cycle, dispatches no agent and spends nothing, so it
+#: is not the "framework run" issue #15 forbids.
+_ALLOWED_LINES = frozenset({"./update_vault.py validate"})
 
 
 @pytest.fixture(scope="module")
@@ -48,7 +58,11 @@ def rendered() -> dict[str, str]:
 def test_the_rendered_command_names_no_framework_command(
     rendered: dict[str, str], command: str
 ) -> None:
-    text = rendered[command]
+    text = "\n".join(
+        line
+        for line in rendered[command].splitlines()
+        if line.strip() not in _ALLOWED_LINES
+    )
     hits = [rx.pattern for rx in _FRAMEWORK_COMMANDS if rx.search(text)]
     assert not hits, f"/{command} names a framework command: {hits}"
 
@@ -59,16 +73,19 @@ def test_ask_tells_the_agent_to_report_a_gap_on_the_contract_line(
     assert GAP_LINE_PREFIX in rendered["ask"]
 
 
-def test_the_gap_line_example_in_ask_parses_under_the_strict_contract(
+def test_the_gap_line_example_in_ask_is_refused_if_copied_verbatim(
     rendered: dict[str, str],
 ) -> None:
-    """The template's own example is what agents copy; it must parse."""
+    """An agent that copies the template's example must not buy a paid cycle.
+
+    The example's topic is a `<placeholder>`; the parser refuses it, so a
+    verbatim copy is an error, never an in-scope gap.
+    """
     examples = [
         line
         for line in rendered["ask"].splitlines()
         if line.strip().startswith(GAP_LINE_PREFIX)
     ]
     assert len(examples) == 1, examples
-    gap = parse_gap_line(examples[0])
-    assert isinstance(gap, Gap)
-    assert gap.in_scope is True
+    with pytest.raises(GapLineError, match="placeholder"):
+        parse_gap_line(examples[0])
