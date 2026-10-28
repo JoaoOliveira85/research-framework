@@ -18,6 +18,17 @@ It re-parses when the cache is missing, was written without a hash or a
 version, was written by a different parser version, or no longer matches the
 spec file, and otherwise returns the cache. Spec-file freshness is therefore
 decided in exactly one place.
+
+Strict and lenient reads
+------------------------
+When the spec no longer parses (mid-edit, or invalid), a *reader* should keep
+working from the last good parse rather than resolve a different corpus folder
+or silently see nothing. So the default is **lenient**: if a cache exists it is
+served and a WARNING names the spec file and the parse error. The verbs that
+exist to (re)build from the spec — ``parse-spec``, ``regenerate-agents``,
+``regenerate-shim``, ``onboard``, ``scaffold`` — pass ``strict=True`` and get a
+:class:`ParsedSpecError` instead. Only those verbs and the cycle runner pass
+``write_cache=True``; every other reader leaves the vault untouched.
 """
 
 from __future__ import annotations
@@ -27,6 +38,8 @@ import json
 import logging
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 from .schema import SpecValidationError
 
@@ -55,8 +68,9 @@ class ParsedSpecError(Exception):
     """The parsed spec could not be produced or read.
 
     Raised for: no cache and no spec file; an unreadable or non-object cache
-    with no spec file to rebuild it from; a spec that fails to parse. The
-    underlying error, when there is one, is chained as ``__cause__``.
+    with no spec file to rebuild it from; a spec that fails to parse and either
+    ``strict=True`` was asked for or there is no earlier cache to fall back to.
+    The underlying error, when there is one, is chained as ``__cause__``.
     """
 
 
@@ -68,17 +82,15 @@ def spec_parse_path(vault: Path) -> Path:
 def find_spec_file(vault: Path) -> Path | None:
     """Return the vault's spec file, or ``None``.
 
-    Order: ``<vault-name>-spec.md``, the first ``*-spec.md``, then
-    ``research.spec.md``.
+    Probe order: ``<vault-name>-spec.md``, then ``research.spec.md``. There is
+    deliberately no ``*-spec.md`` glob: a stray file must not be able to take
+    over a vault's cache. ``onboard``, which may meet a hand-named spec, finds
+    it itself and passes it as ``spec_file=``; the loader then records it.
     """
-    canonical = vault / f"{vault.name}-spec.md"
-    if canonical.exists():
-        return canonical
-    for p in sorted(vault.glob("*-spec.md")):
-        return p
-    research = vault / "research.spec.md"
-    if research.exists():
-        return research
+    for name in (f"{vault.resolve().name}-spec.md", "research.spec.md"):
+        candidate = vault / name
+        if candidate.exists():
+            return candidate
     return None
 
 
@@ -88,13 +100,21 @@ def spec_file_sha256(spec_file: Path) -> str:
 
 
 def stamp_parsed_spec(
-    doc: dict[str, Any], spec_file: Path, vault: Path
+    doc: dict[str, Any],
+    spec_file: Path,
+    vault: Path,
+    *,
+    sha256: str | None = None,
 ) -> dict[str, Any]:
     """Return *doc* plus the metadata keys that tie it to *spec_file*.
 
     ``spec_file`` is recorded relative to *vault* when it lives inside it
     (absolute otherwise), so an explicit ``parse-spec <vault> <other.md>`` is
     not silently replaced by the vault's default spec on the next load.
+
+    ``sha256`` is the digest of the bytes the caller parsed. Pass it whenever
+    the file was hashed before it was parsed, so the stamp can never describe
+    newer content than the parse saw; by default the file is hashed here.
     """
     try:
         recorded = spec_file.resolve().relative_to(vault.resolve()).as_posix()
@@ -102,7 +122,7 @@ def stamp_parsed_spec(
         recorded = str(spec_file.resolve())
     return {
         **json.loads(json.dumps(doc, default=str)),  # JSON-safe: Path -> str
-        SPEC_SHA256_KEY: spec_file_sha256(spec_file),
+        SPEC_SHA256_KEY: sha256 if sha256 is not None else spec_file_sha256(spec_file),
         PARSER_VERSION_KEY: PARSER_VERSION,
         SPEC_FILE_KEY: recorded,
     }
@@ -138,40 +158,46 @@ def _resolve_spec_file(vault: Path, cache: dict[str, Any] | None) -> Path | None
     return find_spec_file(vault)
 
 
-def _is_fresh(cache: dict[str, Any], spec_file: Path) -> bool:
+def _is_fresh(cache: dict[str, Any], sha256: str) -> bool:
     if cache.get(PARSER_VERSION_KEY) != PARSER_VERSION:
         return False
     recorded = cache.get(SPEC_SHA256_KEY)
-    if not isinstance(recorded, str) or not recorded:
-        return False
-    return recorded == spec_file_sha256(spec_file)
+    return isinstance(recorded, str) and bool(recorded) and recorded == sha256
 
 
-def load_parsed_spec(vault: Path, *, write_cache: bool = True) -> dict[str, Any]:
+def load_parsed_spec(
+    vault: Path,
+    *,
+    write_cache: bool = False,
+    strict: bool = False,
+    spec_file: Path | None = None,
+) -> dict[str, Any]:
     """Return the vault's parsed spec, re-parsing if the cache is not current.
 
     The cache is current iff it is a JSON object whose ``parser_version`` is
     :data:`PARSER_VERSION` and whose ``spec_sha256`` equals the SHA-256 of the
     spec file now. File modification times are never consulted.
 
-    A stale or missing cache is rebuilt from the spec file and, unless
-    *write_cache* is false, written back atomically. Pass ``write_cache=False``
-    from read-only diagnostics.
+    A stale or missing cache is rebuilt from the spec file. The rebuild is
+    returned either way; it is written back (atomically) only when
+    *write_cache* is true, and a failure to write is logged, not raised.
 
-    When the vault has no spec file there is nothing to compare against or
-    rebuild from (a vault built straight from a parsed dict, or one whose spec
-    was removed): the cache is returned as it is.
+    *spec_file* names the spec explicitly (``onboard`` uses this for a
+    hand-named spec). Otherwise the file the cache was stamped from is used,
+    then :func:`find_spec_file`. With no spec file at all there is nothing to
+    compare against or rebuild from, and the cache is returned as it is.
 
-    A failure to write the cache back (a read-only vault) is logged, not raised.
+    If the spec cannot be read or parsed: with ``strict=True`` this raises
+    :class:`ParsedSpecError`. Otherwise, if any cache exists it is returned
+    (the last good parse) and a WARNING names the spec file and the error; with
+    no cache at all it raises.
 
-    Raises :class:`ParsedSpecError` if there is neither a usable cache nor a
-    spec file, or the spec file fails to parse. A spec that fails to parse is
-    an error even when a stale cache exists — serving the stale cache is the
-    behaviour this loader exists to prevent.
+    Raises :class:`ParsedSpecError` and nothing else.
     """
     path = spec_parse_path(vault)
     cache = _read_cache(path) if path.exists() else None
-    spec_file = _resolve_spec_file(vault, cache)
+    if spec_file is None:
+        spec_file = _resolve_spec_file(vault, cache)
 
     if spec_file is None:
         if cache is not None:
@@ -180,25 +206,46 @@ def load_parsed_spec(vault: Path, *, write_cache: bool = True) -> dict[str, Any]
             f"no usable {SPEC_PARSE_RELPATH.as_posix()} and no spec file in {vault}"
         )
 
-    if cache is not None and _is_fresh(cache, spec_file):
+    # Hash once, up front. The stamp below uses this digest, so a spec edited
+    # while it is being parsed is stamped with the older content and simply
+    # re-parsed on the next load, never trusted.
+    try:
+        sha256 = spec_file_sha256(spec_file)
+    except OSError as exc:
+        return _unparseable(cache, spec_file, exc, strict)
+
+    if cache is not None and _is_fresh(cache, sha256):
         return cache
 
     from .simple import load as load_spec
 
     try:
         spec = load_spec(spec_file, location=vault.resolve())
-    except SpecValidationError as exc:
-        raise ParsedSpecError(
-            f"cannot rebuild {SPEC_PARSE_RELPATH.as_posix()}: "
-            f"{spec_file.name} failed validation: {exc}"
-        ) from exc
-    except OSError as exc:
-        raise ParsedSpecError(f"cannot read {spec_file}: {exc}") from exc
+    except (SpecValidationError, OSError, ValueError, yaml.YAMLError) as exc:
+        return _unparseable(cache, spec_file, exc, strict)
 
-    doc = stamp_parsed_spec(spec.to_dict(), spec_file, vault)
+    doc = stamp_parsed_spec(spec.to_dict(), spec_file, vault, sha256=sha256)
     if write_cache:
         try:
             write_parsed_spec(vault, doc)
         except OSError as exc:  # read-only vault: serve the fresh parse anyway
             _LOG.warning("could not refresh %s: %s", SPEC_PARSE_RELPATH, exc)
     return doc
+
+
+def _unparseable(
+    cache: dict[str, Any] | None, spec_file: Path, exc: Exception, strict: bool
+) -> dict[str, Any]:
+    """Serve the last good parse (lenient) or raise ``ParsedSpecError``."""
+    detail = f"{spec_file.name} could not be parsed: {exc}"
+    if strict or cache is None:
+        raise ParsedSpecError(
+            f"cannot rebuild {SPEC_PARSE_RELPATH.as_posix()}: {detail}"
+        ) from exc
+    _LOG.warning(
+        "%s: using the last good parse of %s (%s)",
+        spec_file.name,
+        SPEC_PARSE_RELPATH.as_posix(),
+        detail,
+    )
+    return cache
