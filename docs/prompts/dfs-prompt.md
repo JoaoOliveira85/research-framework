@@ -7,13 +7,13 @@
 | **Source** | `templates/prompts/dfs-prompt.md.j2` |
 | **Role** | Depth-first research — writes notes, produces `_pipeline/research-report.json`. |
 | **Dispatched by** | `pipeline resume` / the cycle runner's research step |
-| **Source sha256** | `693aa606e8a9288d` |
+| **Source sha256** | `fd6ee4885391932c` |
 
 Reproduced verbatim, including its placeholders. A vault gets this text with the placeholders filled at scaffold or dispatch time.
 
 ````
 ---
-_template_version: 1
+_template_version: 2
 ---
 You are running DFS research cycle {CYCLE_NUM} of a recursive research pass on the
 {{ spec.name }} vault.
@@ -26,14 +26,39 @@ Organization: {{ spec.scope.organization }}
 1. `CLAUDE.md` — vault conventions, frontmatter schema, note quality bar.
 2. `AGENTS.md` — Layer 1 routing index.
 3. The scout report at `{SCOUT_REPORT}` — this contains `topics_found.new` and
-   `proposed_filenames`. The research below must cover those topics.
+   `proposed_filenames`.
 4. `_templates/{type}.md` for each note type you plan to write. The template's
    section headings are MANDATORY.
 
 ## Your job
 
-For each topic in `topics_found.new` from the scout report, create or deepen vault
-notes with full research. Apply the note-inclusion criteria and quality bar strictly.
+**When a `## Batch topics (JSON)` list is appended to this prompt, it is your
+whole assignment.** Work ONLY the topics in `## Batch topics (JSON)`: do not
+propose new topics, do not pick topics from the scout report or anywhere else,
+and attempt every assigned topic before you stop. Any `## Exclusions (binding)`
+list appended with it is binding: never write a note whose filename matches one
+of its entries. Without a batch list, work each topic in `topics_found.new`
+from the scout report.
+
+For each topic you work, create or deepen vault notes with full research. Apply
+the note-inclusion criteria and quality bar strictly.
+
+### Skipped topics
+
+Every assigned topic you do not complete MUST appear in the report's
+`skipped_topics` array as
+`{"topic": "<assigned title>", "reason": "<reason>", "detail": "<optional>"}`,
+where `reason` is exactly one of:
+
+- `no_sources` — no usable source could be found
+- `exclusion_match` — the filename matches a binding exclusion
+- `duplicate_filename` — a note with that filename already exists
+- `agent_skipped` — skipped for another stated reason (say which in `detail`)
+- `context_overflow` — you ran out of room to finish it
+- `agent_chose_alternative` — you wrote a different topic instead
+
+Choosing `agent_chose_alternative` because another topic was easier fails the
+batch's adherence gate; give the honest reason.
 
 ### Quality bar (every note must satisfy)
 
@@ -108,6 +133,8 @@ Same schema as the scout report but with:
 - `phase`: `"research"`
 - `notes_created`: filenames of notes written this phase
 - `notes_updated`: filenames of existing notes deepened this phase
+- `skipped_topics`: one entry per assigned topic you did not complete (see
+  "Skipped topics" above); `[]` when you completed them all
 - `topics_found.new`: normally empty after research (only populate if genuinely new
   topics were discovered during deep research that weren't in the scout's list)
 - `budget_consumed_usd`: total $ spent so far in this run; if the model can't
@@ -140,6 +167,7 @@ Same schema as the scout report but with:
   },
   "notes_created": ["<path/to/Note Name.md>", "..."],
   "notes_updated": [],
+  "skipped_topics": [],
   "new_wikilinks_discovered": [],
   "cost_estimate_usd": <float>,
   "cumulative_cost_usd": <float>,

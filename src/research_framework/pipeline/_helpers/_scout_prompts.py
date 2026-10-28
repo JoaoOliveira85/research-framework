@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
 from pathlib import Path
 
 from ..gates import GateResult
@@ -103,6 +104,35 @@ def _render_prompt(
     dest.write_text(text, encoding="utf-8")
 
 
+def _render_cycle_scout_prompt(
+    src: Path,
+    dest: Path,
+    *,
+    vault_dir: Path,
+    cycle_num: int,
+    scout_report: Path,
+) -> None:
+    """Render the cycle's scout prompt with the research plan appended (#12).
+
+    The scout template tells the agent to treat the plan's priority queue as
+    its to-do list and to keep ≥ 70% of its topics inside the plan's focus
+    categories; the plan itself travels with the prompt so those rules can be
+    followed on a runtime that reads nothing but the prompt. Used by the first
+    scout attempt and by every validation retry, so a retry carries it too.
+    """
+    from ...agents._render import _research_plan_block
+
+    _render_prompt(
+        src,
+        dest,
+        {"{CYCLE_NUM}": str(cycle_num), "{SCOUT_REPORT}": str(scout_report)},
+        vault_dir=vault_dir,
+        cycle_num=cycle_num,
+    )
+    text = dest.read_text(encoding="utf-8").rstrip("\n")
+    dest.write_text(f"{text}\n\n{_research_plan_block(vault_dir)}", encoding="utf-8")
+
+
 def _parse_priority_queue_from_plan_md(text: str) -> list:
     """Rebuild priority-queue topics from ``## Priority queue`` (``to_markdown`` shape)."""
     from ..research_plan import PrioritizedTopic
@@ -165,7 +195,16 @@ def _render_batch_note_writer_prompt(
     research_report: Path,
     batch_topics,
     correction_directive: str,
+    exclusions: Sequence[str] | None = None,
 ) -> None:
+    """Render one note-writer batch prompt.
+
+    The DFS template's "Your job" section makes the appended
+    ``## Batch topics (JSON)`` list the whole assignment and defines the
+    ``skipped_topics`` contract. ``exclusions`` is the research plan's binding
+    exclusion list, appended as ``## Exclusions (binding)`` so the agent does
+    not have to read the plan from disk (#12); ``None`` appends nothing.
+    """
     topics_payload = json.dumps([t.to_dict() for t in batch_topics], indent=2)
     parts = [
         dfs_prompt_src.read_text(encoding="utf-8")
@@ -180,6 +219,10 @@ def _render_batch_note_writer_prompt(
         "```",
         "",
     ]
+    if exclusions is not None:
+        parts.extend(["## Exclusions (binding)", ""])
+        parts.extend([f"- {ex}" for ex in exclusions] or ["- (none)"])
+        parts.append("")
     if correction_directive.strip():
         parts.extend(["## Correction directive", "", correction_directive.strip(), ""])
     dest.parent.mkdir(parents=True, exist_ok=True)

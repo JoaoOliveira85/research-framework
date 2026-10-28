@@ -14,6 +14,7 @@ from ._scout_prompts import (  # noqa: F401
     _parse_priority_queue_from_plan_md,
     _read_correction_directive_block,
     _render_batch_note_writer_prompt,
+    _render_cycle_scout_prompt,
     _render_prompt,
 )
 from .script_runner import _StepError
@@ -160,12 +161,12 @@ def _retry_scout_with_validation_directive(
             attempts_made,
             len(error_lines),
         )
-        _render_prompt(
+        _render_cycle_scout_prompt(
             scout_prompt_src,
             scout_prompt_rendered,
-            {"{CYCLE_NUM}": str(cycle_num), "{SCOUT_REPORT}": str(scout_report)},
             vault_dir=vault_dir,
             cycle_num=cycle_num,
+            scout_report=scout_report,
         )
         try:
             script_runner._run_script(
