@@ -28,8 +28,11 @@ schema_version: 1
 archived: false
 
 # ---------------------------------------------------------------------------
-# Vendor-agnostic model tiers (spec 020 D7). Stages reference tier names;
-# the framework resolves them to concrete model identifiers at config-load.
+# Vendor-agnostic model tiers (spec 020 D7). Any stage under `stages:` may set
+# `tier: <name>` instead of `model:` — never both — and dispatches on
+# `tiers.<name>`. A tier name not defined here is refused at load. basic,
+# normal and flagship always exist (the values below are their defaults).
+# `standard` / `expert` are retired complexity labels: warned and ignored.
 # ---------------------------------------------------------------------------
 tiers:
   basic: claude-haiku-4-5
@@ -317,13 +320,12 @@ stages:
   # See specs/003-topic-harvest-stage/phase-2-semantic.md.
   # --- 2.x research plan (feature 017 + spec 025 A1) ---------------------
   # Advisory ``## Focus rationale`` header; routed through agent_call.py.
-  plan_narrator:
-    tier: standard          # basic | standard | expert — metadata for cost sidecar
+  # Inherits default_executor; add `tier:` (see `tiers:`) or `model:` to change.
+  plan_narrator: {}
 
   # Probe-cache retrieval (spec 025 A2); routed through agent_call.py.
   probe_retrieval:
-    tier: standard          # basic | standard | expert — metadata for cost sidecar
-    # enabled defaults true; set false to skip LLM retrieval (cache-only path)
+    enabled: true           # set false to skip LLM retrieval (cache-only path)
 
   topic_propose:
     enabled: false          # opt-in; default off for predictability

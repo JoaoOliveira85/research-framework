@@ -43,6 +43,17 @@
 schema_version: 1
 
 # ---------------------------------------------------------------------------
+# Model tiers (spec 020 D7) — the table above, as config. Any stage may set
+# `tier: <name>` instead of `model:` (never both) and dispatches on
+# `tiers.<name>`; an undefined name is refused at load. Without this block
+# the tiers default to Anthropic ids, which cursor-agent does not accept.
+# ---------------------------------------------------------------------------
+tiers:
+  basic: composer-2.5-fast
+  normal: gpt-5.4-high
+  flagship: claude-opus-4-8-thinking-high
+
+# ---------------------------------------------------------------------------
 # Where generated vaults land. Same semantics as the other profiles.
 # ---------------------------------------------------------------------------
 output_dir: null
