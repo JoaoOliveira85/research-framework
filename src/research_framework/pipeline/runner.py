@@ -1482,6 +1482,7 @@ def _call_agent(
     quiet: bool,
     prompt_file: Path | None,
     run_dir: Path | None = None,
+    output_file: Path | None = None,
 ) -> AgentCallOutcome:
     """Invoke agent_call.py for a given stage.
 
@@ -1536,10 +1537,14 @@ def _call_agent(
         str(prompt_file),
     ]
     # FR-010: nothing the runner dispatches may spend money without a record.
-    # ``--output-file`` is deliberately NOT requested (FR-011): the merged log
-    # already holds the agent's stdout, and ``--output-file`` is written only
-    # on exit 0 — it would be absent in exactly the runs an operator needs to
-    # read.
+    # ``--output-file`` is deliberately NOT requested by the runner's phases
+    # (FR-011): the merged log already holds the agent's stdout, and
+    # ``--output-file`` is written only on exit 0 — it would be absent in
+    # exactly the runs an operator needs to read. A caller whose product IS
+    # the answer (``ask``, issue #15) passes ``output_file`` and gets the
+    # agent's final text rather than a merged stream to scrape.
+    if output_file is not None:
+        cmd += ["--output-file", str(output_file)]
     sidecar: Path | None = None
     if run_dir is not None:
         sidecar = run_receipt.stage_path(run_dir, "agent-calls", stage, ".json")
