@@ -136,6 +136,32 @@ class RepoScanRepo:
     domain_terms_found: list[DomainTerm] = field(default_factory=list)
 
 
+def _parsed_spec(vault_dir: Path) -> dict | None:
+    """The vault's parsed spec, or None when unavailable.
+
+    Goes through the framework's content-keyed loader when ``research_framework``
+    is importable, so a spec edited since ``_pipeline/spec-parse.json`` was
+    written is re-parsed (never judged by mtime). Without the framework this
+    standalone script falls back to reading the cache file as it is.
+    """
+    try:
+        from research_framework.spec.parsed import ParsedSpecError, load_parsed_spec
+    except ImportError:
+        try:
+            raw = json.loads(
+                (vault_dir / "_pipeline" / "spec-parse.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+        except (OSError, ValueError):
+            return None
+        return raw if isinstance(raw, dict) else None
+    try:
+        return load_parsed_spec(vault_dir, write_cache=False)
+    except ParsedSpecError:
+        return None
+
+
 def _load_spec(pipeline_dir: Path | None, spec_path: Path | None) -> dict | None:
     if spec_path:
         try:
@@ -143,12 +169,7 @@ def _load_spec(pipeline_dir: Path | None, spec_path: Path | None) -> dict | None
         except Exception:
             return None
     if pipeline_dir:
-        parse_file = pipeline_dir / "spec-parse.json"
-        if parse_file.exists():
-            try:
-                return json.loads(parse_file.read_text(encoding="utf-8"))
-            except json.JSONDecodeError:
-                return None
+        return _parsed_spec(pipeline_dir.parent)
     return None
 
 

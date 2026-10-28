@@ -97,9 +97,34 @@ def _stage_settings(vault: Path) -> dict[str, Any]:
     return block if isinstance(block, dict) else {}
 
 
+def _parsed_spec(vault_dir: Path) -> dict | None:
+    """The vault's parsed spec, or None when unavailable.
+
+    Goes through the framework's content-keyed loader when ``research_framework``
+    is importable, so a spec edited since ``_pipeline/spec-parse.json`` was
+    written is re-parsed (never judged by mtime). Without the framework this
+    standalone script falls back to reading the cache file as it is.
+    """
+    try:
+        from research_framework.spec.parsed import ParsedSpecError, load_parsed_spec
+    except ImportError:
+        try:
+            raw = json.loads(
+                (vault_dir / "_pipeline" / "spec-parse.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+        except (OSError, ValueError):
+            return None
+        return raw if isinstance(raw, dict) else None
+    try:
+        return load_parsed_spec(vault_dir, write_cache=False)
+    except ParsedSpecError:
+        return None
+
+
 def _spec_block(vault: Path) -> dict[str, Any]:
-    spec_parse = _read_json(vault / "_pipeline" / "spec-parse.json") or {}
-    return spec_parse if isinstance(spec_parse, dict) else {}
+    return _parsed_spec(vault) or {}
 
 
 def _scope(vault: Path) -> dict[str, Any]:

@@ -89,15 +89,34 @@ def _parse_frontmatter(text: str) -> dict:
     return fm if isinstance(fm, dict) else {}
 
 
-def _load_spec(vault_dir: Path) -> dict | None:
-    spec_path = vault_dir / "_pipeline" / "spec-parse.json"
-    if not spec_path.exists():
-        return None
+def _parsed_spec(vault_dir: Path) -> dict | None:
+    """The vault's parsed spec, or None when unavailable.
+
+    Goes through the framework's content-keyed loader when ``research_framework``
+    is importable, so a spec edited since ``_pipeline/spec-parse.json`` was
+    written is re-parsed (never judged by mtime). Without the framework this
+    standalone script falls back to reading the cache file as it is.
+    """
     try:
-        spec = json.loads(spec_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+        from research_framework.spec.parsed import ParsedSpecError, load_parsed_spec
+    except ImportError:
+        try:
+            raw = json.loads(
+                (vault_dir / "_pipeline" / "spec-parse.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+        except (OSError, ValueError):
+            return None
+        return raw if isinstance(raw, dict) else None
+    try:
+        return load_parsed_spec(vault_dir, write_cache=False)
+    except ParsedSpecError:
         return None
-    return spec if isinstance(spec, dict) else None
+
+
+def _load_spec(vault_dir: Path) -> dict | None:
+    return _parsed_spec(vault_dir)
 
 
 def _hard_types_from_spec(vault_dir: Path) -> set[str]:

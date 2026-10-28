@@ -151,14 +151,8 @@ def _drift_targets_from_spec(
     — the caller then keeps the legacy (service|flow, Current Behaviour/Stated
     Intent) behaviour.
     """
-    spec_path = vault_dir / "_pipeline" / "spec-parse.json"
-    if not spec_path.exists():
-        return None
-    try:
-        spec = json.loads(spec_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return None
-    if not isinstance(spec, dict):
+    spec = _parsed_spec(vault_dir)
+    if spec is None:
         return None
     out: dict[str, tuple[str, str]] = {}
     for nt in spec.get("note_types") or []:
@@ -170,6 +164,32 @@ def _drift_targets_from_spec(
         if name and authority and complementary:
             out[str(name)] = (_strip_heading(authority), _strip_heading(complementary))
     return out or None
+
+
+def _parsed_spec(vault_dir: Path) -> dict | None:
+    """The vault's parsed spec, or None when unavailable.
+
+    Goes through the framework's content-keyed loader when ``research_framework``
+    is importable, so a spec edited since ``_pipeline/spec-parse.json`` was
+    written is re-parsed (never judged by mtime). Without the framework this
+    standalone script falls back to reading the cache file as it is.
+    """
+    try:
+        from research_framework.spec.parsed import ParsedSpecError, load_parsed_spec
+    except ImportError:
+        try:
+            raw = json.loads(
+                (vault_dir / "_pipeline" / "spec-parse.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+        except (OSError, ValueError):
+            return None
+        return raw if isinstance(raw, dict) else None
+    try:
+        return load_parsed_spec(vault_dir, write_cache=False)
+    except ParsedSpecError:
+        return None
 
 
 def scan_vault(
