@@ -112,6 +112,7 @@ shipped-task ledger.
 | [`080-run-receipt`](080-run-receipt/spec.md) | The run receipt — `_pipeline/runs/<run_id>/` | planned |
 | [`081-triage-gate`](081-triage-gate/spec.md) | The triage gate | planned |
 | [`082-spec-driven-verify`](082-spec-driven-verify/spec.md) | Spec-driven verify — the checkers read the vault's own declaration | planned |
+| [`083-durable-state-layout`](083-durable-state-layout/spec.md) | Durable vault state lives in `_pipeline/state/` | planned |
 
 ## Archived corpus
 

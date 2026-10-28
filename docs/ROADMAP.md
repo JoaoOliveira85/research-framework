@@ -170,6 +170,7 @@ precondition of the one after it, and #249 composes all of them.
 | 3 | **#43** — spec 023 Phase 2: `VaultHandle`, `active-sources.json`, `.local.md`, FR-009/010/011/012/016/017 | 023 | 1, 2 — the contract must exist before the engine serves N vaults through it | `[ ]` |
 | 4 | **#274** remainder — the ~16-folder absorption, recorded as a clean-room authoring task | — | D6 | `[ ]` — the index + archive shipped in private 1.2.0; #274 closes with a ledger |
 | 5 | Clean-room reader gaps: the two runtimes (075 D1), generator/scaffold + `research.spec.md` contract, standalone source-module contract, verifier/gate rule catalogue (IX-*, SG/CG/GA), budget/cost operator doc, `_pipeline/` artifact + schema index, weekly-run operator runbook, quality-harness `unmeasured` semantics, cross-repo contracts (XI), a CI/CD doc | — | — | `[ ]` — each a doc, not a feature |
+| 6 | **#10** — durable vault state in a tracked `_pipeline/state/`, one ignore rule, `./vault update` migrates existing vaults with history | 083 | lands before 084 (#18, the backlog conversion); its inventory (`specs/083-durable-state-layout/research.md`) is item 5's `_pipeline/` artifact index in draft | `[?]` — blocked on owner decisions D-1 (cycle ledger), D-2 (`sources.db` in git), D-4 (uncommitted state at run start) |
 
 **Closes** #217's residue, #43, #52.
 
