@@ -94,3 +94,36 @@ in its `settings.yaml` and the previous file kept at
   the file the operator already reads.
 - Making archived vaults read-only on disk. The flag is about the *pipeline*,
   not filesystem permissions; the operator still edits their own notes.
+
+## Amendment (issue #26, 2026-10-28)
+
+The shipped contract above guarded `run_cycles` and `generate` only. Reading
+the dispatch surface found two more paths that write research content straight
+past it: the `cycle` verb (`run_single_cycle`) and the `pipeline` run verbs.
+The earlier text is left as shipped; this section extends it.
+
+**Refused** — added to the list above, same exit code 2 and the same message
+(`pipeline/archived.py::archived_refusal_message`, the single copy), before any
+side effect:
+
+- `research-framework cycle` (including `--estimate-only`) and any direct
+  `orchestrator.run_single_cycle(...)` call — the guard sits above budget
+  resolution, per FR2 and FR4.
+- `research-framework pipeline <vault> full|collect|extract|scout|resume|finish`
+  and the matching `pipeline.runner.run_*` functions.
+- `research-framework generate --regenerate-plan-only` (it rewrites
+  `_pipeline/research-plan.md`).
+
+**Unaffected** — `pipeline <vault> status` and `prune-runs`, which read or tidy
+run records only, plus everything already listed above.
+
+**Visible** — an archived vault says so without being asked:
+
+- `./vault status` leads its text output with an `ARCHIVED` line, and its
+  `--json` object carries `"archived": true|false`.
+- `CLAUDE.md`, `AGENTS.md` and the `/research` command carry a marked notice
+  (`<!-- archived-notice:begin/end -->`) telling an interactive agent it must
+  not write or edit research notes, and how to reverse that. It is added at
+  render time, and `regenerate-agents` adds or removes it on an existing vault
+  (idempotent; text outside the markers is never touched). The flag is read
+  with the same `is_archived`, so FR4/FR5 hold here too.
