@@ -90,7 +90,7 @@ def _allocate_fake_sidecar_path(cycle_dir: Path, stage: str) -> Path:
     return agent_calls / f"{stage}-{n}.json"
 
 
-def dispatch(stage, prompt, *, tier="standard", agent=None, model=None,
+def dispatch(stage, prompt, *, tier=None, agent=None, model=None,
              vault_dir=None, cycle_dir=None, timeout_s=None):
     """Test-mode dispatch — returns canned output for known stages.
 
@@ -102,6 +102,10 @@ def dispatch(stage, prompt, *, tier="standard", agent=None, model=None,
     expected parameter set from the real function and fails on drift.
     """
     del prompt, agent, model, timeout_s
+    if vault_dir is None and cycle_dir is not None:
+        vault_dir = Path(cycle_dir).parents[2]
+    if tier is None:
+        tier = fake_agent.stage_tier(vault_dir, stage)
     cycle_num = 1
     if cycle_dir is not None:
         for part in cycle_dir.parts:
@@ -140,6 +144,7 @@ def dispatch(stage, prompt, *, tier="standard", agent=None, model=None,
             stage=stage,
             cycle=cycle_num,
             scenario="happy",
+            tier=tier,
         )
     return SimpleNamespace(
         stdout=stdout,

@@ -327,7 +327,9 @@ def test_shim_dispatch_keeps_the_real_defaults(shim_dispatch) -> None:
         for name, param in real.items()
         if name in shim and shim[name].default != param.default
     )
-    assert not drifted, f"the shim's dispatch() defaults differ from the real: {drifted}"
+    assert not drifted, (
+        f"the shim's dispatch() defaults differ from the real: {drifted}"
+    )
 
 
 _TIERED_SETTINGS = (

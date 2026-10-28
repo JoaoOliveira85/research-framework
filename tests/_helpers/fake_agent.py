@@ -952,12 +952,30 @@ _SIDECAR_SCHEMA_VERSION = "1.2"
 _COST_SOURCE = "none"
 
 
+def stage_tier(vault_dir: Path | None, stage: str) -> str:
+    """The tier the real dispatcher records for *stage* in *vault_dir*.
+
+    Delegates to ``scripts/agent_call._stage_tier`` itself (a pure settings
+    read; nothing is dispatched) so the fake's cost record cannot drift from
+    production's issue-#13 rule. ``""`` when there is no vault or no
+    ``settings.yaml`` — the fake runs in vaults the real dispatcher would
+    refuse.
+    """
+    if vault_dir is None or not (Path(vault_dir) / "settings.yaml").is_file():
+        return ""
+    from tests._helpers.llm_dispatch import load_agent_call
+
+    real = load_agent_call()
+    return real._stage_tier(real._load_settings(Path(vault_dir)), stage)
+
+
 def _write_cost_sidecar_v11(
     path: Path,
     *,
     stage: str,
     cycle: int,
     scenario: str,
+    tier: str = "",
     batch_index: int | None = None,
     topic_count: int | None = None,
     status: str = "ok",
@@ -969,7 +987,7 @@ def _write_cost_sidecar_v11(
         "stage": stage,
         "agent": "fake",
         "agent_kind": "fake",
-        "tier": "standard",
+        "tier": tier,
         "status": status,
         "exit_code": exit_code,
         "cost_usd": 0.0,
@@ -1179,6 +1197,7 @@ def _write_outcome_sidecar(args: argparse.Namespace, outcome: _StageOutcome) -> 
         stage=args.stage,
         cycle=outcome.cycle,
         scenario=outcome.scenario,
+        tier=stage_tier(args.vault, args.stage),
         batch_index=_batch_index_for(args),
         topic_count=args.topic_count,
         status="ok" if outcome.exit_code == 0 else "failed",
@@ -1293,7 +1312,7 @@ def _allocate_fake_sidecar_path(cycle_dir: Path, stage: str) -> Path:
     return agent_calls / f"{stage}-{n}.json"
 
 
-def dispatch(stage, prompt, *, tier="standard", agent=None, model=None,
+def dispatch(stage, prompt, *, tier=None, agent=None, model=None,
              vault_dir=None, cycle_dir=None, timeout_s=None):
     """Test-mode dispatch — returns canned output for known stages.
 
@@ -1305,6 +1324,10 @@ def dispatch(stage, prompt, *, tier="standard", agent=None, model=None,
     expected parameter set from the real function and fails on drift.
     """
     del prompt, agent, model, timeout_s
+    if vault_dir is None and cycle_dir is not None:
+        vault_dir = Path(cycle_dir).parents[2]
+    if tier is None:
+        tier = fake_agent.stage_tier(vault_dir, stage)
     cycle_num = 1
     if cycle_dir is not None:
         for part in cycle_dir.parts:
@@ -1343,6 +1366,7 @@ def dispatch(stage, prompt, *, tier="standard", agent=None, model=None,
             stage=stage,
             cycle=cycle_num,
             scenario="happy",
+            tier=tier,
         )
     return SimpleNamespace(
         stdout=stdout,
