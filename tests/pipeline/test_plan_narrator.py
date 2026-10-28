@@ -65,8 +65,7 @@ def _write_minimal_settings(vault_dir: Path, *, runtime: str = "claude") -> None
               runtime: {runtime}
               model: sonnet
             stages:
-              plan_narrator:
-                tier: standard
+              plan_narrator: {{}}
             """
         ),
         encoding="utf-8",
@@ -199,7 +198,9 @@ class TestPlanNarratorDispatchRouting:
         mock_dispatch.assert_called_once()
         call_kwargs = mock_dispatch.call_args.kwargs
         assert call_kwargs["stage"] == "plan_narrator"
-        assert call_kwargs["tier"] == "standard"
+        # The narrator leaves the tier to dispatch(), which reads the stage's
+        # own `tier` (issue #13); passing a label would override it.
+        assert "tier" not in call_kwargs
         assert call_kwargs["prompt"].strip()
         assert call_kwargs["vault_dir"] == tmp_path
         assert (

@@ -356,7 +356,7 @@ def _install_budget_run_script_guard(session: CycleBudgetSession | None) -> None
                 stage=stage,
                 prompt_text=_prompt_text_from_argv(active.vault_dir, args),
                 agent=_resolve_dispatch_agent(active, stage),
-                tier=active.vault_settings.stage(stage).tier,
+                tier=active.vault_settings.stage(stage).tier or "",
                 max_tokens=_resolve_max_tokens(active, stage),
             )
         rc = original(python_bin, script_path, *args, **kwargs)

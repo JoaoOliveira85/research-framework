@@ -591,6 +591,19 @@ DEFAULT_EXECUTOR: dict[str, Any] = {
     "timeout_s": 3600,
 }
 
+# Issue #13: `stages.<stage>.tier` names a key in the top-level `tiers:` map
+# and resolves to that model here, on every stage. These two copies mirror
+# `research_framework.pipeline.settings` (this script must run without the
+# package installed); `tests/scripts/test_agent_call.py` pins them equal.
+_DEFAULT_MODEL_TIERS: dict[str, str] = {
+    "basic": "claude-haiku-4-5",
+    "normal": "claude-sonnet-5",
+    "flagship": "claude-opus-5",
+}
+# The retired complexity labels: the settings loader warns about them and
+# they select no model (one-release deprecation).
+_LEGACY_COMPLEXITY_TIERS = frozenset({"standard", "expert"})
+
 
 def _load_settings(vault_dir: Path) -> dict[str, Any]:
     """Load `<vault>/settings.yaml`. Missing file is fatal — the generator
@@ -643,6 +656,9 @@ def _resolve_executor(settings: dict[str, Any], stage: str) -> dict[str, Any]:
       ``default_executor.args`` once, while individual stages still
       add their own tuning (e.g. ``-c model_reasoning_effort=low``)
       without wiping the runtime flags out.
+    - ``model`` from ``stages.<stage>.tier``: a stage that names a tier and no
+      ``model`` gets ``tiers[<tier>]`` (issue #13). An explicit ``model`` —
+      including a per-call override — wins.
 
     Unknown stages fall through to the default cleanly.
     """
@@ -660,6 +676,10 @@ def _resolve_executor(settings: dict[str, Any], stage: str) -> dict[str, Any]:
             {k: v for k, v in default.items() if v is not None and k != "args"}
         )
     merged.update({k: v for k, v in stage_cfg.items() if v is not None and k != "args"})
+    if stage_cfg.get("model") is None:
+        tier_model = _tier_model(settings, stage, stage_cfg.get("tier"))
+        if tier_model is not None:
+            merged["model"] = tier_model
 
     # Args: additive. Validate each list up front so errors point at the
     # actual offending source (default vs stage) rather than a merged blob.
@@ -678,6 +698,36 @@ def _resolve_executor(settings: dict[str, Any], stage: str) -> dict[str, Any]:
     stage_args = _coerce_args(f"stages.{stage}", stage_cfg.get("args"))
     merged["args"] = default_args + stage_args
     return merged
+
+
+def _tiers_map(settings: dict[str, Any]) -> dict[str, str]:
+    """The profile's ``tiers:`` over the defaults, as the settings loader reads it."""
+    raw = settings.get("tiers")
+    tiers = dict(_DEFAULT_MODEL_TIERS)
+    if isinstance(raw, dict):
+        tiers.update({str(k): str(v) for k, v in raw.items() if v})
+    return tiers
+
+
+def _tier_model(settings: dict[str, Any], stage: str, tier: Any) -> str | None:
+    """Resolve a stage's ``tier`` to a model id through ``tiers:``.
+
+    ``None`` when the stage names no tier, or names a retired complexity label
+    the profile does not define. An unknown tier raises, naming the stage and
+    the known tiers — the settings loader refuses the same file at load.
+    """
+    if tier is None:
+        return None
+    tiers = _tiers_map(settings)
+    name = str(tier)
+    if name in tiers:
+        return tiers[name]
+    if name in _LEGACY_COMPLEXITY_TIERS:
+        return None
+    raise ValueError(
+        f"Unknown tier {name!r} for stage {stage!r}; "
+        f"known tiers (from tiers:): {', '.join(sorted(tiers))}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -777,11 +827,11 @@ def _python_cmd(executor: dict[str, Any]) -> list[str]:
     return cmd
 
 
-# Spec 052: recommended cursor tier→model map. The tier system
-# (settings.yaml::tiers) is runtime-agnostic and resolves UPSTREAM into an
-# explicit ``executor["model"]`` (exactly like the codex profile), so this is a
-# documented recommendation for a cursor vault's ``tiers:`` block, not a runtime
-# resolver. Model ids verified via ``cursor-agent --list-models`` (2026-06-08).
+# Spec 052: recommended cursor tier→model map. A stage's ``tier`` resolves
+# through the vault's own ``tiers:`` block (``_tier_model``), so this is the
+# documented recommendation that ``settings.cursor.yaml::tiers`` carries, not a
+# runtime resolver. Model ids verified via ``cursor-agent --list-models``
+# (2026-06-08).
 _CURSOR_MODEL_TIERS: dict[str, str] = {
     "basic": "composer-2.5-fast",
     "normal": "gpt-5.4-high",
@@ -2003,7 +2053,7 @@ def dispatch(
     stage: str,
     prompt: str,
     *,
-    tier: str = "standard",
+    tier: str | None = None,
     agent: str | None = None,
     model: str | None = None,
     vault_dir: Path | None = None,
@@ -2011,6 +2061,9 @@ def dispatch(
     timeout_s: int | None = None,
 ) -> AgentCallResult:
     """Run one LLM stage programmatically and optionally write a cost sidecar.
+
+    ``tier`` labels the cost record only; ``None`` (the default) records the
+    stage's own ``stages.<stage>.tier``, which also selects its model.
 
     Contract: ``specs/028-dispatch-telemetry/contracts/dispatch-protocol.contract.md``.
     """
@@ -2021,6 +2074,8 @@ def dispatch(
 
     _set_call_context(vault_dir, stage)
     settings = _apply_stage_model_override(_load_settings(vault_dir), stage, model)
+    if tier is None:
+        tier = _stage_tier(settings, stage)
     agent_name = _resolve_agent_name(agent, settings, stage)
     agent_kind = _detect_agent_kind(agent_name, vault_dir)
     executor = _executor_for_dispatch(settings, stage, agent_name)
@@ -2588,11 +2643,19 @@ def _cycle_from_sidecar_path(cost_sidecar: Path) -> int:
 
 
 def _stage_tier(settings: dict[str, Any], stage: str) -> str:
+    """The stage's model tier for the cost record, or ``""`` when it names none.
+
+    A retired complexity label (issue #13) selects no model, so it is not
+    recorded as the call's tier either.
+    """
     stages = settings.get("stages") or {}
     stage_cfg = stages.get(stage) if isinstance(stages, dict) else None
-    if isinstance(stage_cfg, dict) and stage_cfg.get("tier"):
-        return str(stage_cfg["tier"])
-    return "standard"
+    if not isinstance(stage_cfg, dict) or not stage_cfg.get("tier"):
+        return ""
+    tier = str(stage_cfg["tier"])
+    if tier in _LEGACY_COMPLEXITY_TIERS and tier not in _tiers_map(settings):
+        return ""
+    return tier
 
 
 def _run_http(

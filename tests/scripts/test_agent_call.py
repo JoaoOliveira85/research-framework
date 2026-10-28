@@ -272,9 +272,7 @@ class TestStageTierResolution:
         )
         assert executor["model"] == "gpt-default"
 
-    def test_unknown_tier_raises_naming_stage_and_known_tiers(
-        self, agent_call
-    ) -> None:
+    def test_unknown_tier_raises_naming_stage_and_known_tiers(self, agent_call) -> None:
         with pytest.raises(ValueError) as exc:
             agent_call._resolve_executor(self._settings(tier="elite"), "note_writer")
         assert "note_writer" in str(exc.value)
@@ -291,6 +289,42 @@ class TestStageTierResolution:
     ) -> None:
         assert agent_call._stage_tier(self._settings(**cfg), "note_writer") == ""
 
+    def test_dispatch_runs_the_tier_model_and_records_the_tier(
+        self, agent_call, tmp_path: Path
+    ) -> None:
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        (vault / "settings.yaml").write_text(
+            "default_executor:\n  runtime: claude\n  model: sonnet\n"
+            "tiers:\n  basic: claude-haiku-4-5\n"
+            "stages:\n  plan_narrator:\n    tier: basic\n",
+            encoding="utf-8",
+        )
+        cycle_dir = vault / "_pipeline" / "cycles" / "cycle-001"
+        cycle_dir.mkdir(parents=True)
+        fake_proc = MagicMock()
+        fake_proc.stdin = MagicMock()
+        fake_proc.stdout = iter(['{"type":"result","total_cost_usd":0.01}\n'])
+        fake_proc.stderr = MagicMock(read=MagicMock(return_value=""))
+        fake_proc.wait.return_value = 0
+        with patch.object(
+            agent_call.subprocess, "Popen", return_value=fake_proc
+        ) as popen:
+            result = agent_call.dispatch(
+                "plan_narrator",
+                "hi",
+                agent="claude",
+                vault_dir=vault,
+                cycle_dir=cycle_dir,
+            )
+        assert result.exit_code == 0
+        argv = popen.call_args.args[0]
+        assert argv[argv.index("--model") + 1] == "claude-haiku-4-5"
+        sidecar = json.loads(
+            (cycle_dir / "agent-calls" / "plan_narrator.json").read_text("utf-8")
+        )
+        assert sidecar["tier"] == "basic"
+
     def test_default_tiers_and_legacy_values_match_the_settings_loader(
         self, agent_call
     ) -> None:
@@ -299,9 +333,7 @@ class TestStageTierResolution:
         from research_framework.pipeline import settings as loader
 
         assert agent_call._DEFAULT_MODEL_TIERS == loader._DEFAULT_MODEL_TIERS
-        assert (
-            agent_call._LEGACY_COMPLEXITY_TIERS == loader._LEGACY_COMPLEXITY_TIERS
-        )
+        assert agent_call._LEGACY_COMPLEXITY_TIERS == loader._LEGACY_COMPLEXITY_TIERS
 
 
 # ---------------------------------------------------------------------------

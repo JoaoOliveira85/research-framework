@@ -11,8 +11,6 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from research_framework.pipeline.settings import SettingsError, load_vault_settings
-
 from ..spec.parser import parse
 from ..spec.schema import SpecValidationError
 from .research_plan import ResearchPlan
@@ -66,14 +64,6 @@ def _bootstrap_scripts_agent_call(vault_dir: Path | None = None):
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
-
-
-def _load_vault_tier(vault_dir: Path, stage: str) -> str:
-    """Read ``stages.<stage>.tier`` via :func:`load_vault_settings` (spec 025 B7)."""
-    try:
-        return load_vault_settings(vault_dir).stage(stage).tier
-    except SettingsError:
-        return "standard"
 
 
 def _skill_instructions() -> str:
@@ -198,16 +188,15 @@ def prepend_narrative(vault_dir: Path, cycle_number: int) -> None:
     )
 
     cycle_dir = vault_dir / "_pipeline" / "cycles" / f"cycle-{cycle_number:03d}"
-    tier = _load_vault_tier(vault_dir, "plan_narrator")
     agent_call = _bootstrap_scripts_agent_call(vault_dir=vault_dir)
 
     rationale_text: str | None = None
     failure_note: str | None = None
     try:
+        # No `tier=`: dispatch resolves `stages.plan_narrator.tier` itself.
         call_result = agent_call.dispatch(
             stage="plan_narrator",
             prompt=prompt,
-            tier=tier,
             vault_dir=vault_dir,
             cycle_dir=cycle_dir,
             timeout_s=60,

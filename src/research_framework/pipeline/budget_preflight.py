@@ -190,14 +190,14 @@ def estimate_cycle(
             # The prompt does not exist yet; see the module docstring.
             prompt_text="",
             agent=agent,
-            tier=stage_settings.tier,
+            tier=stage_settings.tier or "",
             max_tokens=resolve_max_tokens(vault_settings, stage),
             limits=vault_settings.limits,
         )
         rows.append(
             StageEstimate(
                 stage=stage,
-                tier=stage_settings.tier,
+                tier=stage_settings.tier or "",
                 agent=agent,
                 dispatches=_dispatch_count(stage, notes=notes, batch_size=batch_size),
                 per_dispatch_usd=est.cost_usd,
@@ -227,7 +227,7 @@ def render_estimate_text(estimate: CycleEstimate) -> str:
     ]
     for row in estimate.stages:
         lines.append(
-            f"  {row.stage:<14} {row.agent:<12} {row.tier:<10} "
+            f"  {row.stage:<14} {row.agent:<12} {row.tier or '-':<10} "
             f"{row.dispatches:>5} {row.per_dispatch_usd:>10.4f} "
             f"{row.subtotal_usd:>10.4f}"
         )

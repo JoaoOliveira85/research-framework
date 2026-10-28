@@ -742,7 +742,7 @@ class CycleBudgetSession:
         stage: str,
         prompt_text: str = "",
         agent: str = "claude",
-        tier: str = "standard",
+        tier: str = "",
         max_tokens: int = 4096,
     ) -> None:
         from research_framework.pipeline.cost_estimator import estimate_dispatch

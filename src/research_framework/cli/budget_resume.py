@@ -93,7 +93,7 @@ def _render_approval_summary(marker: ApprovalRequiredMarker) -> str:
     """
     lines = [
         f"APPROVAL_REQUIRED — stage {marker.stage_name!r}, cycle {marker.cycle_number}",
-        f"  tier                   {marker.tier}",
+        f"  tier                   {marker.tier or '-'}",
     ]
     if marker.agent:
         lines.append(f"  agent                  {marker.agent}")
