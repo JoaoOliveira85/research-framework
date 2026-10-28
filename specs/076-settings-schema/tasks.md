@@ -14,6 +14,10 @@ follow-up work § Known divergences identified.
       `stages.source_manager.auto_promote_discovered`,
       `stages.verifier.on_timeout`, `stages.verifier.output_filename`,
       `stages.topic_propose.auto_promote`.
+      The keys added to D1 by the unknown-key register (#8) are in scope too.
+      Deleting a key from the profiles also deletes its line from
+      `_INERT_PATHS` in `pipeline/settings.py`; a key left there is tolerated
+      without a report, a key removed from there is reported.
 
   ### Testing Requirements
 

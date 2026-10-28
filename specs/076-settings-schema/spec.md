@@ -126,7 +126,7 @@ features the keys configure, which live in their own specs (`033`, `061`,
   offending key.
 - **FR-006**: Unrecognised top-level keys MUST be preserved in `extras`
   rather than rejected — a vault written for a newer framework must still
-  load.
+  load. They MUST also be reported (FR-022).
 - **FR-007**: The resolved settings object MUST be immutable.
 - **FR-008**: Executor resolution precedence MUST be
   `stages.<stage>` > `default_executor` > built-in default for scalars, and
@@ -174,6 +174,24 @@ features the keys configure, which live in their own specs (`033`, `061`,
 - **FR-020**: Validation MUST fail fast on the first violation with an
   actionable message; there is no aggregate validation report.
 
+**Unknown keys (issue #8)**
+
+- **FR-022**: Every key in the file that is neither a typed field, a
+  documented pass-through (§ Key entities — the "Reader" column names who
+  consumes it) nor on the inert register (D1) MUST be reported on load as an
+  `UnknownSettingsKeyWarning` naming its dotted path and, when one is close
+  (`difflib.get_close_matches`), the closest known sibling. Each key is
+  reported once per process. Map-valued sections whose keys the operator
+  picks — stage names under `stages`, labels under `tiers`, the entries of
+  `limits.tier_thresholds` / `limits.estimator_calibration` — are never
+  reported, only the keys beneath a stage.
+- **FR-023**: `strict_settings: true` MUST make a research run refuse to
+  start (exit `2`, the "operator must fix it" code of `077` FR-012) while any
+  such key is present. The orchestrator enforces it before any side effect,
+  reading the flag from the raw file so it holds when the rest of the file
+  fails validation. A non-boolean value MUST raise at load. Default `false`.
+- **FR-024**: Every shipped profile MUST load with zero unknown-key reports.
+
 **Honesty**
 
 - **FR-021**: A key that no code reads MUST NOT ship in a profile. The dead
@@ -197,6 +215,12 @@ Types are YAML types. "Reader" is the subsystem that consumes the key;
 | `local_providers` | list[str] | `[ollama, local, lmstudio, llamacpp]` | opencode cost classifier |
 | `default_agent` | enum | `claude` | cycle runner |
 | `approval_gates` | list[str] | `[]` | approval gate (`061`) |
+| `strict_settings` | bool | `false` | orchestrator — refuses a run over an unknown key (FR-023) |
+| `vault_commit.{enabled,push_on_complete,auto_merge}` | bool/enum/bool | `true`/`auto`/`true` | `vault_commit` (`050`/`072`) |
+| `vault_commit.retention.{keep_last,max_age_days}` | int \| null | `5` / `90` | branch retention |
+| `default_executor` | map | see below | dispatcher (`078`); not part of `VaultSettings` |
+| `cycles.{initial_max,update_max}` | int | unset | deprecated cycle limits (FR-009) |
+| `source_manager.decay_after_n_cycles` | int | `3` | digest only — the source manager reads `stages.source_manager` (D7) |
 | `dimensions` | list[str] | `[]` | — |
 | `communication.mode` | enum | `cli` | — |
 
@@ -299,6 +323,7 @@ Types are YAML types. "Reader" is the subsystem that consumes the key;
 | FR-017 (credibility) | `tests/pipeline/test_settings_credibility.py` |
 | FR-018 (cycle yield) | `tests/pipeline/test_cg001_yield_model.py` |
 | FR-019 (`default_agent`) | `tests/pipeline/test_settings_cursor.py`, `tests/pipeline/test_settings_ollama.py` |
+| FR-022…FR-024 (unknown keys, strict mode) | `tests/pipeline/test_settings_unknown_keys.py` |
 | FR-021 (no dead config in profiles) | `tests/pipeline/test_shipped_profiles_enforce_budget.py::test_profile_has_no_unparsed_budget_block` |
 
 ---
@@ -319,6 +344,16 @@ Types are YAML types. "Reader" is the subsystem that consumes the key;
   `stages.topic_propose.auto_promote`. Sharpest instance:
   `gates.cg_007_max_orphan_link_pct: 15` in every profile against a hardcoded
   `0.2` default in the gate, whose only production call site passes zeros.
+  Found while building the unknown-key register (#8), also read by nothing:
+  `citation.*`, `commands.*`, `cycles.max_consecutive_verifier_rejections`,
+  `pipeline.source_failure_thresholds.enrichment_max_failures` (the table above
+  lists a reader for it; there is none), `skill` / `on_fail` / `retry` under
+  `default_executor` and `stages.*` (they are `ExecutorConfig` fields of the
+  spec-file loader; the vault dispatcher never reads them), and
+  `pipeline.gates.cg_003_{warn,fail}_pct` (quality fixtures only). All of D1 sits
+  in `_INERT_PATHS` in `pipeline/settings.py`: tolerated without a report so the
+  shipped files stay quiet, never suggested as a correction. T001 deletes a
+  line there with each key it removes.
 - **D2 — "Spec wins over file" is documented and unimplemented.** The file's
   own header says every value can be overridden by `research.spec.md`'s
   `settings:` block, and a typed mirror of that block exists — but no merge
@@ -340,6 +375,14 @@ Types are YAML types. "Reader" is the subsystem that consumes the key;
   `archived`, `tiers`, `modules`, `cycle_yield`, `stubs`, `reports` and the
   D7 stages appear only in `settings.yaml`. Every one defaults, so this is
   not a bug — but the profiles are no longer the same schema by inspection.
+
+- **D7 — Two readers disagree on where `source_manager` lives.**
+  `source_manager.py` reads `stages.source_manager.decay_after_n_cycles`;
+  `pipeline/digest/sections.py::_decay_threshold` reads a top-level
+  `source_manager.decay_after_n_cycles`. Both spellings are accepted so neither
+  is reported, but a value set at the top level only moves the digest.
+- **D8 — Stage names are not checked.** `stages.verifer:` is a new stage as far
+  as the register can tell. Only the keys *beneath* a stage are checked.
 
 ## Assumptions
 
