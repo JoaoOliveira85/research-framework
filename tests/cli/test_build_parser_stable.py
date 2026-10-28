@@ -233,3 +233,25 @@ def test_parsed_namespace_carries_a_callable_handler(subcommand: str) -> None:
         "callable `func`. main() would raise AttributeError at args.func — "
         "the subparser is missing its set_defaults(func=...)."
     )
+
+
+def test_generate_help_documents_cron_and_launchd_one_liners() -> None:
+    """Issue #19: `generate --help` carries the scheduling examples.
+
+    Each example must call ``generate ... --resume`` (what ``./vault research``
+    expands to) with the budget ceiling as an argument.
+    """
+    text = _run_help("generate", "--help").decode()
+    cron = [ln for ln in text.splitlines() if ln.lstrip().startswith("0 6 * * 1 ")]
+    launchd = [
+        ln
+        for ln in text.splitlines()
+        if ln.strip().startswith("/abs/path/to/research-framework generate")
+    ]
+    assert len(cron) == 1 and len(launchd) == 1
+    for line in cron + launchd:
+        assert " generate --spec " in line
+        assert " --resume " in line + " "
+        assert "--max-usd " in line
+    assert "launchctl bootstrap" in text
+    assert "pipeline <vault> run" in text

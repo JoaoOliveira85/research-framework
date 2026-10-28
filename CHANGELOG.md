@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `research-framework generate --help` and the README now show a cron one-liner and a launchd setup for an unattended weekly run (`generate --spec <spec> --output <vault> --resume --max-usd <X>`, which `./vault research` expands to). They will move to `pipeline <vault> run` when ROADMAP v1.1.0 row 7 ships (issue #19).
+
 ### Removed
 
-- The scaffold no longer writes `_pipeline/systemd/vault-research.service` or its `.tmpl-versions.json`, and the `vault-research.service.j2` template is gone (issue #19). The unit shipped without a timer, so it ran `./vault research` once per login rather than weekly. Schedule with cron or launchd instead.
+- The scaffold no longer writes `_pipeline/systemd/vault-research.service` or its `.tmpl-versions.json`, and the `vault-research.service.j2` template is gone (issue #19). The unit shipped without a timer, so it ran `./vault research` once per login rather than weekly. Schedule with cron or launchd instead (see `generate --help`).
 
 ### Migration notes
 

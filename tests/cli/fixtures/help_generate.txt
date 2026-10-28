@@ -89,3 +89,16 @@ options:
                         RF_APPROVE_ALL_ACK=1 headless).
   --reject STAGE        Reject approval for stage; retains APPROVAL_REQUIRED
                         marker.
+
+scheduling an unattended weekly run:
+  cron (Mondays 06:00; --max-usd is a LIFETIME dollar ceiling, 0 disables it):
+    0 6 * * 1 /abs/path/to/research-framework generate --spec /abs/vault/research.spec.md --output /abs/vault --resume --max-usd 25 >> /abs/vault/_pipeline/research.log 2>&1
+
+  launchd (macOS; put these arguments in a LaunchAgent plist's ProgramArguments
+  with StartCalendarInterval, StandardOutPath/StandardErrorPath set to the log,
+  then `launchctl bootstrap gui/$(id -u) <path-to-plist>`;
+  a full plist is in the README):
+    /abs/path/to/research-framework generate --spec /abs/vault/research.spec.md --output /abs/vault --resume --max-usd 25
+
+  `./vault research` expands to this same call. These examples will move to
+  `pipeline <vault> run` when ROADMAP v1.1.0 row 7 ships.
