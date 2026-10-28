@@ -113,6 +113,12 @@ side effect:
   and the matching `pipeline.runner.run_*` functions.
 - `research-framework generate --regenerate-plan-only` (it rewrites
   `_pipeline/research-plan.md`).
+- A fresh `generate` whose vault comes from the settings profile's
+  `output_dir` or the spec's `location` rather than `--output`: the guard runs
+  as soon as that directory is known, before scaffolding.
+- `run_cycles` between cycles: if the flag flips mid-run the loop stops before
+  the next cycle, exits 2, and writes no aborted marker (an archive is a
+  requested stop, not a structural abort).
 
 **Unaffected** — `pipeline <vault> status` and `prune-runs`, which read or tidy
 run records only, plus everything already listed above.
@@ -123,7 +129,15 @@ run records only, plus everything already listed above.
   `--json` object carries `"archived": true|false`.
 - `CLAUDE.md`, `AGENTS.md` and the `/research` command carry a marked notice
   (`<!-- archived-notice:begin/end -->`) telling an interactive agent it must
-  not write or edit research notes, and how to reverse that. It is added at
-  render time, and `regenerate-agents` adds or removes it on an existing vault
-  (idempotent; text outside the markers is never touched). The flag is read
-  with the same `is_archived`, so FR4/FR5 hold here too.
+  not write or edit research notes, and that a human reverses it with
+  `archived: false`. It is added at render time. For an existing vault,
+  `regenerate-agents --notice-only` and `./vault update` add or remove it,
+  touching nothing but the marked blocks (idempotent, line endings kept, no
+  spec or `--force` needed). The flag is read with the same `is_archived`, so
+  FR4/FR5 hold here too.
+- The `--json` field is additive to the stable object in spec 048's status
+  contract; that spec is frozen and unchanged.
+
+FR5 clarification: "a literal `true`" means a YAML boolean as PyYAML reads it,
+so `yes` / `on` archive (the typed loader reads them the same way) while the
+string `"true"`, `1` and typos do not.
