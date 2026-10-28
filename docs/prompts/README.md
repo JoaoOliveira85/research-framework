@@ -15,7 +15,7 @@ These are Jinja templates. Their text is rendered into a generated vault, so rea
 | [`scout-prompt`](scout-prompt.md) | `templates/prompts/scout-prompt.md.j2` | Topic discovery — produces `_pipeline/scout-report.json`. | `pipeline scout` / the cycle runner's scout step | `18adc1d7a327ef11` |
 | [`dfs-prompt`](dfs-prompt.md) | `templates/prompts/dfs-prompt.md.j2` | Depth-first research — writes notes, produces `_pipeline/research-report.json`. | `pipeline resume` / the cycle runner's research step | `693aa606e8a9288d` |
 | [`command-ask`](command-ask.md) | `templates/commands/ask.md.j2` | Vault-grounded answering, with the Principle IX two-tier citation block. | `./vault ask` (interactive) | `3e564b8e95d252fd` |
-| [`command-research`](command-research.md) | `templates/commands/research.md.j2` | Operator-facing research entry point. | `/research` inside a vault | `af1c5b3cc678fe29` |
+| [`command-research`](command-research.md) | `templates/commands/research.md.j2` | Operator-facing research entry point. | `/research` inside a vault | `237c6ec535bdedb9` |
 | [`command-write`](command-write.md) | `templates/commands/write.md.j2` | Document generation, with the Principle IX two-tier citation requirement. | `./vault write` (see spec 077 § D2 — not currently runnable) | `5389c6f98c3ade52` |
 | [`agent-scout`](agent-scout.md) | `src/research_framework/agents/scout.md.j2` | Scout agent definition. | rendered to `.claude/commands/scout.md` | `b3b5e2ac95b41f9a` |
 | [`agent-extract`](agent-extract.md) | `src/research_framework/agents/extract.md.j2` | Extraction agent definition. | rendered to `.claude/commands/extract.md` | `f5cc038295e0862f` |

@@ -83,3 +83,33 @@ def test_role_declared_round_trips_through_to_dict() -> None:
     )
     assert declared.role_declared
     assert DataSourceConfig.from_dict(declared.to_dict()).role_declared
+
+
+def _rendered_vault_files(spec: SpecConfig) -> dict[str, str]:
+    from research_framework.agents._render import citation_roles
+    from research_framework.generator.templates import _env, _templates_src
+
+    env = _env(_templates_src())
+    roles = citation_roles(spec)
+    return {
+        "CLAUDE.md": env.get_template("CLAUDE.md.j2").render(
+            spec=spec, citation_roles=roles
+        ),
+        "vault-config.yaml": env.get_template("vault-config.yaml.j2").render(spec=spec),
+        "research": render_agent("research", spec),
+    }
+
+
+def test_no_rendered_vault_file_teaches_the_fixed_vocabulary() -> None:
+    for spec in (_photography_spec(), _software_spec()):
+        for name, text in _rendered_vault_files(spec).items():
+            for fixed in (*_FIXED_VOCAB, "[code]/[intent]/[domain]", "`[vault]`"):
+                assert fixed not in text, (name, fixed)
+
+
+def test_claude_md_citation_section_follows_declared_roles() -> None:
+    none = _rendered_vault_files(_photography_spec())["CLAUDE.md"]
+    assert "declares no `role`" in none
+    some = _rendered_vault_files(_software_spec())["CLAUDE.md"]
+    assert "`behaviour` -- Service repos".replace("--", "\u2014") in some
+    assert "`intent` -- Design wiki".replace("--", "\u2014") in some

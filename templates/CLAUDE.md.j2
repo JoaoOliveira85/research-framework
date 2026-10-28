@@ -123,15 +123,8 @@ All BFS scout passes must cover:
 {%- for p in spec.code_source_url_patterns[:2] -%}{%- set _ = code_examples.append(p) -%}{%- endfor -%}
 {%- endif -%}
 {%- set code_examples = code_examples + ['file://.../<enumerated-repo>/...'] -%}
-{%- set intent_names = [] -%}
-{%- for ds in spec.data_sources -%}{%- if ds.role == 'intent' -%}{%- set _ = intent_names.append(ds.name) -%}{%- endif -%}{%- endfor -%}
 {%- set code_line = code_examples | map('string') | map('trim') | list -%}
 {%- set code_joined = code_line | join('`, `') -%}
-{%- if intent_names -%}
-{%- set intent_line = (intent_names | join(', ')) + ' URLs' -%}
-{%- else -%}
-{%- set intent_line = 'intent-source URLs (Confluence, Jira, Slack, etc.)' -%}
-{%- endif -%}
 ## Autonomous Operation
 
 This vault is configured for autonomous operation. Proceed without asking
@@ -149,21 +142,31 @@ Always ask before:
 
 ## Citation Format
 
-When rendering citations in an answer or a note body, classify each URL and
-order them:
+When rendering citations in an answer or a note body, cite the vault notes
+first (Tier 1, Principle IX), then the external URLs from their `source_urls`
+frontmatter (Tier 2).
+
+{% if citation_roles %}
+A Tier-2 entry is labelled with the declared `role` of the data source its URL
+came from:
+
+{% for src in citation_roles %}
+- `{{ src.role }}` — {{ src.name }}
+{% endfor %}
+
+A URL matching none of these sources gets no label.
+{% else %}
+This spec declares no `role` for its data sources, so Tier-2 entries carry no
+label.
+{% endif %}
 
 {% if ns.has_hard -%}
-1. `[code]` — `{{ code_joined }}`
-2. `[intent]` — {{ intent_line }}
-3. `[domain]` — any other external URL (market research, industry reports)
+For `hard` note types, repository URLs look like `{{ code_joined }}`.
 
 For notes where `intent_implementation_drift: true` in frontmatter, responses MUST
 name the disagreement explicitly ("code says X; intent says Y") rather than picking
 one silently.
 {%- else -%}
-1. `[vault]` — wikilinks to other notes in `data_vault/` (Tier 1, Principle IX)
-2. `[domain]` — external URLs listed in the note's `source_urls` frontmatter (Tier 2)
-
 Vault notes are the authoritative answer surface; external URLs are the origin
 of record cited by those notes.
 

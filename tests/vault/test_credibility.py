@@ -246,6 +246,8 @@ def test_invalid_default_warns(
         # and is whatever role the spec declares, leading or trailing.
         ("https://example.com/a — [recipes]", "https://example.com/a"),
         ("[recipes] https://example.com/a", "https://example.com/a"),
+        ("https://example.com/a — [Home cooking]", "https://example.com/a"),
+        ("[Home cooking] https://example.com/a", "https://example.com/a"),
     ],
 )
 def test_citation_url_strips_tag_and_tail(entry: str, expected: str) -> None:

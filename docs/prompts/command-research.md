@@ -7,7 +7,7 @@
 | **Source** | `templates/commands/research.md.j2` |
 | **Role** | Operator-facing research entry point. |
 | **Dispatched by** | `/research` inside a vault |
-| **Source sha256** | `af1c5b3cc678fe29` |
+| **Source sha256** | `237c6ec535bdedb9` |
 
 Reproduced verbatim, including its placeholders. A vault gets this text with the placeholders filled at scaffold or dispatch time.
 
@@ -37,8 +37,8 @@ $ARGUMENTS
 3. **Source-first discovery**:
    - For every note type marked `source_policy: hard` in the spec (defaults:
      `service`, `flow`, `concept`, `decision`), the note's `source_urls` MUST
-     contain at least one entry classified as `[code]` (repository URL or
-     `file://` path matching the vault's `code_source_url_patterns`).
+     contain at least one entry that is a repository URL or
+     `file://` path matching the vault's `code_source_url_patterns`.
    - Start in the authoritative source (code for `hard` types, primary
      data-source for `soft` types). Extract facts from there first, then
      enrich with secondary sources (intent + domain).
@@ -65,8 +65,8 @@ Before writing, verify:
 - [ ] Frontmatter has `title`, `type`, `summary` (≤120 chars, specific), `tags`,
       `created`, `updated`, `status`, `source_urls` (≥1), `related`,
       `confidence`, `scope`, `template_version`.
-- [ ] For `hard` types: at least one `source_urls` entry is `[code]`-classified
-      per the vault's `code_source_url_patterns`.
+- [ ] For `hard` types: at least one `source_urls` entry is a repository URL
+      matching the vault's `code_source_url_patterns`.
 - [ ] First occurrence of every acronym in the body is wikilinked.
 - [ ] Word count ≥ type's `min_word_count`.
 - [ ] `related` is populated from wikilinks in the body.
