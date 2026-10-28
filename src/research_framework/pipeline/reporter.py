@@ -14,6 +14,7 @@ from research_framework.cli._tty import is_interactive_tty
 
 from . import atomic_write
 from .budget_guard import (
+    UNTIERED_LABEL,
     collect_tier_cost_warnings,
     list_sidecars_v11,
     read_approval_decisions,
@@ -137,7 +138,7 @@ def append_cycle_cost_report(
     for row in sidecars:
         stage = str(row.get("stage") or "unknown")
         per_stage[stage] = per_stage.get(stage, 0.0) + float(row.get("cost_usd") or 0.0)
-        tier = str(row.get("tier") or "unknown")
+        tier = str(row.get("tier") or UNTIERED_LABEL)
         per_tier[tier] = per_tier.get(tier, 0.0) + float(row.get("cost_usd") or 0.0)
     cache_section = _cache_hit_section(vault_dir)
     payload = {

@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import Any
 
 from research_framework.pipeline.budget_guard import (
+    UNTIERED_LABEL,
     resolve_dispatch_agent,
     resolve_max_tokens,
 )
@@ -227,7 +228,7 @@ def render_estimate_text(estimate: CycleEstimate) -> str:
     ]
     for row in estimate.stages:
         lines.append(
-            f"  {row.stage:<14} {row.agent:<12} {row.tier or '-':<10} "
+            f"  {row.stage:<14} {row.agent:<12} {row.tier or UNTIERED_LABEL:<10} "
             f"{row.dispatches:>5} {row.per_dispatch_usd:>10.4f} "
             f"{row.subtotal_usd:>10.4f}"
         )
