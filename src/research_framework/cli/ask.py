@@ -23,6 +23,7 @@ from ..pipeline.ask_escalation import (
     render_ask_prompt,
     run_ask,
 )
+from ..pipeline.settings import strict_settings_refusal
 from ._budget_resolve import BudgetError, resolve_cycle_budget_from_path
 from .research_cycles import _cmd_cycle, _standing_pause
 from .research_resume import _cycle_aborted, _highest_completed_cycle
@@ -168,6 +169,13 @@ def _cmd_ask(args: argparse.Namespace) -> int:
     question = " ".join(args.question).strip()
     if not question:
         print("error: ask needs a question.", file=sys.stderr)
+        return 2
+
+    # Issue #8: the ask is itself a paid dispatch, made before `--escalate`
+    # reaches `cycle` and its own strict check, so the refusal comes first.
+    refusal = strict_settings_refusal(vault)
+    if refusal:
+        print(f"error: {refusal}", file=sys.stderr)
         return 2
 
     command_path = _ask_command_path(vault)

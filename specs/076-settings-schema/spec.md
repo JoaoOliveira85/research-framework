@@ -204,11 +204,12 @@ features the keys configure, which live in their own specs (`033`, `061`,
   present. One check, `strict_settings_refusal`, backs every refusal; it runs
   before any side effect, reading the flag from the raw file so it holds when
   the rest of the file fails validation. Scope: `orchestrator.run_cycles`
-  (every `generate` run and `generate --resume`), `cycle`, and `pipeline`
-  `full|collect|extract|scout|resume|finish`. Not covered: `cycle
-  --estimate-only`, `pipeline status|prune-runs`, and the shim verbs that
-  invoke an agent directly rather than through those entry points (`ask`,
-  `write`). A non-boolean value MUST raise at load. Default `false`.
+  (every `generate` run and `generate --resume`), `cycle`, `pipeline`
+  `full|collect|extract|scout|resume|finish`, and `ask` (issue #15; its ask
+  dispatch precedes the `cycle` an escalation runs). Not covered: `cycle
+  --estimate-only`, `pipeline status|prune-runs`, and the shim arms that
+  invoke an agent directly rather than through those entry points
+  (`./vault ask` without `--escalate`, `./vault write`). A non-boolean value MUST raise at load. Default `false`.
 - **FR-024**: Every shipped profile, and every tracked fixture settings file
   that the loader can read, MUST load with zero unknown-key reports.
   `examples/settings.yml` is exempt (D3).

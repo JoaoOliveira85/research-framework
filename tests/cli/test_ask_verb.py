@@ -328,6 +328,38 @@ def test_a_vault_without_a_stages_ask_block_is_refused_before_any_dispatch(
     assert "stages.ask" in err and "CHANGELOG" in err
 
 
+@pytest.mark.parametrize("escalate", [True, False])
+def test_strict_settings_refuses_the_ask_before_any_dispatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+    escalate: bool,
+) -> None:
+    """#8: a verb that dispatches LLM work refuses an unknown key under
+    `strict_settings: true` before its first side effect — here, the paid ask
+    dispatch, which runs before `cycle` (and its own strict check) is reached."""
+    vault = _vault(tmp_path)
+    _edit_settings(vault, lambda s: s.update(strict_settings=True, default_agnet=1))
+    cycles = _record_cycles(monkeypatch)
+
+    rc = _ask(vault, *(["--escalate"] if escalate else []))
+
+    assert rc == 2
+    assert cycles == []
+    assert _answers(vault) == []
+    err = capsys.readouterr().err
+    assert "default_agnet" in err and "strict_settings" in err
+
+
+def test_strict_settings_accepts_the_shipped_ask_block(tmp_path: Path) -> None:
+    """`inherit_args` / `retry` in `stages.ask` are known keys, not refusals."""
+    vault = _vault(tmp_path)
+    _edit_settings(vault, lambda s: s.update(strict_settings=True))
+
+    assert _ask(vault) == 0
+    assert len(_answers(vault)) == 1
+
+
 @pytest.mark.parametrize(
     "budget",
     [pytest.param(0, id="zero"), pytest.param(None, id="unset")],

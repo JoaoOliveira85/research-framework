@@ -1607,8 +1607,8 @@ def strict_settings_refusal(vault_dir: Path) -> str | None:
 
     The ONE check behind every refusal: ``orchestrator.run_cycles`` and the CLI
     entry points of the verbs that dispatch cycles or LLM work (``cycle``,
-    ``generate --resume``, ``pipeline full|collect|extract|scout|resume|finish``)
-    all call it, before they have any side effect, and exit 2.
+    ``generate --resume``, ``pipeline full|collect|extract|scout|resume|finish``,
+    ``ask``) all call it, before they have any side effect, and exit 2.
     """
     unknown = strict_settings_violations(vault_dir)
     if not unknown:
