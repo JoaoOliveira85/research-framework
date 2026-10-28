@@ -204,8 +204,7 @@ def test_a_budget_pause_is_re_checked_against_the_cycle_it_paused(
     assert anchor == 2
     assert budget_resume.peek_paused_stage(vault, anchor) == "note_writer"
     monkeypatch.setattr(budget_resume, "is_interactive_tty", lambda: False)
-    args = argparse.Namespace(output=vault, cycle=None)
-    assert budget_resume.handle_budget_marker_on_resume(args, vault, anchor) != 0
+    assert budget_resume.handle_budget_marker_on_resume(vault, anchor) != 0
     assert budget_marker_path(vault).is_file()
 
 

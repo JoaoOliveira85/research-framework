@@ -67,7 +67,7 @@ def test_over_cap_tty_refuses_without_prompting_and_names_the_setting(
 
     monkeypatch.setattr("builtins.input", _fail_input)
     vault = _over_cap_vault(tmp_path)
-    assert handle_budget_marker_on_resume(Namespace(), vault, 1) == 1
+    assert handle_budget_marker_on_resume(vault, 1) == 1
     err = capsys.readouterr().err
     assert "limits.cycle_budget_usd" in err
     assert "force" not in err.lower()
@@ -82,7 +82,7 @@ def test_over_cap_headless_refuses_with_budget_paused_payload(
     monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
     monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
     vault = _over_cap_vault(tmp_path)
-    assert handle_budget_marker_on_resume(Namespace(), vault, 1) == 1
+    assert handle_budget_marker_on_resume(vault, 1) == 1
     assert "budget_paused" in capsys.readouterr().err
     assert (vault / "_pipeline/BUDGET_PAUSED").is_file()
 
@@ -112,7 +112,7 @@ def test_resume_clears_marker_when_cap_already_satisfied(
     )
     path = vault / "_pipeline/BUDGET_PAUSED"
     atomic_write_json_marker(path, marker.to_json_dict())
-    assert handle_budget_marker_on_resume(Namespace(), vault, 1) == 0
+    assert handle_budget_marker_on_resume(vault, 1) == 0
     assert not path.exists()
 
 

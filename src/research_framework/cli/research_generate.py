@@ -59,9 +59,9 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 
     # Issue #286: --approve/--approve-all/--reject only mean anything on a
     # resume (spec 033's approval gates are markers written mid-run; a fresh
-    # generate has no run yet to approve or reject). They used to be silently accepted no-ops outside
-    # --resume. Refuse loudly instead, same as every other refusal in this
-    # file (spec 070 FR6).
+    # generate has no run yet to approve or reject). They used to be silently
+    # accepted no-ops outside --resume. Refuse loudly instead, same as every
+    # other refusal in this file (spec 070 FR6).
     if not getattr(args, "resume", False):
         _resume_only_flags = [
             flag
@@ -76,7 +76,7 @@ def _cmd_generate(args: argparse.Namespace) -> int:
             print(
                 "error: "
                 + ", ".join(_resume_only_flags)
-                + " only take effect with --resume (spec 033 approval gates "
+                + " only take effect with --resume (spec 033 approval "
                 "gates exist only mid-run); pass --resume or "
                 "drop the flag.",
                 file=sys.stderr,

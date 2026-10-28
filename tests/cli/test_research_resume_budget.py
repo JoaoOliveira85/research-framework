@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from argparse import Namespace
 from pathlib import Path
 
 from research_framework.cli.budget_resume import handle_budget_marker_on_resume
@@ -44,8 +43,7 @@ def test_resume_refuses_when_sidecar_sum_still_over_cap(tmp_path: Path) -> None:
         dispatch_estimate_usd=0.5,
     )
     atomic_write_json_marker(vault / "_pipeline/BUDGET_PAUSED", marker.to_json_dict())
-    args = Namespace()
-    rc = handle_budget_marker_on_resume(args, vault, 1)
+    rc = handle_budget_marker_on_resume(vault, 1)
     assert rc == 1
 
 
@@ -65,7 +63,6 @@ def test_resume_clears_budget_marker_when_cap_satisfied(tmp_path: Path) -> None:
     )
     path = vault / "_pipeline/BUDGET_PAUSED"
     atomic_write_json_marker(path, marker.to_json_dict())
-    args = Namespace()
-    rc = handle_budget_marker_on_resume(args, vault, 1)
+    rc = handle_budget_marker_on_resume(vault, 1)
     assert rc == 0
     assert not path.exists()

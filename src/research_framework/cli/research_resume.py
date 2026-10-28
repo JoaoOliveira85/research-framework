@@ -212,10 +212,11 @@ def _resume(args: argparse.Namespace) -> int:
 
     # budget-marker.contract.md §4.5. The stage has to be read BEFORE the
     # handler clears the marker, but it is only acted on if that handler let
-    # the resume through: a refusal (still over cap, unreadable marker) leaves the pause standing and promises no skip.
+    # the resume through: a refusal (still over cap, unreadable marker)
+    # leaves the pause standing and promises no skip.
     paused_stage = peek_paused_stage(vault_dir, args.cycle)
 
-    rc_budget = handle_budget_marker_on_resume(args, vault_dir, args.cycle)
+    rc_budget = handle_budget_marker_on_resume(vault_dir, args.cycle)
     if rc_budget != 0:
         return rc_budget
 

@@ -188,8 +188,17 @@ _FORCE_BUDGET_RETIRED = (
 )
 
 
+# TRIPWIRE (issue #14): kept for one release after --force-budget's removal so
+# scripts get a pointer instead of argparse's bare "unrecognized arguments".
+# Delete this, _FORCE_BUDGET_RETIRED and the check in main() after the next
+# release (tracked in docs/TODO.md).
 def _retired_force_budget(argv: list[str]) -> bool:
-    return any(a == "--force-budget" or a.startswith("--force-budget=") for a in argv)
+    for a in argv:
+        if a == "--":  # everything after is positional, never a flag
+            return False
+        if a == "--force-budget" or a.startswith("--force-budget="):
+            return True
+    return False
 
 
 def main(argv: list[str] | None = None) -> int:

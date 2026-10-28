@@ -42,3 +42,25 @@ def test_force_budget_not_in_generate_help(
     with pytest.raises(SystemExit):
         main(["generate", "--help"])
     assert "force-budget" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--force-budget", "generate"],
+        ["pause", "show", "--vault", "v", "--force-budget"],
+        ["status", "--vault", "v", "--force-budget"],
+    ],
+)
+def test_force_budget_rejected_before_subcommand_and_on_unrelated_verbs(
+    argv: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(argv) == 2
+    assert "limits.cycle_budget_usd" in capsys.readouterr().err
+
+
+def test_force_budget_after_double_dash_is_a_value_not_the_flag() -> None:
+    from research_framework.cli import _retired_force_budget
+
+    assert _retired_force_budget(["generate", "--", "--force-budget"]) is False
+    assert _retired_force_budget(["generate", "--force-budget", "--"]) is True

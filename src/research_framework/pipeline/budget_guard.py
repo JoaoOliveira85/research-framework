@@ -574,16 +574,22 @@ def check_pre_dispatch(
     return None
 
 
+#: The one ``settings.yaml`` key that clears each pause reason.
+PAUSE_REASON_SETTING: dict[str, str] = {
+    "dollar_cap_exceeded": "limits.cycle_budget_usd",
+    "codex_token_cap_exceeded": "limits.codex_token_budget",
+    "wallclock_exceeded": "limits.cycle_wallclock_budget_minutes",
+}
+
+
 def pause_for_budget(vault_dir: Path, marker: BudgetPausedMarker) -> NoReturn:
     """Write ``BUDGET_PAUSED`` and exit the process."""
     path = vault_dir / BUDGET_PAUSED_REL
     atomic_write_json_marker(path, marker.to_json_dict())
     print(  # noqa: T201 — keep raw print: interactive prompt
         f"BUDGET_PAUSED: {marker.pause_reason} at stage {marker.paused_stage!r}. "
-        "Raise the capped limit (limits.cycle_budget_usd, "
-        "limits.codex_token_budget or limits.cycle_wallclock_budget_minutes, "
-        "per the reason above) in settings.yaml, then run "
-        "`./vault research --resume`.",
+        f"Raise {PAUSE_REASON_SETTING.get(marker.pause_reason, 'the capped limit')}"
+        " in settings.yaml, then run `./vault research --resume`.",
         file=sys.stderr,
     )
     raise SystemExit(1)

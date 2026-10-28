@@ -12,6 +12,7 @@ from typing import Any
 
 from research_framework.cli._tty import is_interactive_tty
 from research_framework.pipeline.budget_guard import (
+    PAUSE_REASON_SETTING,
     ApprovalDecision,
     ApprovalRequiredMarker,
     BudgetPausedMarker,
@@ -148,6 +149,10 @@ class _CapRecheck:
     remedy: str
 
 
+def _raise(reason: str, qualifier: str = "") -> str:
+    return f"Raise {PAUSE_REASON_SETTING[reason]} in settings.yaml{qualifier}, then resume."
+
+
 def _recheck_dollar_cap(
     limits: LimitsSettings, vault_dir: Path, cycle: int
 ) -> _CapRecheck:
@@ -166,7 +171,7 @@ def _recheck_dollar_cap(
             "actual_usd": actual,
             "cycle_budget_usd": cap,
         },
-        remedy="Raise limits.cycle_budget_usd in settings.yaml, then resume.",
+        remedy=_raise("dollar_cap_exceeded"),
     )
 
 
@@ -188,7 +193,7 @@ def _recheck_metered_token_cap(
             "metered_tokens": actual,
             "codex_token_budget": cap,
         },
-        remedy="Raise limits.codex_token_budget in settings.yaml, then resume.",
+        remedy=_raise("codex_token_cap_exceeded"),
     )
 
 
@@ -207,7 +212,7 @@ def _recheck_wallclock_cap(
     So the marker's own ``wallclock_elapsed_seconds`` is the authority here,
     tested against the CURRENT configured ceiling. That gives a wall-clock
     pause the same shape as every other: the operator clears it by raising the
-    ceiling above what the run already spent (or by forcing past it), and the
+    ceiling above what the run already spent, and the
     new process then starts its own clock from zero — which is the honest
     reading, since a fresh process really is beginning a fresh cycle's work.
     """
@@ -227,10 +232,7 @@ def _recheck_wallclock_cap(
             "wallclock_elapsed_seconds": elapsed,
             "cycle_wallclock_budget_minutes": cap_minutes,
         },
-        remedy=(
-            "Raise limits.cycle_wallclock_budget_minutes in settings.yaml "
-            "above the elapsed time above, then resume."
-        ),
+        remedy=_raise("wallclock_exceeded", " above the elapsed time above"),
     )
 
 
@@ -285,9 +287,7 @@ def peek_paused_stage(vault_dir: Path, cycle: int) -> str | None:
     return marker.paused_stage or None
 
 
-def handle_budget_marker_on_resume(
-    args: argparse.Namespace, vault_dir: Path, cycle: int
-) -> int:
+def handle_budget_marker_on_resume(vault_dir: Path, cycle: int) -> int:
     """Budget marker precedence (budget-marker.contract.md §4)."""
     marker_path = budget_marker_path(vault_dir)
     if not marker_path.is_file():
@@ -311,7 +311,10 @@ def handle_budget_marker_on_resume(
         if is_interactive_tty():
             print(f"{recheck.tty_message} {recheck.remedy}", file=sys.stderr)
             return 1
-        print(json.dumps(recheck.payload), file=sys.stderr)
+        print(
+            json.dumps({**recheck.payload, "remedy": recheck.remedy}),
+            file=sys.stderr,
+        )
         return 1
     clear_budget_marker(vault_dir)
     print(

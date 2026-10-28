@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import shutil
 import sys
-from argparse import Namespace
 from pathlib import Path
 from typing import Any
 
@@ -101,7 +100,7 @@ def test_resume_refuses_when_the_token_cap_is_still_exceeded(tmp_path: Path) -> 
     vault = _vault(tmp_path)
     _write_settings(vault, "  codex_token_budget: 100\n")
     path = _write_marker(vault, _token_marker())
-    rc = handle_budget_marker_on_resume(Namespace(), vault, 1)
+    rc = handle_budget_marker_on_resume(vault, 1)
     assert rc == 1
     assert path.is_file(), "a refused resume must retain the marker"
 
@@ -112,7 +111,7 @@ def test_token_refusal_names_the_tally_and_the_cap(
     vault = _vault(tmp_path)
     _write_settings(vault, "  codex_token_budget: 100\n")
     _write_marker(vault, _token_marker())
-    handle_budget_marker_on_resume(Namespace(), vault, 1)
+    handle_budget_marker_on_resume(vault, 1)
     err = capsys.readouterr().err
     assert str(_FIXTURE_METERED_TOKENS) in err
     assert "codex_token_budget" in err
@@ -124,7 +123,7 @@ def test_resume_clears_token_marker_once_the_operator_raised_the_cap(
     vault = _vault(tmp_path)
     _write_settings(vault, "  codex_token_budget: 100000\n")
     path = _write_marker(vault, _token_marker())
-    rc = handle_budget_marker_on_resume(Namespace(), vault, 1)
+    rc = handle_budget_marker_on_resume(vault, 1)
     assert rc == 0
     assert not path.exists()
 
@@ -140,7 +139,7 @@ def test_resume_refuses_when_the_wallclock_cap_is_still_exceeded(
     vault = _vault(tmp_path)
     _write_settings(vault, "  cycle_wallclock_budget_minutes: 1\n")
     path = _write_marker(vault, _wallclock_marker())
-    rc = handle_budget_marker_on_resume(Namespace(), vault, 1)
+    rc = handle_budget_marker_on_resume(vault, 1)
     assert rc == 1
     assert path.is_file()
 
@@ -159,7 +158,7 @@ def test_resume_clears_wallclock_marker_once_the_operator_raised_the_cap(
     vault = _vault(tmp_path)
     _write_settings(vault, "  cycle_wallclock_budget_minutes: 2000\n")
     path = _write_marker(vault, _wallclock_marker())
-    rc = handle_budget_marker_on_resume(Namespace(), vault, 1)
+    rc = handle_budget_marker_on_resume(vault, 1)
     assert rc == 0
     assert not path.exists()
 
@@ -174,7 +173,7 @@ def test_wallclock_pause_is_not_cleared_by_a_generous_dollar_cap(
         "  cycle_budget_usd: 1000.0\n  cycle_wallclock_budget_minutes: 1\n",
     )
     path = _write_marker(vault, _wallclock_marker())
-    rc = handle_budget_marker_on_resume(Namespace(), vault, 1)
+    rc = handle_budget_marker_on_resume(vault, 1)
     assert rc == 1
     assert path.is_file()
 
@@ -190,7 +189,7 @@ def test_resume_refuses_a_bogus_pause_reason_and_keeps_the_marker(
     vault = _vault(tmp_path)
     _write_settings(vault, "  cycle_budget_usd: 1000.0\n")
     path = _write_marker(vault, _wallclock_marker(), pause_reason="whatever")
-    rc = handle_budget_marker_on_resume(Namespace(), vault, 1)
+    rc = handle_budget_marker_on_resume(vault, 1)
     assert rc == 1
     assert path.is_file()
 
@@ -201,7 +200,7 @@ def test_resume_refuses_an_unknown_schema_version_and_keeps_the_marker(
     vault = _vault(tmp_path)
     _write_settings(vault, "  cycle_budget_usd: 1000.0\n")
     path = _write_marker(vault, _wallclock_marker(), schema_version="9.9")
-    rc = handle_budget_marker_on_resume(Namespace(), vault, 1)
+    rc = handle_budget_marker_on_resume(vault, 1)
     assert rc == 1
     assert path.is_file()
 
@@ -213,7 +212,7 @@ def test_resume_refuses_a_marker_missing_a_required_field(tmp_path: Path) -> Non
     doc = _wallclock_marker().to_json_dict()
     del doc["paused_stage"]
     atomic_write_json_marker(path, doc)
-    rc = handle_budget_marker_on_resume(Namespace(), vault, 1)
+    rc = handle_budget_marker_on_resume(vault, 1)
     assert rc == 1
     assert path.is_file()
 
@@ -223,7 +222,7 @@ def test_resume_refuses_unparseable_marker_json(tmp_path: Path) -> None:
     _write_settings(vault, "  cycle_budget_usd: 1000.0\n")
     path = vault / "_pipeline/BUDGET_PAUSED"
     path.write_text("{not json", encoding="utf-8")
-    rc = handle_budget_marker_on_resume(Namespace(), vault, 1)
+    rc = handle_budget_marker_on_resume(vault, 1)
     assert rc == 1
     assert path.is_file()
 
@@ -233,7 +232,7 @@ def test_a_malformed_marker_is_never_cleared_silently(tmp_path: Path) -> None:
     vault = _vault(tmp_path)
     _write_settings(vault, "  cycle_budget_usd: 1000.0\n")
     path = _write_marker(vault, _wallclock_marker(), pause_reason="whatever")
-    rc = handle_budget_marker_on_resume(Namespace(), vault, 1)
+    rc = handle_budget_marker_on_resume(vault, 1)
     assert rc == 1
     assert path.is_file()
 
@@ -249,7 +248,7 @@ def test_clearing_a_marker_says_which_cap_was_re_checked(
     vault = _vault(tmp_path)
     _write_settings(vault, "  cycle_wallclock_budget_minutes: 2000\n")
     _write_marker(vault, _wallclock_marker())
-    assert handle_budget_marker_on_resume(Namespace(), vault, 1) == 0
+    assert handle_budget_marker_on_resume(vault, 1) == 0
     err = capsys.readouterr().err
     assert "wallclock_exceeded" in err
     assert "BUDGET_PAUSED" in err
@@ -261,7 +260,7 @@ def test_headless_refusal_payload_is_machine_readable(
     vault = _vault(tmp_path)
     _write_settings(vault, "  cycle_wallclock_budget_minutes: 1\n")
     _write_marker(vault, _wallclock_marker())
-    handle_budget_marker_on_resume(Namespace(), vault, 1)
+    handle_budget_marker_on_resume(vault, 1)
     err = capsys.readouterr().err.strip().splitlines()
     payload = json.loads(err[-1])
     assert payload["error"] == "budget_paused"
