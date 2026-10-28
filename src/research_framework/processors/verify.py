@@ -805,12 +805,11 @@ def verify(
     if fail_threshold is None:
         fail_threshold = float(cfg.get("fail_threshold", 0.20))
     # ``vault`` is normally the corpus directory; the frontmatter-bearing
-    # note-type templates the generator renders live one level up, beside it
-    # (``vault / "_templates"`` covers a caller that passes the vault root).
+    # note-type templates the generator renders live one level up, beside it.
     template_dirs = (
         (note_templates_dir,)
         if note_templates_dir is not None
-        else (vault.parent / "_templates", vault / "_templates")
+        else (vault / "_templates", vault.parent / "_templates")
     )
     required = _resolve_required_frontmatter(
         required_frontmatter=required_frontmatter,
