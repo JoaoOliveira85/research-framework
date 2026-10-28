@@ -1,5 +1,9 @@
 # Graph — golden-vault
 
+## Duplicate Concept
+
+## Duplicate Tool
+
 ## Event Sourcing
 
 - [[idempotent_consumer|Idempotent Consumer]]
@@ -8,9 +12,12 @@
 
 ## Glossary
 
+- [[02 - Tools/duplicate|Duplicate Tool]]
+
 ## Idempotent Consumer
 
 - [[event_sourcing|Event Sourcing]]
+- [[outbox_pattern|Transactional Outbox Pattern]]
 
 ## Kafka Basics
 

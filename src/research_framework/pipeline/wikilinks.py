@@ -116,6 +116,11 @@ def _resolve_titlecase_stem(target: str, stems: set[str]) -> str | None:
     return None
 
 
+#: Public name for other modules (the Layer-1 indexer) that resolve links the
+#: way this module does.
+resolve_stem = _resolve_titlecase_stem
+
+
 def _normalize_body_wikilinks(body: str, stems: set[str]) -> tuple[str, int]:
     """Rewrite case-mismatched wikilinks in note BODY text.
 

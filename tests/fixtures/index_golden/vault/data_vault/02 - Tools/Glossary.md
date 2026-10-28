@@ -8,4 +8,4 @@ related: []
 
 # Glossary
 
-Terms only.
+Terms only. The tool lives at [[02 - tools/DUPLICATE]], spelt with a different case.

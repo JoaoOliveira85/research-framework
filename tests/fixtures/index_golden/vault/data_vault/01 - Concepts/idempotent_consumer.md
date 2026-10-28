@@ -8,4 +8,5 @@ related: []
 
 # Idempotent Consumer
 
-Typically paired with [[event_sourcing]].
+Typically paired with [[event_sourcing]] and the [[Transactional Outbox Pattern]],
+which is a title and not a spelling of the file name.

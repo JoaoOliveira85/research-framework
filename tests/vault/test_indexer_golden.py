@@ -84,19 +84,19 @@ def test_every_layer1_link_resolves_with_the_validators_resolver(vault: Path) ->
 
 
 def test_inbound_counts_agree_with_the_graph(vault: Path) -> None:
-    """Links written by stem, title or alias all count toward the note's title."""
-    assert (
-        inbound_link_counts(vault)
-        == {
-            "Event Sourcing": 2,  # idempotent_consumer + the note without front matter
-            "Glossary": 1,  # kafka_basics
-            "Idempotent Consumer": 1,  # event_sourcing, by title
-            "Kafka Basics": 2,  # event_sourcing (related) + outbox_pattern
-            "Lonely Note": 0,
-            "Transactional Outbox Pattern": 1,  # event_sourcing, as [[outbox_pattern|outbox]]
-            "scratch_no_frontmatter": 0,
-        }
-    )
+    """Links written by stem, title, alias or path all count toward the title."""
+    assert inbound_link_counts(vault) == {
+        "Duplicate Concept": 0,
+        "Duplicate Tool": 1,  # glossary, by a path link in another case
+        "Event Sourcing": 2,  # idempotent_consumer + the note without front matter
+        "Glossary": 1,  # kafka_basics
+        "Idempotent Consumer": 1,  # event_sourcing, by title
+        "Kafka Basics": 2,  # event_sourcing (related) + outbox_pattern
+        "Lonely Note": 0,
+        # event_sourcing as [[outbox_pattern|outbox]], idempotent_consumer by title
+        "Transactional Outbox Pattern": 2,
+        "scratch_no_frontmatter": 0,
+    }
 
 
 def test_notes_sharing_a_stem_link_by_path(tmp_path: Path) -> None:
@@ -114,13 +114,25 @@ def test_notes_sharing_a_stem_link_by_path(tmp_path: Path) -> None:
 
 
 def test_tooling_markdown_without_front_matter_is_not_indexed(tmp_path: Path) -> None:
-    """With the corpus at the vault root, only real notes are listed."""
+    """Markdown with no front matter is a note unless it is tooling.
+
+    The ``_`` / ``.`` / ``raw_data`` / ``*.spec.md`` exclusions hold in every
+    corpus; the root documents only matter with the corpus at the vault root.
+    """
     (tmp_path / "_pipeline").mkdir()
     (tmp_path / "_pipeline" / "spec-parse.json").write_text(
         '{"vault_corpus_dir": "."}', encoding="utf-8"
     )
-    (tmp_path / "_pipeline" / "research-plan.md").write_text("# Plan\n", "utf-8")
-    (tmp_path / "AGENTS.md").write_text("# Agents\n", "utf-8")
+    for tooling in (
+        "_pipeline/research-plan.md",
+        "AGENTS.md",
+        "raw_data/scraped-page.md",
+        "my-vault.spec.md",
+        ".obsidian/workspace.md",
+    ):
+        path = tmp_path / tooling
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# Tooling\n", "utf-8")
     (tmp_path / "c").mkdir()
     (tmp_path / "c" / "bare.md").write_text("# Bare\n", "utf-8")
 
@@ -128,5 +140,39 @@ def test_tooling_markdown_without_front_matter_is_not_indexed(tmp_path: Path) ->
 
     index = (tmp_path / "_index.md").read_text(encoding="utf-8")
     assert "[[bare]]" in index
-    assert "research-plan" not in index
-    assert "AGENTS" not in index
+    for name in ("research-plan", "AGENTS", "scraped-page", "my-vault", "workspace"):
+        assert name not in index
+
+
+def test_underscore_folders_without_front_matter_are_skipped_in_any_corpus(
+    tmp_path: Path,
+) -> None:
+    """Not only a root corpus: ``data_vault/_drafts/x.md`` is not a note."""
+    corpus = tmp_path / "data_vault"
+    (corpus / "_drafts").mkdir(parents=True)
+    (corpus / "_drafts" / "scratch.md").write_text("# Scratch\n", "utf-8")
+    (corpus / "c").mkdir()
+    (corpus / "c" / "bare.md").write_text("# Bare\n", "utf-8")
+
+    rebuild_all(tmp_path)
+
+    index = (corpus / "_index.md").read_text(encoding="utf-8")
+    assert "[[bare]]" in index
+    assert "scratch" not in index
+
+
+def test_empty_title_falls_back_to_the_stem(tmp_path: Path) -> None:
+    """``title: ""`` (or a bare ``title:``) must not render ``[[stem|]]``."""
+    notes = tmp_path / "data_vault" / "c"
+    notes.mkdir(parents=True)
+    (notes / "blank_title.md").write_text('---\ntitle: ""\n---\n\nx\n', "utf-8")
+    (notes / "null_title.md").write_text("---\ntitle:\n---\n\nx\n", "utf-8")
+
+    rebuild_all(tmp_path)
+
+    for name in ("_index.md", "_concepts.md", "_graph.md"):
+        text = (tmp_path / "data_vault" / name).read_text(encoding="utf-8")
+        assert "|]]" not in text and "None" not in text
+    index = (tmp_path / "data_vault" / "_index.md").read_text(encoding="utf-8")
+    assert "- [[blank_title]]" in index
+    assert "- [[null_title]]" in index

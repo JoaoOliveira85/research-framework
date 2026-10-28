@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from research_framework.pipeline.wikilinks import _resolve_titlecase_stem
+from research_framework.pipeline.wikilinks import resolve_stem
 from research_framework.vault.corpus import corpus_dir
 from research_framework.vault.frontmatter import (
     FrontmatterParseError,
@@ -60,11 +60,14 @@ def _is_note_path(data_vault: Path, path: Path) -> bool:
 def _is_unfielded_non_note(rel: Path) -> bool:
     """Whether a front-matter-less file is tooling rather than a note.
 
-    Only consulted for files with no front matter: with the corpus at the vault
-    root, ``_pipeline/`` reports, hidden folders and the framework's own root
-    documents are all markdown without front matter and must not be indexed.
+    Only consulted for files with no front matter. Anything under a ``_`` or
+    ``.`` folder, the scaffolded ``raw_data/`` sources and ``*.spec.md`` specs
+    are never notes, in any corpus. With the corpus at the vault root the
+    framework's own root documents join them.
     """
-    if any(p.startswith(("_", ".")) for p in rel.parts):
+    if any(p.startswith(("_", ".")) or p == "raw_data" for p in rel.parts):
+        return True
+    if rel.name.endswith(".spec.md"):
         return True
     return len(rel.parts) == 1 and rel.name in _ROOT_DOCS
 
@@ -99,7 +102,8 @@ def _load_notes(data_vault: Path) -> list[_Note]:
         rel_path = path.relative_to(data_vault)
         if not fm and _is_unfielded_non_note(rel_path):
             continue
-        title = str(fm.get("title", path.stem))
+        # A blank or null ``title:`` is no title: fall back to the stem.
+        title = str(fm.get("title") or "").strip() or path.stem
         notes.append(
             _Note(
                 rel=rel_path.with_suffix("").as_posix(),
@@ -129,7 +133,7 @@ class _Resolver:
 
     Follows the validator's lookup (``scripts/validate_vault.py::
     _related_target_resolves``): relative path, then file stem — case-insensitive,
-    with space to ``_``/``-`` variants via ``wikilinks._resolve_titlecase_stem`` —
+    with space to ``_``/``-`` variants via ``wikilinks.resolve_stem`` —
     and finally the note title, because notes also link by title.
     """
 
@@ -141,6 +145,7 @@ class _Resolver:
             self._by_path.setdefault(n.rel.lower(), n)
             self._by_stem.setdefault(n.stem.lower(), n)
             self._by_title.setdefault(n.title.strip().lower(), n)
+        self._stems = set(self._by_stem)  # built once, not once per link
 
     def resolve(self, raw: str) -> _Note | None:
         target = raw.split("|", 1)[0].split("#", 1)[0].strip()
@@ -149,7 +154,7 @@ class _Resolver:
         lower = target.lower()
         if lower in self._by_path:
             return self._by_path[lower]
-        stem = _resolve_titlecase_stem(lower.rsplit("/", 1)[-1], set(self._by_stem))
+        stem = resolve_stem(lower.rsplit("/", 1)[-1], self._stems)
         if stem is not None:
             return self._by_stem[stem]
         return self._by_title.get(lower)
