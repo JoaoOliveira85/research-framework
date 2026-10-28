@@ -240,6 +240,26 @@ def test_notice_follows_a_renamed_research_command(tmp_path: Path) -> None:
     assert MARKER in (commands / "dig.md").read_text(encoding="utf-8")
 
 
+def test_notice_follows_the_spec_file_over_a_stale_cache(tmp_path: Path) -> None:
+    """The stem is read through ``load_parsed_spec`` (#9): a cache that no
+    longer matches the spec file is re-parsed, and nothing is written back."""
+    vault = _notice_vault(tmp_path)
+    commands = vault / ".claude" / "commands"
+    (commands / "dig.md").write_text("# /dig\n", encoding="utf-8")
+    (vault / "_pipeline").mkdir()
+    cache = vault / "_pipeline" / "spec-parse.json"
+    stale = json.dumps({"settings": {"commands": {"research": "dig"}}})
+    cache.write_text(stale, encoding="utf-8")  # unstamped: the spec dropped it
+    (vault / "research.spec.md").write_text(
+        '---\nname: "V"\nowner: "o"\ntopic: "A topic"\n---\n', encoding="utf-8"
+    )
+
+    changed = {p.name for p in sync_archived_notice(vault)}
+
+    assert "research.md" in changed and "dig.md" not in changed
+    assert cache.read_text(encoding="utf-8") == stale
+
+
 def test_notice_only_still_validates_the_vault(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

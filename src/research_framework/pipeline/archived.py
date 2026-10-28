@@ -4,14 +4,14 @@ Everything that decides "is this vault frozen?" or says so to a human or an
 agent lives here, so the CLI verbs, the orchestrator, the pipeline runner,
 ``./vault status`` and the rendered agent instructions cannot drift apart.
 
-This module is a leaf on purpose: it imports nothing from the pipeline, so the
+This module is a leaf on purpose: it imports nothing from the pipeline (only
+``spec.parsed``, lazily, for the ``/research`` command's name), so the
 read-only ``status`` verb and the template renderer can use it without pulling
 in the orchestrator.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from pathlib import Path
@@ -157,15 +157,16 @@ def apply_archived_notice(text: str, archived: bool) -> str:
 def _research_command_stem(vault_dir: Path) -> str:
     """Destination stem of the ``/research`` command (``commands.research``).
 
-    Read from ``_pipeline/spec-parse.json`` when it exists; the notice-only
-    path must not require it, so any problem falls back to the default.
+    Read from the parsed spec through
+    :func:`~research_framework.spec.parsed.load_parsed_spec` (#9), leniently
+    and without writing the cache; the notice-only path must not require a
+    parsed spec, so any problem falls back to the default.
     """
+    from ..spec.parsed import ParsedSpecError, load_parsed_spec
+
     try:
-        parsed = json.loads(
-            (vault_dir / "_pipeline" / "spec-parse.json").read_text(encoding="utf-8")
-        )
-        stem = parsed["settings"]["commands"]["research"]
-    except (OSError, ValueError, KeyError, TypeError):
+        stem = load_parsed_spec(vault_dir)["settings"]["commands"]["research"]
+    except (ParsedSpecError, KeyError, TypeError):
         return "research"
     return stem if isinstance(stem, str) and stem else "research"
 
