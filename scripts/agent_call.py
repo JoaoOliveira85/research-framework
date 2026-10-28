@@ -698,7 +698,18 @@ def _resolve_executor(settings: dict[str, Any], stage: str) -> dict[str, Any]:
         "default_executor", default.get("args") if isinstance(default, dict) else None
     )
     stage_args = _coerce_args(f"stages.{stage}", stage_cfg.get("args"))
-    merged["args"] = default_args + stage_args
+    # ``inherit_args: false`` makes the stage's args the whole list. Additive
+    # args cannot take a permission away: a read-only stage (``ask``, issue
+    # #15) cannot drop ``bypassPermissions`` or ``--force`` by appending, and
+    # codex refuses a second ``--sandbox`` outright.
+    inherit = stage_cfg.get("inherit_args", True)
+    if not isinstance(inherit, bool):
+        raise ValueError(
+            f"stage '{stage}': stages.{stage}.inherit_args must be true or false, "
+            f"got {inherit!r}"
+        )
+    merged.pop("inherit_args", None)
+    merged["args"] = (default_args if inherit else []) + stage_args
     return merged
 
 
