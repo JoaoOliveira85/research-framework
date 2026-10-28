@@ -600,9 +600,11 @@ _DEFAULT_MODEL_TIERS: dict[str, str] = {
     "normal": "claude-sonnet-5",
     "flagship": "claude-opus-5",
 }
-# The retired complexity labels: the settings loader warns about them and
-# they select no model (one-release deprecation).
-_LEGACY_COMPLEXITY_TIERS = frozenset({"standard", "expert"})
+# The 1.0.1 complexity-label vocabulary. For one release a value from it is
+# the old label (selects no model; the settings loader warns) when the vault
+# has no `tiers:` block, when it sits beside `model:`, or when `tiers:` does
+# not define it — see `_effective_tier`.
+_OLD_COMPLEXITY_LABELS = frozenset({"basic", "standard", "expert"})
 
 
 def _load_settings(vault_dir: Path) -> dict[str, Any]:
@@ -677,9 +679,9 @@ def _resolve_executor(settings: dict[str, Any], stage: str) -> dict[str, Any]:
         )
     merged.update({k: v for k, v in stage_cfg.items() if v is not None and k != "args"})
     if stage_cfg.get("model") is None:
-        tier_model = _tier_model(settings, stage, stage_cfg.get("tier"))
-        if tier_model is not None:
-            merged["model"] = tier_model
+        tier = _effective_tier(settings, stage, stage_cfg)
+        if tier is not None:
+            merged["model"] = _tiers_map(settings)[tier]
 
     # Args: additive. Validate each list up front so errors point at the
     # actual offending source (default vs stage) rather than a merged blob.
@@ -709,25 +711,35 @@ def _tiers_map(settings: dict[str, Any]) -> dict[str, str]:
     return tiers
 
 
-def _tier_model(settings: dict[str, Any], stage: str, tier: Any) -> str | None:
-    """Resolve a stage's ``tier`` to a model id through ``tiers:``.
+def _effective_tier(
+    settings: dict[str, Any], stage: str, stage_cfg: dict[str, Any]
+) -> str | None:
+    """The stage's model tier, or ``None`` when it names none or names the
+    1.0.1 complexity label (issue #13).
 
-    ``None`` when the stage names no tier, or names a retired complexity label
-    the profile does not define. An unknown tier raises, naming the stage and
-    the known tiers — the settings loader refuses the same file at load.
+    Mirrors ``research_framework.pipeline.settings._parse_stage_tier``, which
+    warns about the legacy readings and refuses the conflicts at load; a test
+    pins the two to the same model on every case. An unknown tier raises,
+    naming the stage and the known tiers.
     """
+    tier = stage_cfg.get("tier")
     if tier is None:
         return None
-    tiers = _tiers_map(settings)
     name = str(tier)
-    if name in tiers:
-        return tiers[name]
-    if name in _LEGACY_COMPLEXITY_TIERS:
+    tiers = _tiers_map(settings)
+    if not isinstance(settings.get("tiers"), dict):
+        if name in _OLD_COMPLEXITY_LABELS or name in tiers:
+            return None
+    elif name in _OLD_COMPLEXITY_LABELS and (
+        stage_cfg.get("model") is not None or name not in tiers
+    ):
         return None
-    raise ValueError(
-        f"Unknown tier {name!r} for stage {stage!r}; "
-        f"known tiers (from tiers:): {', '.join(sorted(tiers))}"
-    )
+    if name not in tiers:
+        raise ValueError(
+            f"Unknown tier {name!r} for stage {stage!r}; "
+            f"known tiers (from tiers:): {', '.join(sorted(tiers))}"
+        )
+    return name
 
 
 # ---------------------------------------------------------------------------
@@ -828,7 +840,7 @@ def _python_cmd(executor: dict[str, Any]) -> list[str]:
 
 
 # Spec 052: recommended cursor tier→model map. A stage's ``tier`` resolves
-# through the vault's own ``tiers:`` block (``_tier_model``), so this is the
+# through the vault's own ``tiers:`` block (``_effective_tier``), so this is the
 # documented recommendation that ``settings.cursor.yaml::tiers`` carries, not a
 # runtime resolver. Model ids verified via ``cursor-agent --list-models``
 # (2026-06-08).
@@ -2645,17 +2657,14 @@ def _cycle_from_sidecar_path(cost_sidecar: Path) -> int:
 def _stage_tier(settings: dict[str, Any], stage: str) -> str:
     """The stage's model tier for the cost record, or ``""`` when it names none.
 
-    A retired complexity label (issue #13) selects no model, so it is not
-    recorded as the call's tier either.
+    A value read as the 1.0.1 complexity label (issue #13) selects no model,
+    so it is not recorded as the call's tier either.
     """
     stages = settings.get("stages") or {}
     stage_cfg = stages.get(stage) if isinstance(stages, dict) else None
-    if not isinstance(stage_cfg, dict) or not stage_cfg.get("tier"):
+    if not isinstance(stage_cfg, dict):
         return ""
-    tier = str(stage_cfg["tier"])
-    if tier in _LEGACY_COMPLEXITY_TIERS and tier not in _tiers_map(settings):
-        return ""
-    return tier
+    return _effective_tier(settings, stage, stage_cfg) or ""
 
 
 def _run_http(
