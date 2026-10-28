@@ -24,10 +24,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from .schema import SpecValidationError
+
+_LOG = logging.getLogger(__name__)
 
 #: Version of the ``spec-parse.json`` producer. **Bump it whenever the parsed
 #: output changes in a way a cache written earlier would be wrong about** —
@@ -159,6 +162,8 @@ def load_parsed_spec(vault: Path, *, write_cache: bool = True) -> dict[str, Any]
     rebuild from (a vault built straight from a parsed dict, or one whose spec
     was removed): the cache is returned as it is.
 
+    A failure to write the cache back (a read-only vault) is logged, not raised.
+
     Raises :class:`ParsedSpecError` if there is neither a usable cache nor a
     spec file, or the spec file fails to parse. A spec that fails to parse is
     an error even when a stale cache exists — serving the stale cache is the
@@ -192,5 +197,8 @@ def load_parsed_spec(vault: Path, *, write_cache: bool = True) -> dict[str, Any]
 
     doc = stamp_parsed_spec(spec.to_dict(), spec_file, vault)
     if write_cache:
-        write_parsed_spec(vault, doc)
+        try:
+            write_parsed_spec(vault, doc)
+        except OSError as exc:  # read-only vault: serve the fresh parse anyway
+            _LOG.warning("could not refresh %s: %s", SPEC_PARSE_RELPATH, exc)
     return doc

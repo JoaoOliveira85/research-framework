@@ -23,6 +23,7 @@ from research_framework.pipeline.digest.scope import (
     enumerate_cycles,
     parse_iso_date,
 )
+from research_framework.spec.parsed import stamp_parsed_spec, write_parsed_spec
 
 from .digest_helpers import (
     FIXTURE_RANGE,
@@ -243,8 +244,15 @@ def test_notes_are_read_from_the_corpus_folder_the_vault_declares(
     """
     expected = render_fixture(digest_vault)
     (digest_vault / "data_vault").rename(digest_vault / "notes")
-    (digest_vault / "_pipeline" / "spec-parse.json").write_text(
-        '{"vault_corpus_dir": "notes"}', encoding="utf-8"
+    # The cache must be stamped against the vault's spec, or the loader
+    # (correctly) rebuilds it from that spec instead of trusting the hand edit.
+    write_parsed_spec(
+        digest_vault,
+        stamp_parsed_spec(
+            {"vault_corpus_dir": "notes"},
+            digest_vault / "research.spec.md",
+            digest_vault,
+        ),
     )
 
     markdown = render_fixture(digest_vault)

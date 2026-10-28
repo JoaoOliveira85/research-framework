@@ -12,6 +12,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from .. import __version__ as _FRAMEWORK_VERSION
 from .._assets import asset_path, default_settings_path
+from ..spec.parsed import stamp_parsed_spec, write_parsed_spec
 from ..spec.schema import NoteTypeConfig, SpecConfig
 
 
@@ -307,11 +308,6 @@ def scaffold(
         json.dumps(coverage_data, indent=2) + "\n", encoding="utf-8"
     )
 
-    # Write spec-parse.json
-    (pipeline / "spec-parse.json").write_text(
-        json.dumps(spec.to_dict(), indent=2, default=str) + "\n", encoding="utf-8"
-    )
-
     # .tmpl-versions.json — one per directory containing non-markdown scaffold
     # files. Each maps filename → template_version (integer). Written here so
     # the vault migrator (spec 013) can detect and upgrade generated artefacts.
@@ -362,6 +358,15 @@ def scaffold(
         dst = vault_dir / "research.spec.md"
         if spec_source.resolve() != dst.resolve():
             shutil.copy2(spec_source, dst)
+
+    # spec-parse.json is the cache of the spec just parsed. Stamp it with the
+    # hash of the vault's copy of that spec, so the next load can tell whether
+    # the spec changed; without a spec_source there is no file to stamp against.
+    spec_doc = spec.to_dict()
+    vault_spec = vault_dir / "research.spec.md"
+    if spec_source is not None and vault_spec.exists():
+        spec_doc = stamp_parsed_spec(spec_doc, vault_spec, vault_dir)
+    write_parsed_spec(vault_dir, spec_doc)
 
     settings_src = (
         settings_source if settings_source is not None else default_settings_path()

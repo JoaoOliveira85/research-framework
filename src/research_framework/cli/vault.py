@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
+from ..spec.parsed import (
+    ParsedSpecError,
+    load_parsed_spec,
+    stamp_parsed_spec,
+    write_parsed_spec,
+)
 from ..spec.schema import SpecValidationError
 from ..spec.simple import load as load_spec
 
@@ -117,11 +122,8 @@ def _cmd_parse_spec(args: argparse.Namespace) -> int:
         print(f"error: spec failed validation:\n  {exc}", file=sys.stderr)
         return 2
 
-    out = vault_root / "_pipeline" / "spec-parse.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(
-        json.dumps(spec.to_dict(), indent=2, default=str) + "\n",
-        encoding="utf-8",
+    out = write_parsed_spec(
+        vault_root, stamp_parsed_spec(spec.to_dict(), spec_path, vault_root)
     )
     print(f"wrote {out}")
     print(f"  name: {spec.name}")
@@ -133,8 +135,6 @@ def _cmd_parse_spec(args: argparse.Namespace) -> int:
 
 def _cmd_regenerate_agents(args: argparse.Namespace) -> int:
     """Overwrite agent-definition files in a vault from framework templates."""
-    import json as _json
-
     from ..agents import AGENT_NAMES, write_agents
 
     vault_root = args.vault_path.resolve()
@@ -142,15 +142,10 @@ def _cmd_regenerate_agents(args: argparse.Namespace) -> int:
         print(f"error: not a directory: {vault_root}", file=sys.stderr)
         return 2
 
-    spec_parse = vault_root / "_pipeline" / "spec-parse.json"
-    if not spec_parse.exists():
-        print(f"error: spec-parse.json not found: {spec_parse}", file=sys.stderr)
-        return 2
-
     try:
-        spec_dict = _json.loads(spec_parse.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        print(f"error: could not read spec-parse.json: {exc}", file=sys.stderr)
+        spec_dict = load_parsed_spec(vault_root)
+    except ParsedSpecError as exc:
+        print(f"error: spec-parse.json unavailable: {exc}", file=sys.stderr)
         return 2
 
     # Validate requested agent names.

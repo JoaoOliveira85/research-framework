@@ -216,5 +216,8 @@
   "code_source_url_patterns": [],
   "research_mode": "bootstrap",
   "vault_corpus_dir": "data_vault",
-  "processors": {}
+  "processors": {},
+  "spec_sha256": "8bfdcb61329c6f5655633953674e0b468e38e6f3c76026e2da98ce225c05627e",
+  "parser_version": 1,
+  "spec_file": "research.spec.md"
 }
