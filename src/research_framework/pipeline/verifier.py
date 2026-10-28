@@ -15,6 +15,7 @@ from typing import Any
 
 import yaml
 
+from research_framework._assets import skill_instructions
 from research_framework.pipeline.process_tree import (
     popen_session,
     terminate_process_tree,
@@ -454,23 +455,23 @@ def _extract_json_blob(text: str) -> dict | None:
 
 
 def _build_verifier_prompt(note_content: str) -> str:
-    """Wrap the note in explicit verifier instructions.
+    """Wrap the note in the verifier's full instructions.
 
-    On Claude Code, agents auto-load ``.agents/skills/verifier/SKILL.md``
-    and produce JSON-compliant output naturally. Codex (and other
-    runtimes that don't auto-load skills) need the contract baked into
-    the prompt or they default to narrative responses that the framework
-    can't parse \u2014 the 0.2.30 silent-fail mode.
-
-    The wrapper is intentionally short and POINTS to the skill file
-    rather than restating its rules, so the source of truth stays in
-    ``SKILL.md``. The one thing we DO restate inline is the output
-    schema, because that's the contract the framework parses on.
+    The prompt is self-contained (#12): it carries the verifier skill's
+    rules, read from the package by
+    :func:`research_framework._assets.skill_instructions`, instead of
+    pointing the agent at a skill file. A generated vault holds no skill
+    files and at least one supported runtime never loads them, so a pointer
+    left the agent with the schema alone. The output schema is restated
+    after the rules because it is the contract the framework parses on.
     """
     return (
         "# Verifier task\n\n"
-        "You are the verifier. Apply the rules in "
-        "`.agents/skills/verifier/SKILL.md` to the note below.\n\n"
+        "You are the verifier. Apply the rules below to the note under "
+        "review.\n\n"
+        "## Verifier rules\n\n"
+        f"{skill_instructions('verifier')}\n\n"
+        "---\n\n"
         "Your response MUST be a single JSON object matching this schema, "
         "with no surrounding narrative:\n\n"
         "```json\n"
@@ -523,9 +524,8 @@ def _call_verifier(
 ) -> VerifierVerdict:
     """Invoke agent_call.py for a single note and return a VerifierVerdict.
 
-    The prompt is built via :func:`_build_verifier_prompt` so runtimes that
-    don't auto-load ``SKILL.md`` (codex) still see the JSON-output contract
-    inline. The agent's response is parsed via :func:`_extract_json_blob`,
+    The prompt is built via :func:`_build_verifier_prompt`, so every runtime
+    sees the verifier rules and the JSON-output contract inline. The agent's response is parsed via :func:`_extract_json_blob`,
     which tolerates code-fenced and narrative-wrapped JSON.
 
     ``--cost-sidecar`` is not optional (issue #234). Without it this stage —

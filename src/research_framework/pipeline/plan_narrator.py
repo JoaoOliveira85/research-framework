@@ -11,6 +11,8 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from research_framework._assets import skill_instructions
+
 from ..spec.parser import parse
 from ..spec.schema import SpecValidationError
 from .research_plan import ResearchPlan
@@ -67,20 +69,11 @@ def _bootstrap_scripts_agent_call(vault_dir: Path | None = None):
 
 
 def _skill_instructions() -> str:
-    here = Path(__file__).resolve().parent
-    repo_root = here.parent.parent.parent
-    candidates = [
-        here.parent
-        / "_data"
-        / ".agents"
-        / "skills"
-        / "research-plan-narrator"
-        / "SKILL.md",
-        repo_root / ".agents" / "skills" / "research-plan-narrator" / "SKILL.md",
-    ]
-    for path in candidates:
-        if path.is_file():
-            return path.read_text(encoding="utf-8")
+    """The narrator's instructions, read from the package — never a vault (#12)."""
+    try:
+        return skill_instructions("research-plan-narrator")
+    except FileNotFoundError:
+        pass
     return (
         "You are the research-plan narrator. Output at most 200 words of plain "
         "Markdown prose (no headings). Explain why the current cycle focus and "

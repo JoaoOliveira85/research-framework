@@ -96,6 +96,28 @@ def default_settings_path() -> Path:
     return asset_path("settings.yaml")
 
 
+def skill_instructions(name: str) -> str:
+    """Return the instructions of the packaged ``.agents/skills/<name>/SKILL.md``.
+
+    Stage prompts inline this text so a rendered prompt is self-contained: an
+    agent never has to find a skill file on its own, which a runtime that does
+    not load skill files cannot do, and a generated vault holds none (#12).
+    The file is read from the package (or the source tree in dev mode) and
+    never from a vault, so a ``SKILL.md`` planted in a vault changes nothing.
+    The YAML frontmatter is metadata about the skill, not instructions, and is
+    dropped.
+
+    Raises :class:`FileNotFoundError` when the package carries no such skill.
+    """
+    from research_framework.vault.frontmatter import split_frontmatter
+
+    path = asset_path(".agents") / "skills" / name / "SKILL.md"
+    text = path.read_text(encoding="utf-8")
+    split = split_frontmatter(text)
+    body = split[1] if split is not None else text
+    return body.strip()
+
+
 # Legacy alias map retained for a single purpose: producing a helpful error
 # message when someone passes ``--settings claude`` or ``--settings codex``
 # from memory or from old docs. Resolution itself is filepath-only now —

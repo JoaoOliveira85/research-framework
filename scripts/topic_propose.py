@@ -290,8 +290,18 @@ def render_prompt(
     max_proposals: int,
     max_degree: int,
 ) -> str:
+    # The instructions travel with the prompt, read from the package (#12): a
+    # vault holds no skill files and not every runtime would load one.
+    from research_framework._assets import skill_instructions
+
     lines: list[str] = []
-    lines.append(f"You are running the 'topic-propose' skill on the {spec_name} vault.")
+    lines.append(f"You are the topic proposer for the {spec_name} vault.")
+    lines.append("")
+    lines.append(skill_instructions("topic-propose"))
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    lines.append("The sections below are your inputs for this cycle.")
     lines.append("")
     lines.append(f"Domain: {domain or '(unset)'}")
     lines.append("")

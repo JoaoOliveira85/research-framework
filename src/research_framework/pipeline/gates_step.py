@@ -334,7 +334,8 @@ def SG003_topic_abstraction_check(
             ),
             correction_hint=(
                 f"Topics name internal artifacts (prefixes: {prefix_part}). "
-                "Replace with engineering-concept titles per scout SKILL Step 0."
+                "Replace them with engineering-concept titles whose "
+                "proposed_filename starts with no forbidden prefix."
             ),
         )
     if pct > warn_pct:
