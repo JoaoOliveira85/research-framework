@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -22,6 +23,9 @@ TEMPLATE_REGISTRY = "CHANGELOG.md"
 """The template version registry, ``<vault>/_templates/CHANGELOG.md``."""
 
 _TABLE_HEADER = "| Template | Version | Last Changed | Notes |"
+_TABLE_RULE = "|----------|---------|-------------|-------|"
+PREVIOUS_DIR = ".previous"
+"""Under ``_templates/``: the content a re-render last replaced, one copy each."""
 
 
 def _today() -> str:
@@ -61,7 +65,7 @@ def _render_template_changelog(spec: SpecConfig) -> str:
         "## Current Versions",
         "",
         _TABLE_HEADER,
-        "|----------|---------|-------------|-------|",
+        _TABLE_RULE,
     ]
     for nt in spec.note_types:
         lines.append(
@@ -106,7 +110,10 @@ def _merge_template_changelog(spec: SpecConfig, existing: str) -> str:
     try:
         header = next(i for i, ln in enumerate(lines) if ln.strip() == _TABLE_HEADER)
     except StopIteration:
-        return _render_template_changelog(spec)
+        # An operator-reshaped registry is kept as it is; the table is added
+        # beside their text, never in place of it.
+        lines += ["", "## Current Versions", "", _TABLE_HEADER, _TABLE_RULE]
+        header = len(lines) - 2
     first = header + 2  # skip the header and its separator
     last = first - 1
     while last + 1 < len(lines) and lines[last + 1].lstrip().startswith("|"):
@@ -120,8 +127,8 @@ def _merge_template_changelog(spec: SpecConfig, existing: str) -> str:
         version = nt.template_version
         if key in rows:
             previous = _row(rows[key])[1]
-            if previous == version:
-                continue
+            if previous == version or _is_newer(previous, version):
+                continue  # unchanged, or bumped by hand ahead of the spec
             lines[rows[key]] = (
                 f"| {key} | {version} | {today} | Version {previous} to {version} |"
             )
@@ -157,20 +164,32 @@ def _merge_template_changelog(spec: SpecConfig, existing: str) -> str:
     return re.sub(r"(?m)^updated: .*$", f"updated: {today}", merged, count=1)
 
 
-def _write_if_changed(path: Path, text: str) -> bool:
-    """Write *text* unless the file already holds it. True when written."""
-    try:
-        if path.read_text(encoding="utf-8") == text:
-            return False
-    except OSError:
-        pass
-    path.write_text(text, encoding="utf-8")
-    return True
+def _version_key(version: str) -> tuple[int, ...] | None:
+    """``1.2.3`` as a comparable tuple, padded to three parts; None if not numeric."""
+    if not re.fullmatch(r"\d+(\.\d+)*", version):
+        return None
+    parts = [int(part) for part in version.split(".")]
+    return tuple(parts + [0] * (3 - len(parts)))
+
+
+def _is_newer(candidate: str, than: str) -> bool:
+    a, b = _version_key(candidate), _version_key(than)
+    return a is not None and b is not None and a > b
+
+
+@dataclass
+class RenderResult:
+    """What :func:`render_note_type_templates` changed."""
+
+    written: list[Path] = field(default_factory=list)
+    """Every file whose content changed (new or re-rendered)."""
+    overwritten: list[tuple[Path, Path]] = field(default_factory=list)
+    """``(template, saved_copy)`` for a template that replaced different content."""
 
 
 def render_note_type_templates(
     spec: SpecConfig, vault_dir: Path, templates_dir: Path | None = None
-) -> list[Path]:
+) -> RenderResult:
     """Render ``<vault>/_templates/<type>.md`` plus the version registry.
 
     The single renderer for note templates. They are framework-owned: this runs
@@ -178,30 +197,49 @@ def render_note_type_templates(
     operator edit, so a section added to the spec reaches a vault scaffolded
     earlier. Files that already hold the rendered text are left untouched.
 
-    Returns the paths actually written.
+    The vault's ``.gitignore`` excludes ``_templates/``, so an overwrite could
+    not be recovered from history. Before replacing a template with different
+    bytes the old bytes go to ``_templates/.previous/<name>`` — one copy per
+    template, replaced each time. Bytes are compared, never decoded, so a file
+    that is not UTF-8 is overwritten and saved like any other.
     """
     env = _env(templates_dir or _templates_src())
     out = vault_dir / "_templates"
     out.mkdir(parents=True, exist_ok=True)
     note_type_tpl = env.get_template("note-type.md.j2")
-    written: list[Path] = []
+    result = RenderResult()
     for nt in spec.note_types:
         path = out / f"{nt.name}.md"
-        if _write_if_changed(path, note_type_tpl.render(spec=spec, nt=nt)):
-            written.append(path)
+        new = note_type_tpl.render(spec=spec, nt=nt).encode("utf-8")
+        try:
+            old: bytes | None = path.read_bytes()
+        except FileNotFoundError:
+            old = None
+        if old == new:
+            continue
+        if old is not None:
+            saved = out / PREVIOUS_DIR / path.name
+            saved.parent.mkdir(exist_ok=True)
+            saved.write_bytes(old)
+            result.overwritten.append((path, saved))
+        path.write_bytes(new)
+        result.written.append(path)
     registry = out / TEMPLATE_REGISTRY
     try:
-        existing = registry.read_text(encoding="utf-8")
-    except OSError:
+        existing: str | None = registry.read_text(encoding="utf-8")
+    except FileNotFoundError:
         existing = None
+    except (OSError, ValueError):
+        return result  # unreadable, so not ours to rewrite: leave it as it is
     text = (
         _render_template_changelog(spec)
         if existing is None
         else _merge_template_changelog(spec, existing)
     )
-    if _write_if_changed(registry, text):
-        written.append(registry)
-    return written
+    if text != existing:
+        registry.write_text(text, encoding="utf-8")
+        result.written.append(registry)
+    return result
 
 
 def _legacy_corpus_template(nt: NoteTypeConfig) -> str:
@@ -242,7 +280,8 @@ def remove_legacy_corpus_templates(spec: SpecConfig, vault_dir: Path) -> list[st
     for nt in spec.note_types:
         path = tmpl_dir / f"{nt.name.replace(' ', '_').lower()}.md"
         try:
-            if path.read_text(encoding="utf-8") != _legacy_corpus_template(nt):
+            # Bytes, not text: anything unreadable or non-UTF-8 is not ours.
+            if path.read_bytes() != _legacy_corpus_template(nt).encode("utf-8"):
                 continue
             path.unlink()
         except OSError:

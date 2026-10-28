@@ -312,6 +312,8 @@ class TemplateRefresh:
 
     rendered: tuple[str, ...]
     removed: tuple[str, ...]
+    overwritten: tuple[tuple[str, str], ...] = ()
+    """``(template, where its previous content was saved)``, vault-relative."""
 
 
 def refresh_root_templates(vault: Path) -> TemplateRefresh | None:
@@ -337,15 +339,20 @@ def refresh_root_templates(vault: Path) -> TemplateRefresh | None:
     spec = _load_vault_spec(vault)
     if spec is None:
         return None
+
+    def rel(path: Path) -> str:
+        return path.relative_to(vault).as_posix()
+
     try:
-        rendered = render_note_type_templates(spec, vault)
+        result = render_note_type_templates(spec, vault)
         removed = remove_legacy_corpus_templates(spec, vault)
-    except OSError as exc:  # pragma: no cover - advisory
+    except Exception as exc:  # noqa: BLE001 - a Jinja or I/O error must not fail an upgrade
         _LOG.warning("could not refresh vault note templates: %s", exc)
         return None
     return TemplateRefresh(
-        rendered=tuple(p.relative_to(vault).as_posix() for p in rendered),
+        rendered=tuple(rel(p) for p in result.written),
         removed=tuple(removed),
+        overwritten=tuple((rel(p), rel(saved)) for p, saved in result.overwritten),
     )
 
 

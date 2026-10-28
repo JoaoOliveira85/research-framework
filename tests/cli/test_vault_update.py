@@ -477,6 +477,13 @@ def test_update_rerenders_root_templates_and_removes_corpus_copies(
     )
 
     assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert (
+        "[update] overwrote _templates/concept.md; "
+        "previous content saved to _templates/.previous/concept.md"
+    ) in proc.stdout
+    assert (
+        upgrade_vault / "_templates" / ".previous" / "concept.md"
+    ).read_text() == "stale\n"
     assert "type: concept" in root_tmpl.read_text(encoding="utf-8")
     assert (upgrade_vault / "_templates" / "CHANGELOG.md").is_file()
     assert not (corpus_tmpl / "concept.md").exists()

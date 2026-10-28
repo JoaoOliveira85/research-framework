@@ -334,7 +334,9 @@ RVSYNC
     # Note templates (`_templates/<type>.md`) are framework-owned: re-render them
     # from the vault's spec, record the versions in `_templates/CHANGELOG.md`, and
     # drop the corpus-level copies an older scaffold wrote (issue #20).
-    RV_UPDATE_VAULT="${VAULT_DIR}" "${VENV_PYTHON}" - <<'RVTMPL'
+    # Non-fatal: the framework is already upgraded by here, so a failed refresh
+    # must not abort the rest of the update (it is safe to re-run).
+    RV_UPDATE_VAULT="${VAULT_DIR}" "${VENV_PYTHON}" - <<'RVTMPL' || echo "[update] WARNING: note-template refresh failed; re-run ./vault update" >&2
 import os
 from pathlib import Path
 
@@ -342,6 +344,9 @@ from research_framework.pipeline import vault_update
 
 result = vault_update.refresh_root_templates(Path(os.environ["RV_UPDATE_VAULT"]))
 if result is not None:
+    # _templates/ is git-ignored: say where each overwritten file's old content went.
+    for template, saved in result.overwritten:
+        print(f"[update] overwrote {template}; previous content saved to {saved}")
     if result.rendered:
         print(f"[update] re-rendered {len(result.rendered)} note template(s): {', '.join(result.rendered)}")
     if result.removed:
