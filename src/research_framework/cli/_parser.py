@@ -7,6 +7,7 @@ from pathlib import Path
 
 from ._log_level import add_log_level_arg
 from .acceptance import _cmd_acceptance
+from .ask import _cmd_ask
 from .audit import _cmd_coverage, _cmd_validate
 from .digest import cmd_digest
 from .export import _cmd_export
@@ -675,5 +676,26 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     ex.set_defaults(func=_cmd_export)
+
+    ak = sub.add_parser(
+        "ask",
+        help=(
+            "Ask the vault one question; with --escalate, research a gap it "
+            "reports and ask again (issue #15)"
+        ),
+    )
+    ak.add_argument("--vault", type=Path, required=True, help="Vault directory")
+    ak.add_argument(
+        "--escalate",
+        action="store_true",
+        help=(
+            "If the answer reports an in-scope gap, run ONE research cycle at "
+            "that topic under the vault's budget ladder (pipeline.budget_usd, "
+            "limits.cycle_budget_usd, pipeline.max_cycles), then re-ask. "
+            "Without it, ask never starts a run."
+        ),
+    )
+    ak.add_argument("question", nargs="+", help="The question to ask the vault")
+    ak.set_defaults(func=_cmd_ask)
 
     return parser

@@ -161,8 +161,9 @@ def _cmd_cycle(args: argparse.Namespace) -> int:
 
     # Spec 073: a query that found ground the spec did not declare records it,
     # so the next person does not have to reconstruct it from a chat
-    # transcript. `ask.md` escalates through this very command, which is why
-    # the hook lives here rather than in the interactive session.
+    # transcript. `ask --escalate` (cli/ask.py, issue #15) researches a
+    # reported gap through this very function, which is why the hook lives
+    # here rather than in the interactive session.
     #
     # Best-effort by design: the research has already succeeded, and a
     # bookkeeping failure must not change this cycle's exit code.

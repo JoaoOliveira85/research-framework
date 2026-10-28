@@ -68,6 +68,7 @@ _EXPECTED_SUBCOMMANDS: tuple[str, ...] = (
     # issue #189's `export`).
     "pause",
     "export",
+    "ask",
 )
 
 

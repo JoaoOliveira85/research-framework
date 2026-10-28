@@ -936,6 +936,59 @@ def _handle_report(
 
 
 # ---------------------------------------------------------------------------
+# Ask stage (issue #15)
+#
+# ``./vault ask --escalate`` dispatches the vault's ``/ask`` command one-shot
+# through ``agent_call.py --stage ask --output-file``. The fake answers from
+# the vault the way the real agent is told to: an empty ``data_vault/`` is a
+# gap, reported on the ``VAULT-GAP:`` line; once a note exists the answer
+# cites it and reports no gap. That is what lets a test watch a gap turn into
+# a note and a re-answer.
+# ---------------------------------------------------------------------------
+
+
+_ASK_QUESTION_RE = re.compile(r"## Question\s*\n(.*?)\n## ", re.DOTALL)
+
+
+def _vault_notes(vault: Path) -> list[Path]:
+    data_vault = vault / "data_vault"
+    if not data_vault.is_dir():
+        return []
+    return sorted(
+        p
+        for p in data_vault.rglob("*.md")
+        if not p.name.startswith("_") and "_templates" not in p.parts
+    )
+
+
+def _handle_ask(
+    args: argparse.Namespace,
+    scenario: str,
+    prompt_text: str,
+) -> None:
+    del scenario
+    match = _ASK_QUESTION_RE.search(prompt_text)
+    if match is None or not match.group(1).strip():
+        raise ValueError(
+            "fake_agent: the ask prompt has no `## Question` section; the "
+            "framework substitutes $ARGUMENTS before dispatch."
+        )
+    question = match.group(1).strip()
+    notes = _vault_notes(args.vault)
+    if notes:
+        rel = notes[0].relative_to(args.vault).as_posix()
+        answer = (
+            f"Answer to {question!r}, from the vault.\n\n"
+            "Vault Sources:\n"
+            f"[1] {rel} — Accessed 2026-05-17\n"
+        )
+    else:
+        gap = json.dumps({"topic": question, "in_scope": True})
+        answer = f"The vault does not cover this.\n\nVAULT-GAP: {gap}\n"
+    _emit_stage_output(args, answer, stdout=True)
+
+
+# ---------------------------------------------------------------------------
 # Cost sidecar
 # ---------------------------------------------------------------------------
 
@@ -1087,6 +1140,7 @@ _STAGE_HANDLERS = {
     "probe_retrieval": _handle_probe_retrieval,
     "research": _handle_research,
     "report": _handle_report,
+    "ask": _handle_ask,
 }
 
 ALLOW_UNKNOWN_STAGE_ENV = "FAKE_AGENT_ALLOW_UNKNOWN_STAGE"
