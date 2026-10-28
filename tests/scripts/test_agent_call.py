@@ -233,6 +233,77 @@ class TestResolveExecutor:
             agent_call._load_settings(tmp_path)
 
 
+class TestStageTierResolution:
+    """Issue #13: `stages.<name>.tier` selects the model through `tiers:` for
+    every stage that dispatches — the loader's resolver had no production
+    caller, so before this the key never reached the executor at all."""
+
+    @staticmethod
+    def _settings(**stage_cfg: object) -> dict:
+        return {
+            "default_executor": {"runtime": "codex", "model": "gpt-default"},
+            "tiers": {"basic": "gpt-mini", "normal": "gpt-mid", "flagship": "gpt-max"},
+            "stages": {"note_writer": dict(stage_cfg)},
+        }
+
+    def test_stage_tier_selects_the_model_from_tiers(self, agent_call) -> None:
+        settings = self._settings(tier="flagship")
+        executor = agent_call._resolve_executor(settings, "note_writer")
+        assert executor["model"] == "gpt-max"
+
+    def test_absent_tiers_map_falls_back_to_the_loader_defaults(
+        self, agent_call
+    ) -> None:
+        settings = {"stages": {"scout": {"tier": "basic"}}}
+        executor = agent_call._resolve_executor(settings, "scout")
+        assert executor["model"] == "claude-haiku-4-5"
+
+    def test_per_call_model_override_wins_over_stage_tier(self, agent_call) -> None:
+        settings = agent_call._apply_stage_model_override(
+            self._settings(tier="basic"), "note_writer", "explicit-model"
+        )
+        executor = agent_call._resolve_executor(settings, "note_writer")
+        assert executor["model"] == "explicit-model"
+
+    @pytest.mark.parametrize("legacy", ["standard", "expert"])
+    def test_legacy_complexity_tier_selects_nothing(self, agent_call, legacy) -> None:
+        executor = agent_call._resolve_executor(
+            self._settings(tier=legacy), "note_writer"
+        )
+        assert executor["model"] == "gpt-default"
+
+    def test_unknown_tier_raises_naming_stage_and_known_tiers(
+        self, agent_call
+    ) -> None:
+        with pytest.raises(ValueError) as exc:
+            agent_call._resolve_executor(self._settings(tier="elite"), "note_writer")
+        assert "note_writer" in str(exc.value)
+        assert "basic, flagship, normal" in str(exc.value)
+
+    def test_cost_record_tier_is_the_stage_tier_name(self, agent_call) -> None:
+        assert agent_call._stage_tier(self._settings(tier="normal"), "note_writer") == (
+            "normal"
+        )
+
+    @pytest.mark.parametrize("cfg", [{}, {"tier": "standard"}, {"model": "x"}])
+    def test_cost_record_tier_is_empty_when_the_stage_names_none(
+        self, agent_call, cfg
+    ) -> None:
+        assert agent_call._stage_tier(self._settings(**cfg), "note_writer") == ""
+
+    def test_default_tiers_and_legacy_values_match_the_settings_loader(
+        self, agent_call
+    ) -> None:
+        """agent_call keeps its own copy (it must run without the package);
+        pin it to the loader's so the two cannot drift."""
+        from research_framework.pipeline import settings as loader
+
+        assert agent_call._DEFAULT_MODEL_TIERS == loader._DEFAULT_MODEL_TIERS
+        assert (
+            agent_call._LEGACY_COMPLEXITY_TIERS == loader._LEGACY_COMPLEXITY_TIERS
+        )
+
+
 # ---------------------------------------------------------------------------
 # Per-runtime command construction
 # ---------------------------------------------------------------------------
