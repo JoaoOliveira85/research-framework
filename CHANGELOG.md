@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `research-framework generate --help` and the README now show a cron one-liner and a launchd setup for an unattended weekly run (`generate --spec <spec> --output <vault> --resume --max-usd <X>`, which `./vault research` expands to). They will move to `pipeline <vault> run` when ROADMAP v1.1.0 row 7 ships (issue #19).
 
+### Changed
+
+- **`stages.<name>.tier` has one meaning on every stage: a model tier, resolved through the profile's `tiers:` map** (#13). It used to be a `basic|standard|expert` complexity label on most stages and a model tier on `schema_gen`/`source_extraction` only — and even there nothing dispatched on it, because the settings resolver had no production caller. `scripts/agent_call.py` now dispatches a stage that sets `tier` (and no `model`) on `tiers.<tier>`. The loader refuses a stage that sets both `tier` and `model` (naming the stage), and an unknown tier (naming the stage and the known tiers), on every stage. An unset `tier` is now `None`, not `"standard"`; the cost sidecar's `tier` is the stage's tier name, or `""` when it names none. Every shipped profile (`settings*.yaml`) now defines `tiers:` from its own model table — before, the codex/cursor/ollama/opencode profiles fell back to Anthropic ids. (test: `tests/pipeline/test_tier_resolution.py`, `tests/scripts/test_agent_call.py::TestStageTierResolution`)
+
+### Deprecated
+
+- `tier: standard` and `tier: expert` (the retired complexity labels) load with a `FutureWarning` naming the stage and select no model, unless the profile defines that name under `tiers:`. The next release will refuse them. (test: `tests/pipeline/test_tier_resolution.py::test_legacy_complexity_tier_warns_and_is_ignored`)
+
 ### Removed
 
 - The scaffold no longer writes `_pipeline/systemd/vault-research.service` or its `.tmpl-versions.json`, and the `vault-research.service.j2` template is gone (issue #19). The unit shipped without a timer, so it ran `./vault research` once per login rather than weekly. Schedule with cron or launchd instead (see `generate --help`).
@@ -20,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Existing vaults: `./vault update` leaves a `_pipeline/systemd/` directory you already have untouched (nothing is deleted or re-rendered). Delete it, or keep it if you wired it to your own timer.
 - Scripts passing `--force-budget` (with or without `RF_FORCE_BUDGET_ACK=1`) must instead raise the capped limit in the vault's `settings.yaml` and then run `generate --resume`. `--approve` / `--approve-all` / `--reject` are unchanged.
+- A vault generated from `settings.yaml` carries `tier: standard` on `plan_narrator` and `probe_retrieval`: delete those two lines (or set `tier:` to a key of `tiers:`) to silence the warning — before the next release, which refuses them. Neither line ever selected a model, so removing them changes nothing.
+- A stage that sets `tier: basic` now runs on `tiers.basic` rather than its executor's default model; a stage that sets `tier: basic` **and** `model:` no longer loads — keep one.
+- A codex/cursor/ollama/opencode vault that uses `tier:` should copy its profile's new `tiers:` block into its `settings.yaml`; without it, `basic|normal|flagship` still resolve to the Anthropic defaults.
 
 ## [1.0.1] - 2026-10-12
 

@@ -76,11 +76,13 @@ features the keys configure, which live in their own specs (`033`, `061`,
 
 ### User Story 4 — Invalid values are rejected at load, not at use (Priority: P2)
 
-1. **Given** `stages.<name>.tier` outside `basic|standard|expert`, **When**
-   the file loads, **Then** it raises.
-2. **Given** a D7 stage (`schema_gen`, `source_extraction`) carrying **both**
-   `tier` and `model`, **When** the file loads, **Then** it raises — the two
-   are mutually exclusive.
+1. **Given** `stages.<name>.tier` naming no key of `tiers:`, **When** the
+   file loads, **Then** it raises, naming the stage and the known tiers
+   (issue #13; the retired `standard`/`expert` labels warn instead, for one
+   release).
+2. **Given** any stage carrying **both** `tier` and `model`, **When** the
+   file loads, **Then** it raises naming the stage — the two are mutually
+   exclusive.
 3. **Given** a consensus quorum that is even or below 1, **When** the file
    loads, **Then** it raises: a quorum must be odd.
 4. **Given** `archived: "yes-please"`, **When** the file loads, **Then** it
@@ -142,11 +144,15 @@ features the keys configure, which live in their own specs (`033`, `061`,
 
 **Validation**
 
-- **FR-012**: `stages.<name>.tier` MUST be one of `basic`, `standard`,
-  `expert`.
-- **FR-013**: For the two D7 stages (`schema_gen`, `source_extraction`),
-  `tier` names a key in the top-level `tiers:` map and MUST be mutually
-  exclusive with `model`. An unknown tier name MUST raise at load.
+- **FR-012**: `stages.<name>.tier`, on every stage, names a key in the
+  top-level `tiers:` map — the stage's model tier — and MUST be mutually
+  exclusive with `model`; both set MUST raise naming the stage. An unknown
+  tier name MUST raise at load, naming the stage and the known tiers.
+  *(Issue #13: before this the key was a `basic|standard|expert` complexity
+  label on every stage but the two D7 ones.)*
+- **FR-013**: The retired complexity labels `standard` and `expert`, when the
+  profile does not define them as tiers, MUST warn (`FutureWarning`) and be
+  ignored for one release; the release after refuses them.
 - **FR-014**: `tiers` MUST always resolve `basic`, `normal` and `flagship`,
   back-filling any the vault did not override.
 - **FR-015**: `stages.source_extraction.consensus.tiers.<label>` MUST be a
@@ -203,7 +209,7 @@ Types are YAML types. "Reader" is the subsystem that consumes the key;
 | `skill` | str \| null | `null` | prompt rendering |
 | `base_url` / `api_path` | str | `http://127.0.0.1:11434` / `/v1/chat/completions` | HTTP dispatch only |
 | `enabled` (stages only) | bool | `true` (`false` for `source_extraction`) | the stage |
-| `tier` (stages only) | enum | `standard` | complexity label, and D7 model resolution for the two D7 stages |
+| `tier` (stages only) | key of `tiers:` \| null | `null` (unset) | the stage's model, resolved through `tiers:` at dispatch; exclusive with `model` |
 
 **`pipeline`**
 
@@ -324,9 +330,9 @@ Types are YAML types. "Reader" is the subsystem that consumes the key;
   manager additionally checks a legacy `_pipeline/settings.yaml` first.
 - **D5 — The D7 tier resolver has no confirmed production caller.** It is
   fully specified, validated and unit-tested, but no non-test call site was
-  found. Two distinct vocabularies also share the key name `tier`
-  (`basic|standard|expert` as a complexity label; `basic|normal|flagship` as
-  a model tier), disambiguated only by which stage is being configured.
+  found. *(Resolved by issue #13: `tier` has one meaning — a key in `tiers:`
+  — on every stage, and the dispatcher resolves it, so the loader's resolver
+  is the validation twin rather than the only resolver.)*
 - **D6 — Newer blocks were never back-ported to the alternate profiles.**
   `archived`, `tiers`, `modules`, `cycle_yield`, `stubs`, `reports` and the
   D7 stages appear only in `settings.yaml`. Every one defaults, so this is

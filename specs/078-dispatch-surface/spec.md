@@ -110,7 +110,7 @@ weekly runner's own outer timeout (`075` FR-022).
   that file, preferring a vault-local copy over the framework's own so a test
   shim installed in a vault intercepts in-process dispatch too.
 - **FR-002**: The in-process API MUST be
-  `dispatch(stage, prompt, *, tier="standard", agent=None, model=None,
+  `dispatch(stage, prompt, *, tier=None, agent=None, model=None,
   vault_dir=None, cycle_dir=None, timeout_s=None)`, returning an immutable
   result carrying `stdout`, `stderr`, `exit_code`, `cost_usd`, `tokens_in`,
   `tokens_out`, `latency_ms`.
@@ -145,14 +145,19 @@ weekly runner's own outer timeout (`075` FR-022).
 
 **Tiers**
 
-- **FR-012**: `stages.<name>.tier` is a **complexity label**
-  (`basic|standard|expert`) carried through to the cost record for every
-  stage; it does not select a model.
-- **FR-013**: For the two stages that use D7 resolution, the same key names a
-  **model tier** (`basic|normal|flagship`) looked up in the top-level
-  `tiers:` map, mutually exclusive with an explicit `model`.
-- **FR-014**: The two vocabularies sharing one key name MUST be treated as a
-  documented hazard, not a design (§ Known divergences D3).
+- **FR-012**: `stages.<name>.tier` names a **model tier** — a key in the
+  top-level `tiers:` map (`basic|normal|flagship` always exist) — on every
+  stage. A stage that sets `tier` and no `model` MUST be dispatched on
+  `tiers[<tier>]`; an explicit `model`, including the per-call `model=`
+  override, wins. An unknown tier MUST raise, naming the stage and the known
+  tiers. *(Issue #13; this replaced a complexity label `basic|standard|expert`
+  that selected no model.)*
+- **FR-013**: The cost record's `tier` MUST be the stage's tier name, or `""`
+  when the stage names none. `dispatch(tier=None)` records the stage's own;
+  a caller-passed `tier` is a label override only and selects no model.
+- **FR-014**: The retired labels `standard`/`expert`, when the profile does
+  not define them, MUST select no model and record no tier (the settings
+  loader warns about them for one release, then refuses them).
 
 **Cost**
 
@@ -254,14 +259,12 @@ weekly runner's own outer timeout (`075` FR-022).
 - **D2 — The audit-log filename in ARCHITECTURE does not match reality.** It
   describes `<timestamp>-<stage>-<call-id>.json`; the sidecars are
   `<stage>.json`, `<stage>-N.json` and `<stage>-batch-N.json`.
-- **D3 — Two tier vocabularies share one key.** `stages.<name>.tier` means
-  `basic|standard|expert` for most stages and `basic|normal|flagship` for the
-  two D7 stages, disambiguated only by the stage name. ARCHITECTURE credits
-  the dispatcher with resolving the second, which it does not — that
-  resolution lives in the settings loader.
-- **D4 — The complexity tier reaches the estimator and is ignored.** The cost
+- **D3 — Two tier vocabularies share one key.** *(Resolved by issue #13:
+  one vocabulary, resolved by the dispatcher on every stage — FR-012.)*
+- **D4 — The tier reaches the estimator and is ignored.** The cost
   estimator accepts a `tier` parameter and never references it; the value's
-  only real consumer is a soft warning threshold.
+  only real consumer is the `limits.tier_thresholds` soft warning, now keyed
+  by model tier name.
 - **D5 — A documented cursor model-tier map is not a resolver.** A
   tier→model dictionary exists in the dispatcher and is consulted by no code
   path; it is a recommendation for a human editing a vault's `tiers:` block.
