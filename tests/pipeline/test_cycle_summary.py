@@ -70,10 +70,6 @@ def _seed(vault: Path, cycle: int) -> None:
         ),
         encoding="utf-8",
     )
-    (vault / "_pipeline" / f"cycle-{cycle:03d}-skill-check.json").write_text(
-        json.dumps({"scanned": 24, "repaired": [], "unrecoverable": [], "ok": True}),
-        encoding="utf-8",
-    )
 
 
 def test_write_summary_aggregates_capture_failures(tmp_path: Path) -> None:

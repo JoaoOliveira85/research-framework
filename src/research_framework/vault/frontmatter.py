@@ -82,8 +82,8 @@ def split_frontmatter(content: str) -> tuple[str, str] | None:
 
     For the readers that cannot use :func:`parse_frontmatter_str` because they
     must not raise on malformed YAML: stub detection still counts the body's
-    words, the spec loaders and the SKILL.md preflight report the YAML error in
-    their own terms. Returns ``None`` when *content* does not open with a
+    words, the spec loaders report the YAML error in their own terms, and the
+    packaged-skill loader only needs the body. Returns ``None`` when *content* does not open with a
     ``---`` line or that block is never closed.
 
     A delimiter is a whole LINE reading ``---``. Trailing whitespace on it is

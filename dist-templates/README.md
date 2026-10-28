@@ -184,7 +184,7 @@ next to a spec stays portable.
 | `research_framework-*.whl`   | The Python package — installed into `./.venv` by install  |
 | `scripts/`               | Validation + helper scripts copied into every vault       |
 | `templates/`             | Jinja2 templates for vault scaffolding                    |
-| `.agents/skills/`        | Agent skill files consumed by the research orchestrator   |
+| `.agents/skills/`        | Skill source files (`install.sh` reads `vault-spec`); stage prompts inline them from the installed package, so no vault gets a copy |
 | `settings.yaml`          | Default (Claude) settings profile                         |
 | `settings.*.yaml`        | The other five runtime profiles (`codex`, `cursor`, `cursor-claude`, `opencode`, `ollama`) — see "Switching runtimes" above |
 | `examples/`              | Example `research.spec.md` you can copy and edit          |

@@ -404,28 +404,8 @@ def build_quality_fixture(
     return vault
 
 
-def install_bundled_skill(vault: Path, skill_name: str) -> Path:
-    """Copy a bundled SKILL.md into the vault under ``.agents/skills/<name>/``.
-
-    The factory does not install skills by default because ``skill_check``
-    treats a missing ``.agents/skills/`` as a no-op pass. Tests that
-    exercise the auto-repair path call this helper explicitly.
-    """
-    from research_framework._assets import asset_path
-
-    src = asset_path(".agents") / "skills" / skill_name / "SKILL.md"
-    if not src.is_file():
-        raise FileNotFoundError(f"bundled skill not found: {src}")
-    dest_dir = vault / ".agents" / "skills" / skill_name
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / "SKILL.md"
-    shutil.copy2(src, dest)
-    return dest
-
-
 __all__ = (
     "DEFAULT_SETTINGS_YAML",
     "build_minimal_vault",
     "build_quality_fixture",
-    "install_bundled_skill",
 )

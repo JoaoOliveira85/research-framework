@@ -1,17 +1,15 @@
 usage: research-framework [-h] [--log-level {debug,info,warning,error}]
-                          {generate,coverage,validate,reindex,check-skills,cycle,inventory,onboard,regenerate-agents,prune,parse-spec,pipeline,quality-baseline-update,quality-fixture-init,refresh-sources,regenerate-shim,status,digest,acceptance,wikilinks,re-grade,pause,export}
+                          {generate,coverage,validate,reindex,cycle,inventory,onboard,regenerate-agents,prune,parse-spec,pipeline,quality-baseline-update,quality-fixture-init,refresh-sources,regenerate-shim,status,digest,acceptance,wikilinks,re-grade,pause,export}
                           ...
 
 Knowledge vault generator.
 
 positional arguments:
-  {generate,coverage,validate,reindex,check-skills,cycle,inventory,onboard,regenerate-agents,prune,parse-spec,pipeline,quality-baseline-update,quality-fixture-init,refresh-sources,regenerate-shim,status,digest,acceptance,wikilinks,re-grade,pause,export}
+  {generate,coverage,validate,reindex,cycle,inventory,onboard,regenerate-agents,prune,parse-spec,pipeline,quality-baseline-update,quality-fixture-init,refresh-sources,regenerate-shim,status,digest,acceptance,wikilinks,re-grade,pause,export}
     generate            Generate a vault from a spec file
     coverage            Show coverage target status
     validate            Run full validation suite on a vault
     reindex             Rebuild Layer 1 index files
-    check-skills        Validate .agents/skills/*/SKILL.md and auto-restore
-                        broken ones from the bundled wheel copies.
     cycle               Run a single research cycle
     inventory           Produce a read-only structured snapshot of a vault's
                         contents

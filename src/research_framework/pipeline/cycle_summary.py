@@ -1,10 +1,9 @@
 """Human-readable per-cycle summary.
 
 Writes ``_pipeline/cycles/cycle-NNN-summary.md`` at the end of each cycle.
-Drains the four artefacts the orchestrator already produces — the scout
-report, the research report, the cycle quality report, and the per-cycle
-skill-check sidecar — into a single Markdown page that fits on screen
-without scrolling.
+Drains the three artefacts the orchestrator already produces — the scout
+report, the research report and the cycle quality report — into a single
+Markdown page that fits on screen without scrolling.
 
 This exists because the v0.2.19 cycle output dumped raw JSON deltas
 straight into the user's terminal, including eleven near-identical
@@ -139,20 +138,6 @@ def _coerce_str_list(value: Any) -> list[str]:
     return [str(v) for v in value]
 
 
-def _format_skill_check(skill_check: dict[str, Any] | None) -> str:
-    if not skill_check:
-        return "_no preflight sidecar found_"
-    scanned = skill_check.get("scanned", 0)
-    repaired = skill_check.get("repaired") or []
-    unrecoverable = skill_check.get("unrecoverable") or []
-    if not repaired and not unrecoverable:
-        return f"PASS — {scanned} skill file(s) parsed cleanly"
-    bits = [f"scanned {scanned}"]
-    if repaired:
-        bits.append(f"{len(repaired)} auto-restored")
-    if unrecoverable:
-        bits.append(f"**{len(unrecoverable)} unrecoverable**")
-    return ", ".join(bits)
 
 
 def _format_exit(exit_code: int, exit_reason: str | None) -> str:
@@ -339,16 +324,12 @@ def write_summary(
     """
     cycle_3 = f"{cycle_num:03d}"
     cycles_dir = vault_dir / "_pipeline" / "cycles"
-    pipeline_dir = vault_dir / "_pipeline"
     dest = cycles_dir / f"cycle-{cycle_3}-summary.md"
 
     try:
         scout = _safe_read_json(cycles_dir / f"cycle-{cycle_3}-scout.json") or {}
         research = _safe_read_json(cycles_dir / f"cycle-{cycle_3}-research.json") or {}
         quality = _safe_read_json(cycles_dir / f"cycle-{cycle_3}-quality-report.json")
-        skill_check = _safe_read_json(
-            pipeline_dir / f"cycle-{cycle_3}-skill-check.json"
-        )
 
         notes_created = _coerce_str_list(research.get("notes_created"))
         notes_updated = _coerce_str_list(research.get("notes_updated"))
@@ -414,10 +395,6 @@ def write_summary(
                 out.extend(f"  {line}" for line in fail_lines)
         else:
             out.append("- _no gate verdicts recorded (cycle aborted early?)_")
-        out.append("")
-
-        out.append("## Preflight")
-        out.append(f"- Skill check: {_format_skill_check(skill_check)}")
         out.append("")
 
         out.append("## Capture failures (aggregated)")

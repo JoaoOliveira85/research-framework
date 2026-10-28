@@ -16,7 +16,7 @@ import pytest
 from research_framework.pipeline.budget_guard import budget_marker_path
 from research_framework.pipeline.cycle_runner import run_cycle_steps
 from tests._helpers import fake_cli_binary
-from tests._helpers.vault_factory import build_minimal_vault, install_bundled_skill
+from tests._helpers.vault_factory import build_minimal_vault
 
 pytestmark = pytest.mark.e2e
 
@@ -39,7 +39,6 @@ def test_mid_cycle_budget_pause_resume_completes_cycle(
         max_cycles=1,
         install_fake_agent=False,
     )
-    install_bundled_skill(vault, "scout")
     fake_cli_binary.activate(monkeypatch, tmp_path / "bin")
     (vault / "settings.yaml").write_text(
         """

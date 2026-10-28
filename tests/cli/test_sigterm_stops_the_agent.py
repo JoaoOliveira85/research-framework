@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 from research_framework import cli
-from tests._helpers.vault_factory import build_minimal_vault, install_bundled_skill
+from tests._helpers.vault_factory import build_minimal_vault
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -99,7 +99,6 @@ def test_terminating_the_cli_stops_the_wrapper_and_the_agent(
         max_cycles=1,
         install_fake_agent=False,
     )
-    install_bundled_skill(vault, "scout")
     stub, pidfile = _an_agent_that_stays(tmp_path)
     env = {**os.environ, "CLAUDE_BIN": str(stub)}
     env.pop("RESEARCH_FRAMEWORK_DEFAULT_AGENT", None)
