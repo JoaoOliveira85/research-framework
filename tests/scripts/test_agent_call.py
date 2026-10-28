@@ -251,12 +251,32 @@ class TestStageTierResolution:
         executor = agent_call._resolve_executor(settings, "note_writer")
         assert executor["model"] == "gpt-max"
 
-    def test_absent_tiers_map_falls_back_to_the_loader_defaults(
-        self, agent_call
+    @pytest.mark.parametrize("tier", ["basic", "normal", "flagship", "standard"])
+    def test_no_tiers_block_reads_tier_as_the_legacy_label(
+        self, agent_call, tier
     ) -> None:
-        settings = {"stages": {"scout": {"tier": "basic"}}}
+        """Review repro: main's codex profile (no `tiers:`) plus
+        `plan_narrator: {tier: basic}` ran `codex exec --model claude-haiku-4-5`.
+        A vault that never opted in keeps its executor's model."""
+        settings = {
+            "default_executor": {"runtime": "codex", "model": "gpt-5.4"},
+            "stages": {"plan_narrator": {"tier": tier}},
+        }
+        executor = agent_call._resolve_executor(settings, "plan_narrator")
+        assert executor["model"] == "gpt-5.4"
+        assert agent_call._stage_tier(settings, "plan_narrator") == ""
+
+    def test_partial_tiers_block_backfills_the_defaults(self, agent_call) -> None:
+        settings = {"tiers": {"basic": "own"}, "stages": {"scout": {"tier": "normal"}}}
         executor = agent_call._resolve_executor(settings, "scout")
-        assert executor["model"] == "claude-haiku-4-5"
+        assert executor["model"] == "claude-sonnet-5"
+
+    @pytest.mark.parametrize("legacy", ["basic", "standard", "expert"])
+    def test_old_label_beside_model_keeps_the_model(self, agent_call, legacy) -> None:
+        settings = self._settings(tier=legacy, model="explicit")
+        executor = agent_call._resolve_executor(settings, "note_writer")
+        assert executor["model"] == "explicit"
+        assert agent_call._stage_tier(settings, "note_writer") == ""
 
     def test_per_call_model_override_wins_over_stage_tier(self, agent_call) -> None:
         settings = agent_call._apply_stage_model_override(
@@ -333,7 +353,46 @@ class TestStageTierResolution:
         from research_framework.pipeline import settings as loader
 
         assert agent_call._DEFAULT_MODEL_TIERS == loader._DEFAULT_MODEL_TIERS
-        assert agent_call._LEGACY_COMPLEXITY_TIERS == loader._LEGACY_COMPLEXITY_TIERS
+        assert agent_call._OLD_COMPLEXITY_LABELS == loader._OLD_COMPLEXITY_LABELS
+
+    @pytest.mark.parametrize(
+        ("tiers_block", "stage_cfg"),
+        [
+            (None, "tier: basic"),
+            (None, "tier: flagship"),
+            ("basic: own-basic", "tier: basic"),
+            ("basic: own-basic", "tier: flagship"),
+            ("basic: own-basic", "tier: standard"),
+            ("basic: own-basic", "tier: expert\n    model: picked"),
+            ("basic: own-basic", "tier: basic\n    model: picked"),
+            ("standard: own-standard", "tier: standard"),
+            ("basic: own-basic", "model: picked"),
+        ],
+    )
+    def test_dispatch_model_agrees_with_the_settings_loader(
+        self, agent_call, tmp_path: Path, tiers_block, stage_cfg
+    ) -> None:
+        """The loader validates and agent_call dispatches: for every legacy and
+        new-vocabulary reading, both must pick the same model."""
+        import warnings
+
+        from research_framework.pipeline.settings import load_vault_settings
+
+        body = (
+            "pipeline:\n  max_cycles: 1\n  budget_usd: 1.0\n"
+            "default_executor:\n  runtime: claude\n  model: executor-default\n"
+        )
+        if tiers_block is not None:
+            body += f"tiers:\n  {tiers_block}\n"
+        body += f"stages:\n  scout:\n    {stage_cfg}\n"
+        (tmp_path / "settings.yaml").write_text(body, encoding="utf-8")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            loaded = load_vault_settings(tmp_path).resolve_model("scout")
+        executor = agent_call._resolve_executor(
+            agent_call._load_settings(tmp_path), "scout"
+        )
+        assert executor["model"] == (loaded or "executor-default")
 
 
 # ---------------------------------------------------------------------------
