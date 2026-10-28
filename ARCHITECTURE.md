@@ -676,7 +676,7 @@ research-framework/
 │   ├── templates/             # spec / plan / tasks templates
 │   └── scripts/bash/          # speckit workflow scripts
 ├── .agents/
-│   └── skills/                # Agent skills (cycle-report, install-wizard, etc.); shipped in the wheel + bundle only, inlined into stage prompts — never copied into a vault
+│   └── skills/                # Agent skills; wheel + bundle only, never copied into a vault. Inlined at runtime: verifier stage ← `verifier`, topic_propose ← `topic-propose`, plan narrator ← `research-plan-narrator`; install.sh ← `vault-spec`. Scout / note_writer rules are adapted into templates/prompts/
 └── dist-templates/            # Bundle template files
 ```
 

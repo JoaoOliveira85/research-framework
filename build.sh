@@ -313,7 +313,10 @@ cp "${WHEEL_FILE}" "${BUNDLE_DIR}/"
 # 4b. Runtime support folders. Each is part of the runtime contract:
 #     - scripts/   — copied into every generated vault
 #     - templates/ — Jinja2 vault scaffolds
-#     - .agents/   — skills consumed by the orchestrator
+#     - .agents/   — skill sources: install.sh inlines vault-spec; the
+#                    verifier, topic-propose and research-plan-narrator
+#                    stages inline theirs from the installed wheel's copy.
+#                    Never copied into a vault (#12).
 #     - examples/  — sample research.spec.md the user edits
 _copy_tree() {
     local src="$1"
