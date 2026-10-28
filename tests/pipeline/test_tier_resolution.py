@@ -398,7 +398,9 @@ def test_backfilled_default_tier_on_claude_does_not_warn(tmp_path: Path) -> None
 
 
 def test_stage_runtime_override_decides_the_backfill_warning(tmp_path: Path) -> None:
-    body = _PARTIAL_TIERS.lstrip().format(runtime="claude") + "    runtime: cursor-agent\n"
+    body = (
+        _PARTIAL_TIERS.lstrip().format(runtime="claude") + "    runtime: cursor-agent\n"
+    )
     (tmp_path / "settings.yaml").write_text(body, encoding="utf-8")
     with pytest.warns(UserWarning, match="'cursor-agent'"):
         load_vault_settings(tmp_path)

@@ -35,11 +35,13 @@ _PIPELINE_TYPED_KEYS = frozenset(
 # stage sets neither `tier` nor `model` (spec 020 FR-014a). `tier` itself is
 # resolved through `tiers:` on every stage (issue #13).
 _MANIFEST_DEFAULT_TIER_STAGES = frozenset({"schema_gen", "source_extraction"})
-# Issue #13: until 1.0.1, `stages.<name>.tier` was also a complexity label
-# (`basic|standard|expert`) on most stages. `basic` survives as a model tier;
-# these two do not. Deprecated: warned and ignored for one release, then
-# refused. scripts/agent_call.py keeps a copy, pinned equal by a test.
-_LEGACY_COMPLEXITY_TIERS = frozenset({"standard", "expert"})
+# Issue #13: until 1.0.1, `stages.<name>.tier` was also a complexity label in
+# this vocabulary on most stages. For one release a value from it is read as
+# that old label (warned about, selects no model) when the vault never opted
+# in to model tiers — no `tiers:` block — when it sits beside `model:`, or
+# when `tiers:` does not define it; the release after refuses it.
+# scripts/agent_call.py mirrors this rule; a test pins the two together.
+_OLD_COMPLEXITY_LABELS = frozenset({"basic", "standard", "expert"})
 # Anthropic model ids for the runtime-agnostic tier names. Two things to know
 # before editing these:
 #
@@ -352,7 +354,11 @@ def load_vault_settings(vault_dir: Path) -> VaultSettings:
     )
     tiers = _parse_tiers(raw.get("tiers"), vault_dir=vault_dir)
     modules = _parse_modules(raw.get("modules"), vault_dir=vault_dir)
-    stages = _parse_stages(raw.get("stages"), vault_dir=vault_dir, tiers=tiers)
+    stages = _parse_stages(
+        raw.get("stages"),
+        vault_dir=vault_dir,
+        tier_context=_TierContext.from_raw(raw, tiers=tiers, vault_dir=vault_dir),
+    )
     _validate_consensus_n(stages, vault_dir=vault_dir)
     dimensions = _parse_dimensions(raw.get("dimensions"), vault_dir=vault_dir)
     default_agent = _parse_default_agent(
@@ -882,11 +888,41 @@ def _validate_consensus_n(stages: dict[str, StageSettings], *, vault_dir: Path) 
     consensus["tiers"] = normalized
 
 
+@dataclass(frozen=True)
+class _TierContext:
+    """What validating a stage's ``tier`` needs from the rest of the file."""
+
+    tiers: dict[str, str]
+    # The keys the file itself declares under `tiers:`; None when it has no
+    # `tiers:` block at all (the vault never opted in to model tiers).
+    declared: frozenset[str] | None
+    default_runtime: str
+    settings_path: Path
+
+    @classmethod
+    def from_raw(
+        cls, raw: dict[str, Any], *, tiers: dict[str, str], vault_dir: Path
+    ) -> _TierContext:
+        declared_raw = raw.get("tiers")
+        executor = raw.get("default_executor")
+        runtime = executor.get("runtime") if isinstance(executor, dict) else None
+        return cls(
+            tiers=tiers,
+            declared=(
+                frozenset(str(k) for k in declared_raw)
+                if isinstance(declared_raw, dict)
+                else None
+            ),
+            default_runtime=str(runtime or "claude"),
+            settings_path=vault_dir / "settings.yaml",
+        )
+
+
 def _parse_stages(
     raw: object,
     *,
     vault_dir: Path,
-    tiers: dict[str, str],
+    tier_context: _TierContext,
 ) -> dict[str, StageSettings]:
     if raw is None:
         return {}
@@ -916,7 +952,7 @@ def _parse_stages(
                 key=f"stages.{name}.enabled",
             )
         out[name] = StageSettings(
-            tier=_parse_stage_tier(name, cfg, tiers=tiers, vault_dir=vault_dir),
+            tier=_parse_stage_tier(name, cfg, ctx=tier_context, vault_dir=vault_dir),
             enabled=enabled,
             extras={k: v for k, v in cfg.items() if k not in {"tier", "enabled"}},
         )
@@ -927,43 +963,75 @@ def _parse_stage_tier(
     name: str,
     cfg: dict[str, Any],
     *,
-    tiers: dict[str, str],
+    ctx: _TierContext,
     vault_dir: Path,
 ) -> str | None:
     """Validate ``stages.<name>.tier`` — a key in ``tiers:``, on every stage.
 
-    A legacy complexity value (``standard``/``expert``) that the profile does
-    not define as a tier is warned about and ignored for one release (issue
-    #13); it is checked before the model/tier exclusivity so a vault that
-    paired one with ``model`` still loads.
+    Issue #13, one-release deprecation: a value that can only be the old
+    complexity label (see :data:`_OLD_COMPLEXITY_LABELS`) warns and is
+    ignored. That check runs first, so a 1.0.1 vault that paired the label
+    with ``model`` still loads. Anything else beside ``model`` is refused, as
+    is a tier ``tiers:`` does not define.
     """
     raw = cfg.get("tier")
     if raw is None:
         return None
     tier = str(raw)
-    if tier in _LEGACY_COMPLEXITY_TIERS and tier not in tiers:
+    has_model = cfg.get("model") is not None
+    reason = _legacy_tier_reason(tier, has_model=has_model, ctx=ctx)
+    if reason is not None:
         warnings.warn(
-            f"stages.{name}.tier: {tier!r} is a retired complexity label and is "
-            f"ignored. `tier` now names a model tier in `tiers:` "
-            f"({', '.join(sorted(tiers))}); remove it or pick one of those. "
-            "A future release will refuse it.",
+            f"{ctx.settings_path}: stages.{name}.tier: {tier!r} {reason}, so it "
+            "is read as the retired complexity label and ignored — it selects "
+            "no model. A future release will refuse it.",
             FutureWarning,
             stacklevel=4,
         )
         return None
-    if cfg.get("model") is not None:
+    if has_model:
         raise SettingsError(
             f"stages.{name} cannot set both model and tier — set one",
             vault_dir=vault_dir,
             key=f"stages.{name}",
         )
-    if tier not in tiers:
+    if tier not in ctx.tiers:
         raise SettingsError(
-            _unknown_tier_message(tier, name, tiers),
+            _unknown_tier_message(tier, name, ctx.tiers),
             vault_dir=vault_dir,
             key=f"stages.{name}.tier",
         )
+    runtime = str(cfg.get("runtime") or ctx.default_runtime)
+    if tier not in (ctx.declared or frozenset()) and runtime != "claude":
+        warnings.warn(
+            f"{ctx.settings_path}: stages.{name}.tier: {tier!r} resolves to the "
+            f"built-in Anthropic default {ctx.tiers[tier]!r}, but the stage runs "
+            f"on {runtime!r}. Define tiers.{tier} for that runtime.",
+            UserWarning,
+            stacklevel=4,
+        )
     return tier
+
+
+def _legacy_tier_reason(tier: str, *, has_model: bool, ctx: _TierContext) -> str | None:
+    """Why *tier* must be the old complexity label, or ``None`` if it is not."""
+    if ctx.declared is None:
+        if tier in _OLD_COMPLEXITY_LABELS or tier in ctx.tiers:
+            return (
+                "is set but this file has no `tiers:` block "
+                "(add a tiers: block to opt in to model tiers)"
+            )
+        return None
+    if tier not in _OLD_COMPLEXITY_LABELS:
+        return None
+    if has_model:
+        return "is set beside `model:` (keep `model:` and remove `tier:`)"
+    if tier not in ctx.tiers:
+        return (
+            f"is not defined in `tiers:` ({', '.join(sorted(ctx.tiers))}; "
+            "remove it or pick one of those)"
+        )
+    return None
 
 
 def _parse_dimensions(raw: object, *, vault_dir: Path) -> list[str]:
