@@ -93,10 +93,50 @@ def test_a_key_with_no_close_match_is_reported_without_a_suggestion(tmp_path: Pa
     assert "did you mean" not in msgs[0]
 
 
-def test_a_typo_is_reported_once_per_process_not_once_per_load(tmp_path: Path):
+def test_a_typo_is_shown_once_per_process_not_once_per_load(tmp_path: Path):
+    """Under the default filter the warnings module dedupes by message."""
     vault = _vault(tmp_path, "default_agnet: codex\n")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("default")
+        load_vault_settings(vault)
+        load_vault_settings(vault)
+    assert len(caught) == 1
+
+
+def test_a_filtered_warning_does_not_consume_the_report(tmp_path: Path):
+    """Ignoring the warning once must not hide the key from a later load."""
+    vault = _vault(tmp_path, "default_agnet: codex\n")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        load_vault_settings(vault)
     assert len(_unknown_warnings(vault)) == 1
-    assert _unknown_warnings(vault) == []
+
+
+def test_a_typo_in_a_required_key_is_reported_before_the_validation_error(
+    tmp_path: Path,
+):
+    """`max_cylces` leaves `max_cycles` missing; say which key was meant."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    (vault / "settings.yaml").write_text(
+        "pipeline:\n  max_cylces: 2\n  budget_usd: 1\n", encoding="utf-8"
+    )
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(SettingsError) as excinfo:
+            load_vault_settings(vault)
+    msgs = [
+        str(w.message)
+        for w in caught
+        if issubclass(w.category, UnknownSettingsKeyWarning)
+    ]
+    assert len(msgs) == 1
+    assert "pipeline.max_cylces" in msgs[0]
+    assert "pipeline.max_cycles" in msgs[0]
+    # The error itself carries the hint too: many callers print only that.
+    assert "max_cycles must be an integer" in str(excinfo.value)
+    assert "pipeline.max_cylces" in str(excinfo.value)
+    assert "did you mean 'pipeline.max_cycles'" in str(excinfo.value)
 
 
 def test_default_mode_still_loads_and_preserves_the_unknown_key(tmp_path: Path):
@@ -190,6 +230,43 @@ def test_repo_ships_the_expected_profile_set() -> None:
 @pytest.mark.parametrize("profile", SHIPPED_PROFILES, ids=lambda p: p.name)
 def test_shipped_profile_has_no_unknown_keys(profile: Path):
     raw = yaml.safe_load(profile.read_text(encoding="utf-8"))
+    assert [u.path for u in find_unknown_keys(raw)] == []
+
+
+#: Settings-shaped files that are NOT vault ``settings.yaml`` files and so are
+#: allowed to carry keys the loader does not know. Each needs a reason.
+_EXEMPT = {
+    "examples/settings.yml": (
+        "documentation-shaped example that still carries the `budget:` block "
+        "#230 removed from the profiles (spec 076 D3, task T002)"
+    ),
+}
+_FIXTURE_AND_EXAMPLE_SETTINGS: list[Path] = sorted(
+    [
+        *REPO_ROOT.glob("tests/fixtures/**/settings*.y*ml"),
+        REPO_ROOT / "examples/settings.yml",
+    ]
+)
+
+
+def test_fixture_and_example_glob_is_not_vacuous() -> None:
+    names = {p.relative_to(REPO_ROOT).as_posix() for p in _FIXTURE_AND_EXAMPLE_SETTINGS}
+    assert "examples/settings.yml" in names
+    assert "tests/fixtures/quality/tech-lite/settings.yaml" in names
+    assert set(_EXEMPT) <= names
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        p
+        for p in _FIXTURE_AND_EXAMPLE_SETTINGS
+        if p.relative_to(REPO_ROOT).as_posix() not in _EXEMPT
+    ],
+    ids=lambda p: p.relative_to(REPO_ROOT).as_posix(),
+)
+def test_tracked_fixture_settings_have_no_unknown_keys(path: Path):
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     assert [u.path for u in find_unknown_keys(raw)] == []
 
 

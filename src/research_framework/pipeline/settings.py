@@ -233,7 +233,8 @@ class VaultSettings:
     # Issue #8: when true, a research run is refused (exit 2) while
     # ``settings.yaml`` carries a key nothing recognises. Off by default — an
     # unknown key is then a warning, so a vault written for a newer framework
-    # still runs. Enforced in the orchestrator; see ``strict_settings_violations``.
+    # still runs. Enforced by ``strict_settings_refusal`` at the entry of each verb
+    # that dispatches work (run_cycles, cycle, pipeline ...), not in the loader.
     strict_settings: bool = False
     extras: dict[str, Any] = field(default_factory=dict)
 
@@ -299,6 +300,12 @@ def load_vault_settings(vault_dir: Path) -> VaultSettings:
             vault_dir=vault_dir,
         )
 
+    # Issue #8: report unknown keys BEFORE validating. A typo in a required key
+    # (`max_cylces`) otherwise surfaces only as "max_cycles ... got None", with
+    # nothing to say which key was meant.
+    unknown_keys = find_unknown_keys(raw)
+    _warn_unknown_keys(unknown_keys, settings_path)
+
     pipeline = raw.get("pipeline")
     if pipeline is None:
         pipeline = {}
@@ -309,25 +316,28 @@ def load_vault_settings(vault_dir: Path) -> VaultSettings:
             key="pipeline",
         )
 
-    max_cycles = _require_positive_int(
-        pipeline.get("max_cycles"),
-        key="max_cycles",
-        vault_dir=vault_dir,
-        label="max_cycles must be an integer >= 1",
-    )
-    budget_usd = _require_non_negative_number(
-        pipeline.get("budget_usd"),
-        key="budget_usd",
-        vault_dir=vault_dir,
-    )
+    try:
+        max_cycles = _require_positive_int(
+            pipeline.get("max_cycles"),
+            key="max_cycles",
+            vault_dir=vault_dir,
+            label="max_cycles must be an integer >= 1",
+        )
+        budget_usd = _require_non_negative_number(
+            pipeline.get("budget_usd"),
+            key="budget_usd",
+            vault_dir=vault_dir,
+        )
 
-    threshold_raw = pipeline.get("backlog_promotion_threshold", 2)
-    backlog_promotion_threshold = _require_positive_int(
-        threshold_raw,
-        key="pipeline.backlog_promotion_threshold",
-        vault_dir=vault_dir,
-        label="backlog_promotion_threshold must be an integer >= 1",
-    )
+        threshold_raw = pipeline.get("backlog_promotion_threshold", 2)
+        backlog_promotion_threshold = _require_positive_int(
+            threshold_raw,
+            key="pipeline.backlog_promotion_threshold",
+            vault_dir=vault_dir,
+            label="backlog_promotion_threshold must be an integer >= 1",
+        )
+    except SettingsError as exc:
+        raise _with_typo_hint(exc, unknown_keys) from exc
 
     pipeline_extra = {
         k: v for k, v in pipeline.items() if k not in _PIPELINE_TYPED_KEYS
@@ -387,8 +397,6 @@ def load_vault_settings(vault_dir: Path) -> VaultSettings:
     )
     reports = _parse_reports(raw.get("reports"), vault_dir=vault_dir)
     credibility = _parse_credibility(raw.get("credibility"), vault_dir=vault_dir)
-
-    _warn_unknown_keys(raw, settings_path)
 
     return VaultSettings(
         max_cycles=max_cycles,
@@ -1538,21 +1546,37 @@ def find_unknown_keys(raw: Mapping[str, Any]) -> list[UnknownKey]:
     return out
 
 
-# A typo is reported once per process per file: the loader runs many times in a
-# cycle (every reader calls it), and one line per call would bury the signal.
-_REPORTED_UNKNOWN: set[tuple[str, str]] = set()
+def _warn_unknown_keys(unknown: list[UnknownKey], settings_path: Path) -> None:
+    """Emit one warning per unknown key.
 
-
-def _warn_unknown_keys(raw: Mapping[str, Any], settings_path: Path) -> None:
-    for unknown in find_unknown_keys(raw):
-        ident = (str(settings_path), unknown.path)
-        if ident in _REPORTED_UNKNOWN:
-            continue
-        _REPORTED_UNKNOWN.add(ident)
+    The loader runs many times in a cycle (every reader calls it). The warnings
+    module's own dedupe keeps that to one line per key per process under the
+    default filter: ``stacklevel=1`` makes the location this line, not the
+    caller, so callers do not each get their own copy. No bookkeeping of ours,
+    so a filtered warning cannot consume a report.
+    """
+    for key in unknown:
         warnings.warn(
-            UnknownSettingsKeyWarning(f"{settings_path}: {unknown.message()}"),
-            stacklevel=3,
+            UnknownSettingsKeyWarning(f"{settings_path}: {key.message()}"),
+            stacklevel=1,
         )
+
+
+def _with_typo_hint(exc: SettingsError, unknown: list[UnknownKey]) -> SettingsError:
+    """Append "found unknown key X, did you mean Y" when X explains *exc*."""
+    if exc.key is None:
+        return exc
+    hints = [
+        f"found unknown key {u.path!r} - did you mean {u.suggestion!r}?"
+        for u in unknown
+        if u.suggestion
+        and (u.suggestion == exc.key or u.suggestion.endswith(f".{exc.key}"))
+    ]
+    if not hints:
+        return exc
+    return SettingsError(
+        f"{exc} ({'; '.join(hints)})", vault_dir=exc.vault_dir, key=exc.key
+    )
 
 
 def strict_settings_violations(vault_dir: Path) -> list[UnknownKey]:
@@ -1572,3 +1596,23 @@ def strict_settings_violations(vault_dir: Path) -> list[UnknownKey]:
     if not isinstance(raw, dict) or raw.get("strict_settings") is not True:
         return []
     return find_unknown_keys(raw)
+
+
+def strict_settings_refusal(vault_dir: Path) -> str | None:
+    """The message a verb prints when strict mode forbids its run, else ``None``.
+
+    The ONE check behind every refusal: ``orchestrator.run_cycles`` and the CLI
+    entry points of the verbs that dispatch cycles or LLM work (``cycle``,
+    ``generate --resume``, ``pipeline full|collect|extract|scout|resume|finish``)
+    all call it, before they have any side effect, and exit 2.
+    """
+    unknown = strict_settings_violations(vault_dir)
+    if not unknown:
+        return None
+    listed = "\n  ".join(u.message() for u in unknown)
+    return (
+        f"{vault_dir / 'settings.yaml'} has unknown keys and "
+        f"`strict_settings: true` is set, so nothing was started:\n  {listed}\n"
+        "Fix or remove them, or set `strict_settings: false` to run with a "
+        "warning instead."
+    )

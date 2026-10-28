@@ -41,7 +41,7 @@ from .gates import GateResult, run_gate
 from .gates_cycle import CG001_min_cycle_yield
 from .gates_step import SG005_frontmatter_completeness
 from .run_report import write_run_report as _write_run_report
-from .settings import strict_settings_violations
+from .settings import strict_settings_refusal
 from .stubs import scan_stubs
 
 _LOG = logging.getLogger(__name__)
@@ -920,17 +920,12 @@ def run_cycles(
 
     # Issue #8: `strict_settings: true` refuses a run while settings.yaml
     # carries a key nothing recognises (a typo that otherwise looks applied).
-    # Same placement and reasoning as the archived guard: before any side
-    # effect, and here rather than in the CLI so every caller is covered.
-    unknown_settings = strict_settings_violations(vault_dir)
-    if unknown_settings:
-        _LOG.error(
-            "[orchestrator] refusing to run: %s has unknown keys and "
-            "`strict_settings: true` is set:\n  %s\nFix or remove them, or set "
-            "`strict_settings: false` to run with a warning instead.",
-            vault_dir / "settings.yaml",
-            "\n  ".join(u.message() for u in unknown_settings),
-        )
+    # Before any side effect, like the archived guard above. The CLI verbs that
+    # dispatch work without passing through here (`cycle`, `pipeline ...`) call
+    # the same check at their own entry points.
+    refusal = strict_settings_refusal(vault_dir)
+    if refusal:
+        _LOG.error("[orchestrator] refusing to run: %s", refusal)
         return 2
 
     # Spec 050 / Principle X: open a research branch (or reuse on

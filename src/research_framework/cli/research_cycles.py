@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+from ..pipeline.settings import strict_settings_refusal
 from ..spec.schema import SpecValidationError
 from ..spec.simple import load as load_spec
 from ..spec.validator import validate
@@ -71,6 +72,14 @@ def _cmd_cycle(args: argparse.Namespace) -> int:
     pause = _standing_pause(args.vault)
     if pause is not None:
         return _refuse_over_pause(*pause)
+
+    # Issue #8: strict mode refuses before anything is resolved or written.
+    # `--estimate-only` only prices a cycle, so it is left alone.
+    if not getattr(args, "estimate_only", False):
+        refusal = strict_settings_refusal(args.vault)
+        if refusal:
+            print(f"error: {refusal}", file=sys.stderr)
+            return 2
 
     # Spec 061: ONE ladder for every run verb. `--budget-cap` is this verb's
     # `--max-usd` rung; omitted, `pipeline.budget_usd` decides; absent, the
@@ -402,6 +411,14 @@ def _cmd_pipeline(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
+
+    # Issue #8: every subcommand that starts a phase; `status` and `prune-runs`
+    # read or tidy and are not refused.
+    if sub in {"full", "collect", "extract", "scout", "resume", "finish"}:
+        refusal = strict_settings_refusal(vault)
+        if refusal:
+            print(f"error: {refusal}", file=sys.stderr)
+            return 2
 
     if sub == "full":
         return run_full(vault, quiet=quiet)
