@@ -112,7 +112,7 @@ def _ask(vault: Path, *extra: str) -> int:
 
 
 def test_without_escalate_a_reported_gap_starts_no_run(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     vault = _vault(tmp_path)
     cycles = _record_cycles(monkeypatch)
@@ -123,7 +123,7 @@ def test_without_escalate_a_reported_gap_starts_no_run(
     assert cycles == [], "ask without --escalate must never start a run"
     answers = _answers(vault)
     assert len(answers) == 1 and GAP_LINE_PREFIX in answers[0]
-    assert "--escalate" in capsys.readouterr().err
+    assert "--escalate" in caplog.text
 
 
 def test_with_escalate_the_gap_topic_reaches_one_cycle_under_the_ladder(
@@ -232,7 +232,7 @@ def test_a_cycle_that_terminates_with_1_is_followed_by_a_re_ask(
 
 
 def test_a_budget_pause_inside_the_cycle_is_reported_as_a_pause(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """`pause_for_budget` writes its marker and exits 1 — the ceiling holding."""
     from research_framework.pipeline.budget_guard import budget_marker_path
@@ -250,8 +250,7 @@ def test_a_budget_pause_inside_the_cycle_is_reported_as_a_pause(
 
     assert rc == 1
     assert len(_answers(vault)) == 1, "a paused run must not be followed by a re-ask"
-    err = capsys.readouterr().err
-    assert "paused" in err and "BUDGET_PAUSED" in err
+    assert "paused" in caplog.text and "BUDGET_PAUSED" in caplog.text
 
 
 def test_the_lifetime_dollar_ceiling_refuses_the_escalation(

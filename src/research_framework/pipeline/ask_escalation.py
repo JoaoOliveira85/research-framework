@@ -25,8 +25,8 @@ this flow reuses. Nothing here writes it anywhere else.
 from __future__ import annotations
 
 import json
+import logging
 import re
-import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -76,6 +76,8 @@ _NEAR_MISS_RE = re.compile(
 #: Exactly these keys, no more: a gap line is a report, not a request. A field
 #: such as a budget would be the agent picking its own cap again.
 _GAP_KEYS = frozenset({"topic", "in_scope"})
+
+_LOG = logging.getLogger(__name__)
 
 #: The stage name the dispatch is recorded under; ``stages.ask`` in
 #: settings.yaml picks its executor, ``default_executor`` otherwise.
@@ -241,16 +243,15 @@ def dispatch_ask(vault: Path, prompt: str, run_dir: Path) -> AskAnswer:
     if outcome.returncode != 0:
         return AskAnswer(outcome.returncode, "")
     if not answer_file.is_file():
-        print(
-            f"[ask] ERROR: the ask agent exited 0 but wrote no answer to {answer_file}",
-            file=sys.stderr,
+        _LOG.error(
+            "[ask] the ask agent exited 0 but wrote no answer to %s", answer_file
         )
         return AskAnswer(1, "")
     return AskAnswer(0, answer_file.read_text(encoding="utf-8"))
 
 
-def _stderr(message: str) -> None:
-    print(f"[ask] {message}", file=sys.stderr)
+def _log(level: int, message: str) -> None:
+    _LOG.log(level, "[ask] %s", message)
 
 
 def run_ask(
@@ -259,7 +260,7 @@ def run_ask(
     escalate: bool,
     ask: Callable[[str], AskAnswer],
     research: Callable[[str], ResearchOutcome],
-    report: Callable[[str], None] = _stderr,
+    report: Callable[[int, str], None] = _log,
 ) -> int:
     """Answer ``question``; research a reported in-scope gap only if ``escalate``.
 
@@ -267,71 +268,87 @@ def run_ask(
     budget ladder and every refusal the cycle verb makes. It is called at most
     once: a gap that survives the research is reported, not researched again,
     so one ask can never turn into a loop of paid runs.
+
+    ``report(level, message)`` is the spec-048 logger by default. Every exit
+    reason for a non-zero return is an ERROR; anything the operator has to
+    act on (a gap left unresearched, an unreadable gap marker) is a WARNING,
+    so it survives the redirected-output default of ``warning``; progress is
+    INFO.
     """
     answer = ask(question)
     if answer.returncode != 0:
         report(
-            f"ERROR: the ask agent exited {answer.returncode}; nothing was researched."
+            logging.ERROR,
+            f"the ask agent exited {answer.returncode}; nothing was researched.",
         )
         return answer.returncode
     try:
         gap = parse_gap_line(answer.text)
     except GapLineError as exc:
-        report(f"ERROR: {exc}. Nothing was researched.")
+        report(logging.ERROR, f"{exc}. Nothing was researched.")
         return 1
 
     if gap is None:
         if gap_line_near_miss(answer.text):
             report(
-                f"WARN: the answer mentions a vault gap but has no line starting "
+                logging.WARNING,
+                "the answer mentions a vault gap but has no line starting "
                 f"{GAP_LINE_PREFIX!r} with the contract's JSON (bold, backticks, "
                 "a bullet or lower case break it). No gap was read and nothing "
-                "was researched."
+                "was researched.",
             )
         return 0
     if not gap.in_scope:
         report(
+            logging.WARNING,
             f"gap outside the vault's declared scope: {gap.topic!r}. "
-            "Not researched — widen the spec's scope first if it belongs here."
+            "Not researched — widen the spec's scope first if it belongs here.",
         )
         return 0
     if not escalate:
         report(
+            logging.WARNING,
             f"the vault does not cover {gap.topic!r}. Re-run with --escalate to "
-            "research it under the vault's configured budget, then re-ask."
+            "research it under the vault's configured budget, then re-ask.",
         )
         return 0
 
-    report(f"escalating: researching {gap.topic!r} under the configured budget ladder.")
+    report(
+        logging.INFO,
+        f"escalating: researching {gap.topic!r} under the configured budget ladder.",
+    )
     outcome = research(gap.topic)
     if outcome.status == "paused":
         report(
+            logging.ERROR,
             f"research for {gap.topic!r} paused before it finished "
             f"({outcome.detail or 'a pause marker is standing'}); the question was "
-            "not re-asked. Inspect it with `research-framework pause show`."
+            "not re-asked. Inspect it with `research-framework pause show`.",
         )
         return outcome.returncode or 1
     if outcome.status != "completed":
         detail = f" ({outcome.detail})" if outcome.detail else ""
         report(
-            f"ERROR: the research run for {gap.topic!r} exited "
-            f"{outcome.returncode}{detail}; the question was not re-asked."
+            logging.ERROR,
+            f"the research run for {gap.topic!r} exited "
+            f"{outcome.returncode}{detail}; the question was not re-asked.",
         )
         return outcome.returncode or 1
 
-    report("research finished; asking again.")
+    report(logging.INFO, "research finished; asking again.")
     again = ask(question)
     if again.returncode != 0:
-        report(f"ERROR: the re-ask exited {again.returncode}.")
+        report(logging.ERROR, f"the re-ask exited {again.returncode}.")
         return again.returncode
     try:
         still = parse_gap_line(again.text)
     except GapLineError as exc:
-        report(f"ERROR: {exc}.")
+        report(logging.ERROR, f"{exc}.")
         return 1
     if still is not None:
         report(
+            logging.WARNING,
             f"the vault still does not cover {still.topic!r} after one research "
-            "run. Not escalating again."
+            "run. Not escalating again.",
         )
     return 0

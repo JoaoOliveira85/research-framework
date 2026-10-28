@@ -16,6 +16,7 @@ dispatch and the real cycle verb.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -208,7 +209,10 @@ def test_a_near_miss_is_warned_about_not_passed_silently() -> None:
     assert rec.run(escalate=True) == 0
 
     assert rec.researched == []
-    assert any("WARN" in m and GAP_LINE_PREFIX in m for m in rec.messages)
+    assert any(
+        lvl == logging.WARNING and GAP_LINE_PREFIX in m
+        for lvl, m in zip(rec.levels, rec.messages, strict=True)
+    )
 
 
 def test_two_gap_lines_are_refused() -> None:
@@ -248,6 +252,7 @@ class _Recorder:
         self.researched: list[str] = []
         self._research = research
         self.messages: list[str] = []
+        self.levels: list[int] = []
 
     def ask(self, question: str) -> AskAnswer:
         self.asked.append(question)
@@ -257,8 +262,9 @@ class _Recorder:
         self.researched.append(topic)
         return self._research
 
-    def report(self, message: str) -> None:
+    def report(self, level: int, message: str) -> None:
         self.messages.append(message)
+        self.levels.append(level)
 
     def run(self, *, escalate: bool, question: str = "Q?") -> int:
         return run_ask(
@@ -277,7 +283,11 @@ def test_without_escalate_an_in_scope_gap_starts_no_run() -> None:
 
     assert rec.researched == []
     assert rec.asked == ["Q?"]
-    assert any("--escalate" in m for m in rec.messages)
+    # A WARNING, so the hint survives the redirected-output default level.
+    assert any(
+        lvl == logging.WARNING and "--escalate" in m
+        for lvl, m in zip(rec.levels, rec.messages, strict=True)
+    )
 
 
 def test_with_escalate_an_in_scope_gap_is_researched_then_re_asked() -> None:
@@ -365,7 +375,10 @@ def test_a_paused_research_run_is_reported_as_a_pause_and_not_re_asked() -> None
     assert rec.run(escalate=True) == 1
 
     assert len(rec.asked) == 1
-    assert any("paused" in m and "BUDGET_PAUSED" in m for m in rec.messages)
+    assert any(
+        lvl == logging.ERROR and "paused" in m and "BUDGET_PAUSED" in m
+        for lvl, m in zip(rec.levels, rec.messages, strict=True)
+    )
 
 
 def test_a_gap_that_survives_the_research_is_not_escalated_twice() -> None:
