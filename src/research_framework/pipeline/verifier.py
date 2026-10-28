@@ -594,9 +594,7 @@ def _call_verifier(
     none of it. The fake agent hides this in tests because it costs $0.
     """
     note_text = note_file.read_text(encoding="utf-8")
-    prompt = _build_verifier_prompt(
-        note_text, **_verifier_inputs(vault_dir, note_text)
-    )
+    prompt = _build_verifier_prompt(note_text, **_verifier_inputs(vault_dir, note_text))
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".md", delete=False, encoding="utf-8"
     ) as prompt_f:

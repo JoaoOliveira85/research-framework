@@ -329,7 +329,9 @@ class TestSkillInstructions:
         root = self._skill(tmp_path, "s", "---\nname: s\n---\n\n# Role\n\nDo it.\n")
         assert _assets.skill_instructions("s", skills_root=root) == "# Role\n\nDo it."
 
-    def test_a_skill_without_frontmatter_is_returned_whole(self, tmp_path: Path) -> None:
+    def test_a_skill_without_frontmatter_is_returned_whole(
+        self, tmp_path: Path
+    ) -> None:
         root = self._skill(tmp_path, "s", "# Role\n\nDo it.\n")
         assert _assets.skill_instructions("s", skills_root=root) == "# Role\n\nDo it."
 
@@ -348,5 +350,7 @@ class TestSkillInstructions:
         assert text == "### Role\n\n#### Step\n\n```bash\n# a shell comment\n```"
 
     def test_a_stub_examples_section_is_dropped(self, tmp_path: Path) -> None:
-        root = self._skill(tmp_path, "s", "# Role\n\nDo it.\n\n# Examples\n\n*(Stub.)*\n")
+        root = self._skill(
+            tmp_path, "s", "# Role\n\nDo it.\n\n# Examples\n\n*(Stub.)*\n"
+        )
         assert _assets.skill_instructions("s", skills_root=root) == "# Role\n\nDo it."
