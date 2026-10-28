@@ -166,7 +166,7 @@ def _recheck_dollar_cap(
             "actual_usd": actual,
             "cycle_budget_usd": cap,
         },
-        remedy="Bump limits.cycle_budget_usd or pass --force-budget.",
+        remedy="Raise limits.cycle_budget_usd in settings.yaml, then resume.",
     )
 
 
@@ -188,7 +188,7 @@ def _recheck_metered_token_cap(
             "metered_tokens": actual,
             "codex_token_budget": cap,
         },
-        remedy="Bump limits.codex_token_budget or pass --force-budget.",
+        remedy="Raise limits.codex_token_budget in settings.yaml, then resume.",
     )
 
 
@@ -228,8 +228,8 @@ def _recheck_wallclock_cap(
             "cycle_wallclock_budget_minutes": cap_minutes,
         },
         remedy=(
-            "Bump limits.cycle_wallclock_budget_minutes above the elapsed "
-            "time above, or pass --force-budget."
+            "Raise limits.cycle_wallclock_budget_minutes in settings.yaml "
+            "above the elapsed time above, then resume."
         ),
     )
 
@@ -295,10 +295,9 @@ def handle_budget_marker_on_resume(
     try:
         marker = _load_valid_budget_marker(marker_path)
     except (OSError, ValueError, TypeError, KeyError) as exc:
-        # Deliberately NOT forceable: `--force-budget` is consent to overspend
-        # a cap the operator can see, not consent to resume past a pause
-        # nobody can read. Deleting it here would be the silent-clear bug in a
-        # new costume.
+        # Deliberately not clearable here: resuming past a pause nobody can
+        # read would drop whichever cap stopped the run. Deleting it here
+        # would be the silent-clear bug in a new costume.
         return _refused(
             f"BUDGET_PAUSED is not a valid marker per "
             f"budget-marker.contract.md §2 ({exc})",
@@ -308,34 +307,16 @@ def handle_budget_marker_on_resume(
         )
     settings = load_vault_settings(vault_dir)
     recheck = _recheck_paused_cap(marker, settings.limits, vault_dir, cycle)
-    force = _flag_is_true(args, "force_budget")
-    if recheck.still_exceeded and not force:
+    if recheck.still_exceeded:
         if is_interactive_tty():
             print(f"{recheck.tty_message} {recheck.remedy}", file=sys.stderr)
             return 1
         print(json.dumps(recheck.payload), file=sys.stderr)
         return 1
-    if force and recheck.still_exceeded:
-        if not is_interactive_tty() and not _env_ack("RF_FORCE_BUDGET_ACK"):
-            print(
-                json.dumps({"error": "force_budget_requires_RF_FORCE_BUDGET_ACK"}),
-                file=sys.stderr,
-            )
-            return 1
-        if is_interactive_tty():
-            answer = input("Force resume despite budget cap? [y/N] ").strip().lower()
-            if answer not in ("y", "yes"):
-                return _refused(
-                    f"declined to force past the budget cap ({recheck.tty_message})",
-                    marker_path,
-                    f"{recheck.remedy} Or re-run `--force-budget` and answer `y`.",
-                )
     clear_budget_marker(vault_dir)
     print(
         f"BUDGET_PAUSED cleared: {recheck.pause_reason} re-checked at "
-        f"stage {marker.paused_stage!r}"
-        + (" and forced past" if recheck.still_exceeded else " and now satisfied")
-        + ".",
+        f"stage {marker.paused_stage!r} and now satisfied.",
         file=sys.stderr,
     )
     return 0
@@ -434,9 +415,3 @@ def handle_approval_marker_on_resume(args: argparse.Namespace, vault_dir: Path) 
 def _flag_is_true(args: argparse.Namespace, name: str) -> bool:
     """Return True only for an explicit boolean ``True`` (mocks are not flags)."""
     return getattr(args, name, None) is True
-
-
-def validate_force_budget_flags(args: argparse.Namespace) -> int:
-    """Pre-flight for ``--force-budget`` (ack lives in budget-marker handler)."""
-    _ = args
-    return 0

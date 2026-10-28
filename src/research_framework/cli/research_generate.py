@@ -57,10 +57,9 @@ def _cmd_generate(args: argparse.Namespace) -> int:
     if args.regenerate_plan_only:
         return _regenerate_plan_only(args)
 
-    # Issue #286: --approve/--approve-all/--reject/--force-budget only mean
-    # anything on a resume (spec 033's approval gates and budget pauses are
-    # markers written mid-run; a fresh generate has no run yet to approve,
-    # reject or force past). They used to be silently accepted no-ops outside
+    # Issue #286: --approve/--approve-all/--reject only mean anything on a
+    # resume (spec 033's approval gates are markers written mid-run; a fresh
+    # generate has no run yet to approve or reject). They used to be silently accepted no-ops outside
     # --resume. Refuse loudly instead, same as every other refusal in this
     # file (spec 070 FR6).
     if not getattr(args, "resume", False):
@@ -70,7 +69,6 @@ def _cmd_generate(args: argparse.Namespace) -> int:
                 ("--approve", getattr(args, "approve", None)),
                 ("--approve-all", getattr(args, "approve_all", False)),
                 ("--reject", getattr(args, "reject", None)),
-                ("--force-budget", getattr(args, "force_budget", False)),
             )
             if value
         ]
@@ -79,7 +77,7 @@ def _cmd_generate(args: argparse.Namespace) -> int:
                 "error: "
                 + ", ".join(_resume_only_flags)
                 + " only take effect with --resume (spec 033 approval gates "
-                "and budget pauses exist only mid-run); pass --resume or "
+                "gates exist only mid-run); pass --resume or "
                 "drop the flag.",
                 file=sys.stderr,
             )

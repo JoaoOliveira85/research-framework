@@ -580,7 +580,10 @@ def pause_for_budget(vault_dir: Path, marker: BudgetPausedMarker) -> NoReturn:
     atomic_write_json_marker(path, marker.to_json_dict())
     print(  # noqa: T201 — keep raw print: interactive prompt
         f"BUDGET_PAUSED: {marker.pause_reason} at stage {marker.paused_stage!r}. "
-        "Bump limits.cycle_budget_usd or run `./vault research --resume --force-budget`.",
+        "Raise the capped limit (limits.cycle_budget_usd, "
+        "limits.codex_token_budget or limits.cycle_wallclock_budget_minutes, "
+        "per the reason above) in settings.yaml, then run "
+        "`./vault research --resume`.",
         file=sys.stderr,
     )
     raise SystemExit(1)

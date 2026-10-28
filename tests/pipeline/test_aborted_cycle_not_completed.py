@@ -161,7 +161,7 @@ def test_a_budget_pause_is_re_checked_against_the_cycle_it_paused(
 
     Anchored one cycle late, the resume re-checked the cap against a cycle
     that had spent nothing, found it "now satisfied", cleared ``BUDGET_PAUSED``
-    without ``--force-budget`` and never went back to the paused cycle.
+    without raising the cap and never went back to the paused cycle.
     """
     from research_framework.cli import budget_resume
     from research_framework.pipeline.budget_guard import (
@@ -204,7 +204,7 @@ def test_a_budget_pause_is_re_checked_against_the_cycle_it_paused(
     assert anchor == 2
     assert budget_resume.peek_paused_stage(vault, anchor) == "note_writer"
     monkeypatch.setattr(budget_resume, "is_interactive_tty", lambda: False)
-    args = argparse.Namespace(output=vault, cycle=None, force_budget=False)
+    args = argparse.Namespace(output=vault, cycle=None)
     assert budget_resume.handle_budget_marker_on_resume(args, vault, anchor) != 0
     assert budget_marker_path(vault).is_file()
 

@@ -6,9 +6,8 @@ usage: research-framework generate [-h] [--spec SPEC] [--output OUTPUT]
                                    [--skip-gate] [--prepopulate PREPOPULATE]
                                    [--settings SETTINGS]
                                    [--regenerate-plan-only]
-                                   [--legacy-cycle-runner] [--force-budget]
-                                   [--approve STAGE] [--approve-all]
-                                   [--reject STAGE]
+                                   [--legacy-cycle-runner] [--approve STAGE]
+                                   [--approve-all] [--reject STAGE]
                                    [vault_dir]
 
 positional arguments:
@@ -81,8 +80,6 @@ options:
                         DEPRECATED: pre-017 single-invocation note-writer path
                         (removed). Emits a warning and fails — use the default
                         pipeline instead.
-  --force-budget        Resume past BUDGET_PAUSED after operator
-                        acknowledgement (spec 033).
   --approve STAGE       Headless approval for a gated stage (requires
                         RF_APPROVE_<STAGE>_ACK=1).
   --approve-all         Approve all pending gates (requires

@@ -196,11 +196,6 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     g.add_argument(
-        "--force-budget",
-        action="store_true",
-        help="Resume past BUDGET_PAUSED after operator acknowledgement (spec 033).",
-    )
-    g.add_argument(
         "--approve",
         type=str,
         default=None,

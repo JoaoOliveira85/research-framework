@@ -177,8 +177,26 @@ def _die_of(signum: int) -> int:
     return 128 + signum  # only if the signal is somehow not delivered
 
 
+_FORCE_BUDGET_RETIRED = (
+    "error: --force-budget was removed (issue #14). A run over its cap stops "
+    "before dispatch; raise the cap instead:\n"
+    "  per-cycle dollars:     limits.cycle_budget_usd in settings.yaml\n"
+    "  metered tokens:        limits.codex_token_budget\n"
+    "  wall-clock:            limits.cycle_wallclock_budget_minutes\n"
+    "  run-wide dollars:      --max-usd (or pipeline.budget_usd)\n"
+    "then `generate --resume`."
+)
+
+
+def _retired_force_budget(argv: list[str]) -> bool:
+    return any(a == "--force-budget" or a.startswith("--force-budget=") for a in argv)
+
+
 def main(argv: list[str] | None = None) -> int:
     _force_line_buffered_stdio()
+    if _retired_force_budget(sys.argv[1:] if argv is None else argv):
+        print(_FORCE_BUDGET_RETIRED, file=sys.stderr)
+        return 2
     parser = build_parser()
     args = parser.parse_args(argv)
     level = _log_level.resolve(
