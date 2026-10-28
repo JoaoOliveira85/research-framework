@@ -310,3 +310,83 @@ def test_fake_records_a_failed_stage_in_its_sidecar(tmp_path: Path) -> None:
     assert payload["status"] == "failed"
     assert payload["exit_code"] == 2
     assert payload["stderr_excerpt"]
+
+
+# ---------------------------------------------------------------------------
+# The tier the cost record carries (issue #13)
+# ---------------------------------------------------------------------------
+
+
+def test_shim_dispatch_keeps_the_real_defaults(shim_dispatch) -> None:
+    """Names alone let ``tier="standard"`` survive in the fake after the real
+    default became ``None`` (resolve from the stage)."""
+    real = inspect.signature(_real().dispatch).parameters
+    shim = inspect.signature(shim_dispatch).parameters
+    drifted = sorted(
+        name
+        for name, param in real.items()
+        if name in shim and shim[name].default != param.default
+    )
+    assert not drifted, f"the shim's dispatch() defaults differ from the real: {drifted}"
+
+
+_TIERED_SETTINGS = (
+    "tiers:\n  basic: b\n  normal: n\n  flagship: f\n"
+    "stages:\n  plan_narrator:\n    tier: normal\n"
+    "  research_plan_narrator:\n    tier: flagship\n"
+)
+
+
+def _tiered_vault(tmp_path: Path, settings: str = _TIERED_SETTINGS) -> Path:
+    vault = tmp_path / "vault"
+    (vault / "_pipeline" / "cycles" / "cycle-001").mkdir(parents=True)
+    (vault / "settings.yaml").write_text(settings, encoding="utf-8")
+    return vault
+
+
+def _real_stage_tier(vault: Path, stage: str) -> str:
+    real = _real()
+    return real._stage_tier(real._load_settings(vault), stage)
+
+
+@pytest.mark.parametrize(
+    ("settings", "expected"),
+    [(_TIERED_SETTINGS, "normal"), ("stages:\n  plan_narrator: {}\n", "")],
+)
+def test_shim_dispatch_records_the_tier_the_real_dispatch_records(
+    shim_dispatch, tmp_path: Path, settings: str, expected: str
+) -> None:
+    vault = _tiered_vault(tmp_path, settings)
+    cycle_dir = vault / "_pipeline" / "cycles" / "cycle-001"
+
+    shim_dispatch("plan_narrator", "p", vault_dir=vault, cycle_dir=cycle_dir)
+
+    payload = json.loads(
+        (cycle_dir / "agent-calls" / "plan_narrator.json").read_text("utf-8")
+    )
+    assert payload["tier"] == _real_stage_tier(vault, "plan_narrator") == expected
+
+
+def test_fake_cli_records_the_tier_the_real_cli_records(tmp_path: Path) -> None:
+    vault = _tiered_vault(tmp_path)
+    prompt = tmp_path / "prompt.md"
+    prompt.write_text("Cycle 1 plan narration request.\n", encoding="utf-8")
+    sidecar = tmp_path / "agent-calls" / "research_plan_narrator.json"
+
+    rc = fake_agent.main(
+        [
+            "--vault",
+            str(vault),
+            "--stage",
+            "research_plan_narrator",
+            "--prompt-file",
+            str(prompt),
+            "--cost-sidecar",
+            str(sidecar),
+        ]
+    )
+
+    assert rc == 0
+    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert payload["tier"] == _real_stage_tier(vault, "research_plan_narrator")
+    assert payload["tier"] == "flagship"
