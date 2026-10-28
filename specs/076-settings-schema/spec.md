@@ -78,11 +78,11 @@ features the keys configure, which live in their own specs (`033`, `061`,
 
 1. **Given** `stages.<name>.tier` naming no key of `tiers:`, **When** the
    file loads, **Then** it raises, naming the stage and the known tiers
-   (issue #13; the retired `standard`/`expert` labels warn instead, for one
-   release).
-2. **Given** any stage carrying **both** `tier` and `model`, **When** the
-   file loads, **Then** it raises naming the stage — the two are mutually
-   exclusive.
+   (issue #13; a value that can only be the 1.0.1 complexity label warns
+   instead, for one release — FR-013).
+2. **Given** any stage carrying **both** `model` and a `tier` only the new
+   vocabulary defines, **When** the file loads, **Then** it raises naming
+   the stage — the two are mutually exclusive.
 3. **Given** a consensus quorum that is even or below 1, **When** the file
    loads, **Then** it raises: a quorum must be odd.
 4. **Given** `archived: "yes-please"`, **When** the file loads, **Then** it
@@ -150,9 +150,12 @@ features the keys configure, which live in their own specs (`033`, `061`,
   tier name MUST raise at load, naming the stage and the known tiers.
   *(Issue #13: before this the key was a `basic|standard|expert` complexity
   label on every stage but the two D7 ones.)*
-- **FR-013**: The retired complexity labels `standard` and `expert`, when the
-  profile does not define them as tiers, MUST warn (`FutureWarning`) and be
-  ignored for one release; the release after refuses them.
+- **FR-013**: For one release, a value that can only be the 1.0.1 label — any of `basic|normal|flagship|standard|expert` in a file with no
+  `tiers:` block, `basic|standard|expert` beside `model`, or
+  `standard`/`expert` undefined in `tiers:` — MUST warn (`FutureWarning`, naming the settings file and the
+  stage) and select no model; the release after refuses them. A tier that
+  resolves through a back-filled default while the stage's runtime is not
+  `claude` MUST warn, naming the file.
 - **FR-014**: `tiers` MUST always resolve `basic`, `normal` and `flagship`,
   back-filling any the vault did not override.
 - **FR-015**: `stages.source_extraction.consensus.tiers.<label>` MUST be a

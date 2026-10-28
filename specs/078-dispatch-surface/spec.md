@@ -155,9 +155,11 @@ weekly runner's own outer timeout (`075` FR-022).
 - **FR-013**: The cost record's `tier` MUST be the stage's tier name, or `""`
   when the stage names none. `dispatch(tier=None)` records the stage's own;
   a caller-passed `tier` is a label override only and selects no model.
-- **FR-014**: The retired labels `standard`/`expert`, when the profile does
-  not define them, MUST select no model and record no tier (the settings
-  loader warns about them for one release, then refuses them).
+- **FR-014**: For one release, a value that can only be the 1.0.1 label — any of `basic|normal|flagship|standard|expert` in a file with no
+  `tiers:` block, `basic|standard|expert` beside `model`, or
+  `standard`/`expert` undefined in `tiers:` — MUST select no model and record no tier, exactly as the
+  settings loader reads it (`076` FR-013); the loader warns, then the next
+  release refuses them.
 
 **Cost**
 

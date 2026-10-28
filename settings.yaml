@@ -32,7 +32,8 @@ archived: false
 # `tier: <name>` instead of `model:` — never both — and dispatches on
 # `tiers.<name>`. A tier name not defined here is refused at load. basic,
 # normal and flagship always exist (the values below are their defaults).
-# `standard` / `expert` are retired complexity labels: warned and ignored.
+# Without this block a `tier:` is read as the retired 1.0.1 complexity label
+# (warned, ignored); so are basic/standard/expert beside `model:`.
 # ---------------------------------------------------------------------------
 tiers:
   basic: claude-haiku-4-5
