@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — four `[NEEDS DECISION]` markers (Q1–Q4) await the owner, each with options and a recommendation
+- [x] No [NEEDS CLARIFICATION] markers remain *(Q1–Q4 decided by the owner 2026-10-28, recorded in § Clarifications and § Decisions)*
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic
@@ -31,5 +31,4 @@
 
 ## Notes
 
-- Ready for `/speckit.plan` once Q1–Q4 are answered. Q2 and Q3 change which
-  FRs are worded as "keep" versus "change"; Q1 only changes merge order.
+- Ready for `/speckit.plan`.

@@ -158,10 +158,13 @@ precondition of the one after it, and #249 composes all of them.
   skill; ADR-0013 vs a 061 amendment.
 - #270's fake-CLI-binary write-up folded into spec 078.
 - 075 T005 tick (satisfied by 080).
-- `[?]` **#18** → spec 084 — the research backlog as structured JSON
+
+**After spec 083** (#10, which creates the tracked `_pipeline/state/`
+directory; low priority):
+
+- `[ ]` **#18** → spec 084 — the research backlog as structured JSON
   (`_pipeline/state/research-backlog.json`, one writer) with a rendered,
-  git-ignored Markdown view. Lands after spec 083 (#10); blocked on the
-  spec's four owner decisions (Q1–Q4). Low priority.
+  git-ignored Markdown view. Clarified 2026-10-28; lands after 083.
 
 **Closes** #211 and #214 (with ledgers, after re-homing), #307, #189, #86,
 #295.

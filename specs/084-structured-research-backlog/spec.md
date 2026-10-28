@@ -1,9 +1,9 @@
 # Feature Specification: The research backlog as structured state
 
-**Status**: planned — drafted 2026-10-28 from #18; clarify analysis done, four
-owner decisions open (§ Open decisions). Low priority. Lands **after**
-`083-durable-state-layout` (#10), whose `_pipeline/state/` directory it
-writes into (Q1).
+**Status**: planned — drafted 2026-10-28 from #18; clarified the same day
+(the owner took all four recommendations, § Clarifications). Low priority.
+Lands **after** `083-durable-state-layout` (#10), whose `_pipeline/state/`
+directory it writes into (Q1).
 
 **Spec**: `084-structured-research-backlog` · **Depends on**:
 `083-durable-state-layout` (the tracked `_pipeline/state/` directory and the
@@ -56,8 +56,8 @@ not chase them:
   `orchestrator._harvest_followups` reads this cycle's
   `_pipeline/cycles/cycle-NNN-harvest.json`. The backlog reaches the loop only
   indirectly: the planner queues its orphans into the batches that are
-  written, and the scout agent reads the whole file as required reading. Q2
-  decides whether that stays so.
+  written, and the scout agent reads the whole file as required reading.
+  That stays so (Q2): the store is not a loop input.
 
 The fix #18 proposes is the right shape: one structured file, one module
 that writes it, and a Markdown view that is rendered from it and never
@@ -85,9 +85,10 @@ vault by two processes (§ Assumptions); surfacing anchor-stubs (D2).
 
 ### Session 2026-10-28
 
-Clarify analysis run without an interactive owner; each answer below was
-resolved from code or live-vault evidence. Genuine owner decisions are left
-as `[NEEDS DECISION]` under § Open decisions.
+Clarify analysis was run without an interactive owner. The first seven
+answers were resolved from code or live-vault evidence; the last four were
+owner decisions, put as options with a recommendation and accepted as
+recommended (§ Decisions keeps the options and the reasoning).
 
 - Q: Are coverage-gap lines backlog entries? → A: No. They are a snapshot of
   `_pipeline/coverage-targets.json`, which owns them; `topic_propose` and the
@@ -113,6 +114,19 @@ as `[NEEDS DECISION]` under § Open decisions.
   untouched and log `ERROR`; readers see no entries and log `WARNING`; the
   cycle continues, matching the best-effort contract the harvest, propose
   and quarantine steps already have (§ Edge Cases).
+- Q1 (owner): Does `084` land before or after `083`? → A: After — a hard
+  dependency. `083` owns `_pipeline/state/`, the single `.gitignore` rule and
+  the `./vault update` step that rewrites an existing vault's `.gitignore`.
+- Q2 (owner): What does the continuation trigger read? → A: This cycle's
+  harvest manifest, as today. The store is not a loop input (FR-014).
+- Q3 (owner): Which origins does the planner queue? → A: Open `harvest` and
+  `operator` entries. `researcher` entries are not queued yet — D4 is the
+  recorded follow-up; `proposal` and `migrated` entries are not queued
+  (FR-012).
+- Q4 (owner): What happens to a hand edit of the view? → A: Overwrite and
+  warn, and keep one copy of the overwritten text at
+  `_pipeline/research-backlog.md.overwritten` (git-ignored), named in the
+  warning (FR-018).
 
 ---
 
@@ -202,8 +216,8 @@ is kept. Running it again changes nothing.
   detection applies) and is not migrated again.
 - **A stale vault-local `topic_harvest.py` / `topic_propose.py`** (the
   vault's `scripts/` copy predates this spec) → it writes the Markdown view
-  directly; the next render detects the change, overwrites the view and warns
-  as for any hand edit. Q4 decides whether the overwritten text is kept.
+  directly; the next render detects the change, keeps the overwritten text,
+  overwrites the view and warns, as for any hand edit (FR-018).
 - **A title that differs only in case or internal whitespace** (F6) → the
   same entry.
 - **The view is missing** (it is git-ignored, so a fresh clone has none) →
@@ -231,9 +245,11 @@ is kept. Running it again changes nothing.
   or `migrated` (a line migration could not type). `status` MUST be one of
   `open`, `resolved` or `dropped`.
 - **FR-004**: An entry's `id` MUST be derived once, at creation, from its
-  origin and its key — the title with internal whitespace collapsed and
-  case-folded for topics, the note stem for quarantine entries — and MUST
-  NOT change afterwards, even if the title is edited.
+  key: `topic:` plus the title with internal whitespace collapsed and
+  case-folded, for every topic origin (so an operator's topic and the
+  harvest's sighting of the same topic are one entry), or `quarantine:` plus
+  the note stem. It MUST NOT change afterwards, even if the title is edited;
+  `origin` records who created the entry and also never changes.
 - **FR-005**: Every write MUST be atomic (the existing
   `pipeline/atomic_write` helper) and MUST be a read-modify-write of the
   current file, so no writer works from a stale copy.
@@ -245,16 +261,17 @@ is kept. Running it again changes nothing.
   quarantine sweep, `re-grade`, the scaffold and the planner MUST go through
   it; a guard test MUST fail if any other file under `src/` or `scripts/`
   opens either backlog path for writing.
-- **FR-007**: A writer MUST change only the fields its origin owns:
+- **FR-007**: A writer MUST change only the observation fields it owns —
   `last_seen_cycle`, `seen_cycles`, `citation_count`, `cited_from`, `detail`
-  and `updated` on entries of its origin, and `status` only from `open`. It
-  MUST NOT delete an entry, MUST NOT reopen an entry whose status an
-  operator set, and MUST NOT touch fields it does not own, including fields
-  it does not know.
-- **FR-008**: An entry is operator-owned when its `origin` is `operator` or
-  `migrated`, or when its `status` was last set by hand; the module MUST
-  record which (`status_by: operator | <writer>`), and an edit made outside
-  the module is by definition an operator's.
+  and `updated` — on the entry its `id` matches, whatever that entry's
+  origin, and `status` only from `open`. It MUST NOT delete an entry, MUST
+  NOT reopen an entry whose status an operator set, MUST NOT change `title`,
+  `origin`, `added` or `first_seen_cycle` of an existing entry, and MUST NOT
+  touch fields it does not know.
+- **FR-008**: The module MUST record who last set an entry's status
+  (`status_by: operator | <writer>`). A status change found in the file that
+  the module did not make is by definition an operator's, and the module
+  MUST record it as such on its next write.
 - **FR-009**: The harvest MUST upsert one entry per follow-on topic (origin
   `harvest` or `researcher`) and mark `resolved` any open `harvest` or
   `researcher` entry whose note now exists in the corpus.
@@ -271,15 +288,20 @@ is kept. Running it again changes nothing.
 
 - **FR-012**: The planner MUST read open entries from the store through the
   module, ordered by `first_seen_cycle` then insertion order, and score an
-  orphan with its **latest** `citation_count` (F9). Which origins it queues
-  is Q3.
+  orphan with its **latest** `citation_count` (F9). It MUST queue open
+  `harvest` and `operator` entries, scoring both with the existing orphan
+  formula (an entry with no `citation_count` scores as zero citations), and
+  MUST NOT queue `researcher`, `proposal`, `quarantine` or `migrated`
+  entries (Q3; D4 records the researcher follow-up).
 - **FR-013**: The propose stage's duplicate check MUST compare against every
   entry's normalised title regardless of status, as it compares against
   every bold title in the file today.
 - **FR-014**: The continuation trigger in `orchestrator.run_cycles`
   MUST keep today's per-cycle semantics — "this cycle's harvest found
   follow-on topics" — and MUST NOT become "the backlog has any open entry"
-  (that would loop on topics no source can answer). Its source is Q2.
+  (that would loop on topics no source can answer). Its source MUST stay
+  this cycle's `_pipeline/cycles/cycle-NNN-harvest.json`; the store is not a
+  loop input (Q2).
 - **FR-015**: The `source-exhausted` exit message MUST stop saying "backlog
   empty" when what it checked was this cycle's harvest; the constrained-exit
   punch list MUST name the JSON file.
@@ -296,8 +318,11 @@ is kept. Running it again changes nothing.
   by the live unmet coverage categories and a count of resolved and dropped
   entries.
 - **FR-018**: Before rendering, the module MUST detect a view that changed
-  since it was last rendered and, if so, log a `WARNING` naming the JSON
-  file as the place to make the change, then overwrite the view.
+  since it was last rendered and, if so, copy its current text to
+  `_pipeline/research-backlog.md.overwritten` (git-ignored; one copy,
+  replaced by the next such event), log a `WARNING` naming the JSON file as
+  the place to make the change and the copy's path, then overwrite the view
+  (Q4).
 - **FR-019**: The scout prompt template's required-reading item MUST
   describe the view's sections instead of the retired comment-delimited
   blocks.
@@ -336,8 +361,9 @@ is kept. Running it again changes nothing.
 | Backlog store | `_pipeline/state/research-backlog.json` (tracked) | `{schema_version, entries[]}`; the only source |
 | Entry | `entries[]` | `id`, `title`, `origin`, `status`, `status_by`, `first_seen_cycle`, `last_seen_cycle`, `seen_cycles`, `added`, `updated`; origin fields `citation_count`, `cited_from` (harvest), `detail` (researcher/proposal reason, quarantine reason, migrated line), `parent_note` + `relation` (proposal), `stem` + `kind: rewrite\|retry` (quarantine); unknown fields preserved |
 | Backlog view | `_pipeline/research-backlog.md` (ignored) | rendered on every write; read by the scout agent and the operator; never parsed |
+| Overwritten view copy | `_pipeline/research-backlog.md.overwritten` (ignored) | the last hand-edited view text the module overwrote (FR-018); never read by code |
 | Migration archive | `_pipeline/state/research-backlog.pre-migration.md` (tracked) | written once, never read by code |
-| Harvest manifest | `_pipeline/cycles/cycle-NNN-harvest.json` (scratch, unchanged) | today's loop-trigger input (Q2) |
+| Harvest manifest | `_pipeline/cycles/cycle-NNN-harvest.json` (scratch, unchanged) | the loop-trigger input, today and after this spec (Q2) |
 
 ## Success Criteria
 
@@ -365,7 +391,8 @@ would need", item 1).
 2. Carry-over: the same orphan harvested in cycles 1 and 3, cited by 2 then
    by 5 notes, is one entry with `first_seen_cycle: 1`,
    `last_seen_cycle: 3`, `seen_cycles: 2`, `citation_count: 5`, and the
-   planner scores it from 5.
+   planner scores it from 5. An `operator` entry is queued by the planner;
+   a `researcher` entry is not (Q3).
 3. A harvest run after the orphan's note was written marks its entry
    `resolved`; the entry is still in the store.
 4. A hand-edited JSON entry — an `operator` entry with a field the module
@@ -382,8 +409,10 @@ would need", item 1).
 7. A guard test fails when any file under `src/` or `scripts/` other than
    the backlog module opens `research-backlog.json` or
    `research-backlog.md` for writing.
-8. Editing the view by hand and then running any writer overwrites the view
-   and logs a `WARNING` naming `_pipeline/state/research-backlog.json`.
+8. Editing the view by hand and then running any writer overwrites the view,
+   leaves the edited text byte-equal in
+   `_pipeline/research-backlog.md.overwritten`, and logs a `WARNING` naming
+   `_pipeline/state/research-backlog.json` and the copy.
 9. A malformed store is left byte-unchanged by every writer, each logging an
    `ERROR`; the cycle completes.
 10. Migration of a fixture assembled from the shapes found in live vaults —
@@ -436,46 +465,37 @@ fixed here.
 - **D4 — Researcher-flagged topics fuel the loop but not the planner.**
   `_harvest_followups` counts them as continuation fuel; the planner never
   queues them (F5). A cycle can therefore continue on fuel only the scout
-  agent might act on. Q3 decides.
+  agent might act on. Q3 keeps them out of the planner for now; whether
+  to queue them (scored as zero-citation orphans) is a follow-up, to be
+  decided once their effect on queue length is measured.
 
-## Open decisions
+## Decisions
 
-The rest were resolved from evidence (§ Clarifications). Four remain.
+Taken by the owner on 2026-10-28; each was the recommended option. The
+options are kept so a later reader can see what was turned down and why.
 
-- **Q1 — Sequencing with `083`.** [NEEDS DECISION] (A) Hard dependency:
-  `084` lands after `083`, which owns `_pipeline/state/`, the `.gitignore`
-  rule and the `./vault update` step that rewrites existing vaults'
-  `.gitignore`. (B) `084` may land first, creating `_pipeline/state/` and
-  adding a narrow re-include for it that `083` later subsumes. *Recommended:
-  A* — B writes the `.gitignore` template twice and leaves existing vaults
-  with an untracked store until `083`'s update step exists. Either way `083`
-  MUST classify `_pipeline/research-backlog.md` as *converted by 084*, not
-  *moved into `state/`*.
-- **Q2 — What the continuation trigger reads.** [NEEDS DECISION] (A) Keep
-  reading this cycle's harvest manifest; the store is not a loop input.
-  (B) Read the store: open `harvest`/`researcher` entries whose
-  `last_seen_cycle` is this cycle — the same set, from the durable file.
-  (C) Any open entry in the store — a behaviour change. *Recommended: A* —
-  the trigger is a fact about this cycle, which is what the manifest
-  records; B adds a dependency on the store's health (a malformed store would
-  read as "no fuel" and could end a run as source-exhausted); C can loop
-  forever on topics no source answers (FR-014 rules it out).
-- **Q3 — Which origins the planner queues.** [NEEDS DECISION] (A) As today:
-  `harvest` orphans only. (B) `harvest` plus open `operator` entries.
-  (C) B plus `researcher` entries, scored as zero-citation orphans
-  (`0.3`). *Recommended: B* — an operator adding a topic to the backlog
-  expects it researched, and today that works only if they happen to type
-  the harvest's exact bullet grammar (F7); C changes queue length on every
-  live vault (28–110 entries each) and is better taken as its own decision
-  once D4 is measured. `proposal` entries stay scout-only (they are
-  advisory by `003` Phase 2's contract).
-- **Q4 — What happens to a hand edit of the view.** [NEEDS DECISION]
-  (A) Overwrite and warn (#18's definition of done, literally). (B) Also
-  keep the overwritten text, once, at `_pipeline/research-backlog.md.overwritten`
-  (ignored) and name it in the warning. *Recommended: B* — the operators
-  most likely to edit the view are the ones with years of habit editing the
-  old file, and a stale vault-local script (§ Edge Cases) writes there too;
-  one ignored file costs nothing and turns "lost" into "recoverable".
+- **Q1 — Sequencing with `083`: A, hard dependency.** Rejected: (B) `084`
+  lands first with a narrow re-include that `083` later subsumes — it writes
+  the `.gitignore` template twice and leaves existing vaults with an
+  untracked store until `083`'s update step exists. `083` MUST classify
+  `_pipeline/research-backlog.md` as *converted by 084*, not *moved into
+  `state/`*.
+- **Q2 — The continuation trigger: A, this cycle's harvest manifest.**
+  Rejected: (B) open `harvest`/`researcher` entries whose `last_seen_cycle`
+  is this cycle — the same set, but a malformed store would read as "no
+  fuel" and could end a run as source-exhausted; (C) any open entry — can
+  loop forever on topics no source answers.
+- **Q3 — The planner's origins: B, `harvest` plus `operator`.** An operator
+  who adds a topic expects it researched; today that works only in the
+  harvest's exact bullet grammar (F7). Rejected for now: (C) also
+  `researcher` entries — it changes queue length on every live vault (28–110
+  entries each), so it is D4's follow-up. `proposal` entries stay scout-only
+  (advisory by `003` Phase 2's contract).
+- **Q4 — A hand edit of the view: B, overwrite, warn and keep one copy.**
+  Rejected: (A) overwrite and warn only (#18's definition of done,
+  literally). Operators used to editing the old file, and stale vault-local
+  scripts (§ Edge Cases), both write there; one ignored file turns "lost"
+  into "recoverable".
 
 ## Assumptions
 
