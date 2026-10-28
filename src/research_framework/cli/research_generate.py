@@ -54,7 +54,17 @@ def _estimate_only_for_generate(args: argparse.Namespace) -> int:
 
 
 def _cmd_generate(args: argparse.Namespace) -> int:
+    from ..pipeline.archived import refuse_if_archived
+
     if args.regenerate_plan_only:
+        # Issue #26: it rewrites `_pipeline/research-plan.md`, which an archived
+        # vault must not gain.
+        _plan_target = args.vault_dir or args.output
+        if (
+            _plan_target is not None
+            and (rc := refuse_if_archived(Path(_plan_target).expanduser())) is not None
+        ):
+            return rc
         return _regenerate_plan_only(args)
 
     # Issue #286: --approve/--approve-all/--reject only mean anything on a
@@ -138,18 +148,9 @@ def _cmd_generate(args: argparse.Namespace) -> int:
     # unrelated config error happens to be hit first — an archived vault is
     # precisely the one whose spec and settings nobody has kept current.
     # Same single rule, called earlier.
-    from ..pipeline.orchestrator import is_archived
-
     _target = args.output or getattr(args, "vault_dir", None)
-    if _target is not None and is_archived(Path(_target)):
-        print(
-            f"error: {_target} is archived — no research cycle may write to it.\n"
-            "It stays fully queryable (`./vault ask`, `status`, `digest`, "
-            "`re-grade`) and still takes framework upgrades (`./vault update`).\n"
-            f"To resume research, set `archived: false` in {_target}/settings.yaml.",
-            file=sys.stderr,
-        )
-        return 2
+    if _target is not None and (rc := refuse_if_archived(Path(_target))) is not None:
+        return rc
 
     # --resume skips Phase 0/1; handled below by invoking pipeline modules.
     if args.resume:

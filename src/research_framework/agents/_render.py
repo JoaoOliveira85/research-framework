@@ -8,6 +8,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from ..pipeline.abstraction import effective_forbidden_filename_prefixes
+from ..pipeline.archived import apply_archived_notice, is_archived
 from ..spec.schema import SpecConfig
 
 _TEMPLATES_DIR = Path(__file__).parent
@@ -167,6 +168,12 @@ def write_agents(
     commands_dir.mkdir(parents=True, exist_ok=True)
     rendered = render_all_agents(spec, today=today)
     stems = command_stems(spec)
+    # Issue #26: an archived vault's `/research` command tells the agent not to
+    # write. Rendered fresh here every time, so un-archiving drops the notice.
+    if "research" in rendered:
+        rendered["research"] = apply_archived_notice(
+            rendered["research"], is_archived(vault_root)
+        )
     written: list[Path] = []
     targets = set(only) if only else set(_AGENT_NAMES)
     for name, text in rendered.items():

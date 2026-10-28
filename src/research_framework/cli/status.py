@@ -10,6 +10,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ..pipeline.archived import is_archived
 from ..pipeline.cycle_state import CycleState
 from ..pipeline.cycle_state import read as read_cycle_state
 
@@ -331,6 +332,7 @@ def build_status_json(vault_dir: Path) -> dict[str, object]:
             "deferred_warnings": [],
             "coverage": coverage,
             "pipeline": pipeline_status,
+            "archived": is_archived(vault_dir),
         }
 
     cycles_dir = vault_dir / "_pipeline" / "cycles"
@@ -362,7 +364,26 @@ def build_status_json(vault_dir: Path) -> dict[str, object]:
         "deferred_warnings": deferred,
         "coverage": coverage,
         "pipeline": pipeline_status,
+        "archived": is_archived(vault_dir),
     }
+
+
+_ARCHIVED_LINE = (
+    "ARCHIVED — frozen by `archived: true` in settings.yaml: no research cycle "
+    "will write here. Queries and maintenance still work. "
+    "Set `archived: false` to resume."
+)
+
+
+def _emit_text(vault_dir: Path, body: str) -> None:
+    """Print the plain-text report, led by an ARCHIVED line for a frozen vault.
+
+    Issue #26: a person (or cron wrapper) reading status should not have to
+    discover the freeze from an exit-2 refusal.
+    """
+    if is_archived(vault_dir):
+        print(_ARCHIVED_LINE)
+    print(body)
 
 
 def run_status(vault_dir: Path, *, json_output: bool = False) -> int:
@@ -383,22 +404,20 @@ def run_status(vault_dir: Path, *, json_output: bool = False) -> int:
             )
             last_log = _tail_last_line(log_path)
             elapsed_s = _elapsed_since(state.cycle_started_at)
-            print(
-                render_active(state, last_log, elapsed_s=elapsed_s),
-            )
+            _emit_text(vault_dir, render_active(state, last_log, elapsed_s=elapsed_s))
             return 0
 
         if json_output:
             print(json.dumps(build_status_json(vault_dir), indent=2))
             return 0
-        print(render_inactive(vault_dir))
+        _emit_text(vault_dir, render_inactive(vault_dir))
         return 0
     except Exception as exc:
         _LOG.warning("vault status failed: %s", exc)
         if json_output:
             print(json.dumps(build_status_json(vault_dir), indent=2))
         else:
-            print(render_inactive(vault_dir))
+            _emit_text(vault_dir, render_inactive(vault_dir))
         return 0
 
 
