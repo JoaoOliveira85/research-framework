@@ -26,6 +26,7 @@ from .pipeline.vault_git import (
     snapshot_commit,
     working_tree_dirty,
 )
+from .spec.parsed import ParsedSpecError, load_parsed_spec
 
 __all__ = ["prune_vault", "PruneResult"]
 
@@ -164,17 +165,13 @@ def prune_vault(
 
     corpus_dir = "data_vault"
     if not (vault_root / corpus_dir).exists():
-        # Try corpus_dir from spec-parse.json
-        import json
-
-        sp = vault_root / "_pipeline" / "spec-parse.json"
-        if sp.exists():
-            try:
-                corpus_dir = json.loads(sp.read_text()).get(
-                    "vault_corpus_dir", "data_vault"
-                )
-            except (json.JSONDecodeError, OSError):
-                pass
+        # Try the corpus_dir the vault's spec declares
+        try:
+            corpus_dir = load_parsed_spec(vault_root).get(
+                "vault_corpus_dir", "data_vault"
+            )
+        except ParsedSpecError:
+            pass
         if not (vault_root / corpus_dir).exists():
             raise ValueError(f"not a vault (no {corpus_dir}/ directory): {vault_root}")
 

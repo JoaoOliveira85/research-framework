@@ -21,16 +21,13 @@ _LOG = logging.getLogger(__name__)
 
 def _load_spec_for_scout_gates(vault_dir: Path):
     """Parsed vault spec for SG-001..003, or None to skip scout gates (no-spec path)."""
+    from research_framework.spec.parsed import ParsedSpecError, load_parsed_spec
     from research_framework.spec.schema import SpecConfig
 
-    parse_path = vault_dir / "_pipeline" / "spec-parse.json"
-    if parse_path.is_file():
-        try:
-            return SpecConfig.from_dict(
-                json.loads(parse_path.read_text(encoding="utf-8"))
-            )
-        except (json.JSONDecodeError, TypeError, KeyError, OSError):
-            pass
+    try:
+        return SpecConfig.from_dict(load_parsed_spec(vault_dir))
+    except (ParsedSpecError, TypeError, KeyError):
+        pass
     spec_md = vault_dir / "research.spec.md"
     if not spec_md.is_file():
         return None

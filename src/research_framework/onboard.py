@@ -24,6 +24,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from .spec.parsed import (
+    ParsedSpecError,
+    find_spec_file,
+    load_parsed_spec,
+    spec_parse_path,
+)
+
 __all__ = ["run_onboard", "StepResult"]
 
 # Directories that are never candidates for the corpus folder.
@@ -525,16 +532,7 @@ above, then re-run `research_framework onboard {vault}` to continue.*
 
 def _find_existing_spec(vault: Path) -> Path | None:
     """Return the first spec file found in the vault, or None."""
-    # Canonical name first, then glob
-    canonical = vault / f"{vault.name}-spec.md"
-    if canonical.exists():
-        return canonical
-    for p in sorted(vault.glob("*-spec.md")):
-        return p
-    research = vault / "research.spec.md"
-    if research.exists():
-        return research
-    return None
+    return find_spec_file(vault)
 
 
 def _step_draft_spec(vault: Path) -> StepResult:
@@ -571,7 +569,7 @@ def _step_draft_spec(vault: Path) -> StepResult:
 
 
 def _step_parse_spec(vault: Path) -> StepResult:
-    spec_parse_json = vault / "_pipeline" / "spec-parse.json"
+    spec_parse_json = spec_parse_path(vault)
     spec_file = _find_existing_spec(vault)
 
     if spec_file is None:
@@ -581,52 +579,28 @@ def _step_parse_spec(vault: Path) -> StepResult:
             equivalent_command="",
         )
 
-    # Skip if spec-parse.json is present and newer than the spec
-    if spec_parse_json.exists():
-        spec_mtime = spec_file.stat().st_mtime
-        json_mtime = spec_parse_json.stat().st_mtime
-        if json_mtime >= spec_mtime:
-            return StepResult(
-                status="skipped",
-                message="spec-parse.json present and current   ✓",
-                equivalent_command="",
-            )
-        print("  → mtime is more recent than spec-parse.json — re-parsing.")
-
+    # The one loader decides whether the cache is current: it compares the
+    # spec file's content hash and the parser version, never mtimes.
     cmd = f"research_framework parse-spec {vault} {spec_file.name}"
-    _print_cmd(cmd)
-
-    # Call the parse-spec logic via subprocess (avoids circular imports and
-    # matches what the user would run by hand)
-    env = dict(os.environ)
-    src_dir = Path(__file__).resolve().parent.parent
-    env["PYTHONPATH"] = str(src_dir)
-
-    r = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "research_framework",
-            "parse-spec",
-            str(vault),
-            str(spec_file),
-        ],
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    if r.returncode != 0:
-        err = (r.stderr or r.stdout).strip()
+    before = spec_parse_json.read_bytes() if spec_parse_json.exists() else None
+    try:
+        load_parsed_spec(vault)
+    except ParsedSpecError as exc:
+        _print_cmd(cmd)
         return StepResult(
             status="aborted",
-            message=f"parse-spec failed: {err}",
+            message=f"parse-spec failed: {exc}",
             equivalent_command=cmd,
         )
 
-    # Print what parse-spec wrote
-    for line in (r.stdout or "").splitlines():
-        print(f"  {line}")
+    if before is not None and spec_parse_json.read_bytes() == before:
+        return StepResult(
+            status="skipped",
+            message="spec-parse.json present and current   ✓",
+            equivalent_command="",
+        )
 
+    _print_cmd(cmd)
     return StepResult(
         status="done",
         message=f"wrote {spec_parse_json.relative_to(vault)}",

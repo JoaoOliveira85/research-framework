@@ -29,6 +29,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from ..spec.parsed import (
+    ParsedSpecError,
+    find_spec_file,
+    load_parsed_spec,
+    spec_parse_path,
+)
 from ..vault.corpus import existing_corpus_dir
 from . import run_receipt
 from .process_tree import popen_session, terminate_process_tree
@@ -306,14 +312,12 @@ def _partition_declared_sources(
     fetch, GitHub, arXiv, Reddit, HN — because ``collect`` never routes through
     the ``source_bridge`` modules spec 020 shipped.
     """
-    spec_parse = vault / "_pipeline" / "spec-parse.json"
-    if not spec_parse.exists():
+    if not spec_parse_path(vault).exists() and find_spec_file(vault) is None:
         return [], [], []
 
-    try:
-        spec_data = json.loads(spec_parse.read_text(encoding="utf-8"))
-    except Exception as exc:
-        return [], [], [f"spec-parse.json read error: {exc}"]
+    spec_data, error = _read_parsed_spec(vault)
+    if spec_data is None:
+        return [], [], [f"spec-parse.json read error: {error}"]
 
     rss_names: list[str] = []
     unsupported: list[dict[str, str]] = []
@@ -767,6 +771,19 @@ def _read_json(path: Path) -> tuple[dict[str, Any] | None, str | None]:
     return doc, None
 
 
+def _read_parsed_spec(vault: Path) -> tuple[dict[str, Any] | None, str | None]:
+    """``(document, error)`` for the vault's parsed spec, via the one loader.
+
+    Same contract as ``_read_json``: never raises, never returns both. The
+    loader re-parses when the spec file changed, so callers never see a cache
+    that belongs to an older spec.
+    """
+    try:
+        return load_parsed_spec(vault), None
+    except ParsedSpecError as exc:
+        return None, str(exc)
+
+
 def _queue_from_scout_report(vault: Path) -> list[Any] | None:
     """``topics_found.new`` from the scout report, or ``None`` if unreadable."""
     doc, error = _read_json(_stage_artifacts(vault)["scout_report"])
@@ -800,7 +817,7 @@ def _consulted_names(sources_consulted: Any) -> set[str]:
 
 def _declared_sources(vault: Path) -> list[str]:
     """External ``data_sources`` names the vault's spec declares."""
-    doc, error = _read_json(vault / "_pipeline" / "spec-parse.json")
+    doc, error = _read_parsed_spec(vault)
     if error is not None or doc is None:
         return []
     names = []
@@ -1069,7 +1086,7 @@ def _vault_declarations(vault: Path) -> tuple[dict[str, Any], list[dict[str, Any
     own defaults grade the vault, exactly as they did before. Returns empty
     containers rather than raising.
     """
-    doc, error = _read_json(vault / "_pipeline" / "spec-parse.json")
+    doc, error = _read_parsed_spec(vault)
     if error is not None or doc is None:
         return {}, []
     processors = doc.get("processors")

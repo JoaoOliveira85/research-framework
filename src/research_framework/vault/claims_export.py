@@ -38,6 +38,7 @@ from typing import Any
 
 from research_framework import __version__
 from research_framework.processors.verify import _is_exempt
+from research_framework.spec.parsed import ParsedSpecError, load_parsed_spec
 from research_framework.spec.schema import SpecConfig
 from research_framework.vault.corpus import corpus_dir_name, existing_corpus_dir
 from research_framework.vault.credibility import (
@@ -204,13 +205,9 @@ def render_claims_json(doc: dict[str, Any]) -> str:
 
 
 def _load_spec(vault: Path, warnings: list[str]) -> SpecConfig | None:
-    parse_path = vault / "_pipeline" / "spec-parse.json"
     try:
-        doc = json.loads(parse_path.read_text(encoding="utf-8"))
-        if not isinstance(doc, dict):
-            raise ValueError("not a JSON object")
-        return SpecConfig.from_dict(doc)
-    except (OSError, ValueError, TypeError, KeyError) as exc:
+        return SpecConfig.from_dict(load_parsed_spec(vault))
+    except (ParsedSpecError, TypeError, KeyError) as exc:
         warnings.append(
             f"_pipeline/spec-parse.json unavailable ({exc}): note types are "
             "reported as undeclared and citation credibility stays unresolved"
