@@ -64,10 +64,14 @@ _PLACEHOLDER_RE = re.compile(r"^<.*>$", re.DOTALL)
 #: spec-073 entry it is written into.
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
-#: A mention of the gap marker in any spelling: bold, backticked, bulleted or
-#: lower-cased. Seen without a strict line, it is probably a gap the framework
-#: cannot read — worth a warning, not silence.
-_NEAR_MISS_RE = re.compile(r"vault-gap", re.IGNORECASE)
+#: A line that STARTS with the gap marker in any spelling — after an optional
+#: bullet and bold/italic/backtick decoration, in any case. Seen without a
+#: strict line, it is probably a gap the framework cannot read: worth a
+#: warning, not silence. A mention inside a sentence is prose, not a report.
+_NEAR_MISS_RE = re.compile(
+    r"^[ \t]*(?:[-*+][ \t]+)?[*_`]*[ \t]*vault-gap\b",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 #: Exactly these keys, no more: a gap line is a report, not a request. A field
 #: such as a budget would be the agent picking its own cap again.
@@ -221,6 +225,10 @@ def dispatch_ask(vault: Path, prompt: str, run_dir: Path) -> AskAnswer:
     answer_file = run_receipt.stage_path(run_dir, "answers", ASK_STAGE, ".md")
     prompt_file.parent.mkdir(parents=True, exist_ok=True)
     prompt_file.write_text(prompt, encoding="utf-8")
+    # cwd=vault for every runtime: read-only tools may only read inside the
+    # working directory, and the prompt's paths (`AGENTS.md`,
+    # `data_vault/_index.md`) are relative. Started in the operator's cwd the
+    # agent cannot see the vault and reports a spurious gap — a paid cycle.
     outcome = _call_agent(
         vault,
         stage=ASK_STAGE,
@@ -228,6 +236,7 @@ def dispatch_ask(vault: Path, prompt: str, run_dir: Path) -> AskAnswer:
         prompt_file=prompt_file,
         run_dir=run_dir,
         output_file=answer_file,
+        cwd=vault,
     )
     if outcome.returncode != 0:
         return AskAnswer(outcome.returncode, "")

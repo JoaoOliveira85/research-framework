@@ -1377,6 +1377,7 @@ def _dispatch_agent(
     stage: str,
     quiet: bool,
     run_dir: Path | None = None,
+    cwd: Path | None = None,
 ) -> AgentCallOutcome:
     """Run ``cmd`` bounded, process-group-isolated, and tee'd to a log.
 
@@ -1419,6 +1420,7 @@ def _dispatch_agent(
         encoding="utf-8",
         errors="replace",
         bufsize=1,
+        cwd=cwd,
     )
 
     def _drain() -> None:
@@ -1483,6 +1485,7 @@ def _call_agent(
     prompt_file: Path | None,
     run_dir: Path | None = None,
     output_file: Path | None = None,
+    cwd: Path | None = None,
 ) -> AgentCallOutcome:
     """Invoke agent_call.py for a given stage.
 
@@ -1550,7 +1553,7 @@ def _call_agent(
         sidecar = run_receipt.stage_path(run_dir, "agent-calls", stage, ".json")
         cmd += ["--cost-sidecar", str(sidecar)]
     outcome = _dispatch_agent(
-        cmd, vault=vault, stage=stage, quiet=quiet, run_dir=run_dir
+        cmd, vault=vault, stage=stage, quiet=quiet, run_dir=run_dir, cwd=cwd
     )
     return dataclasses.replace(outcome, cost_sidecar=sidecar)
 

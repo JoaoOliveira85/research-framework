@@ -16,6 +16,7 @@ dispatch and the real cycle verb.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -147,6 +148,58 @@ def test_a_near_miss_gap_line_is_detected(line: str) -> None:
 def test_an_answer_without_any_gap_mention_is_not_a_near_miss() -> None:
     assert not gap_line_near_miss("Covered.\n\nVault Sources:\n[1] x")
     assert not gap_line_near_miss(_gap("T"))
+
+
+@pytest.mark.parametrize(
+    "prose",
+    [
+        "The vault covers this, so no VAULT-GAP line is needed.",
+        "I considered writing vault-gap: but the notes answer it.",
+        "> quoted: VAULT-GAP: {}",
+    ],
+)
+def test_the_marker_inside_prose_is_not_a_near_miss(prose: str) -> None:
+    """Only a line that STARTS with the (decorated) marker is a near miss."""
+    assert not gap_line_near_miss(f"Answer.\n{prose}\n")
+
+
+_CWD_STUB = """\
+import argparse
+import os
+from pathlib import Path
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--vault")
+parser.add_argument("--stage")
+parser.add_argument("--prompt-file")
+parser.add_argument("--cost-sidecar")
+parser.add_argument("--output-file")
+args, _ = parser.parse_known_args()
+out = Path(args.output_file)
+out.parent.mkdir(parents=True, exist_ok=True)
+out.write_text(os.getcwd(), encoding="utf-8")
+"""
+
+
+def test_the_ask_agent_runs_in_the_vault_whatever_the_callers_cwd(
+    tmp_path, monkeypatch
+) -> None:
+    """Read-only tools may only read inside the cwd, and the prompt's paths
+    (`AGENTS.md`, `data_vault/_index.md`) are relative: an agent started in
+    the operator's cwd cannot read the vault and reports a spurious gap."""
+    from research_framework.pipeline.ask_escalation import dispatch_ask
+
+    vault = tmp_path / "vault"
+    (vault / "scripts").mkdir(parents=True)
+    (vault / "scripts" / "agent_call.py").write_text(_CWD_STUB, encoding="utf-8")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+
+    answer = dispatch_ask(vault, "prompt", vault / "_pipeline" / "ask" / "t")
+
+    assert answer.returncode == 0
+    assert Path(answer.text).resolve() == vault.resolve()
 
 
 def test_a_near_miss_is_warned_about_not_passed_silently() -> None:
