@@ -5,6 +5,10 @@ configuration contract as it is, written from the code at that commit. It
 adds no scope. Divergences it found are filed under § Known divergences, not
 fixed here.
 
+**Amended 2026-10-28 (issue #8)**: unlike the rest of this spec, FR-022 to
+FR-025 describe behaviour added after the record was taken — the unknown-key
+report and `strict_settings`. Everything else is still a record.
+
 **Spec**: `076-settings-schema` · **Epic**: #217 · **Issue**: #275, #230
 
 ---
@@ -174,6 +178,12 @@ features the keys configure, which live in their own specs (`033`, `061`,
 - **FR-020**: Validation MUST fail fast on the first violation with an
   actionable message; there is no aggregate validation report.
 
+**Honesty**
+
+- **FR-021**: A key that no code reads MUST NOT ship in a profile. The dead
+  keys enumerated in § Known divergences D1 are the current debt, not a
+  licence to add more.
+
 **Unknown keys (issue #8)**
 
 - **FR-022**: Every key in the file that is neither a typed field, a
@@ -185,18 +195,22 @@ features the keys configure, which live in their own specs (`033`, `061`,
   picks — stage names under `stages`, labels under `tiers`, the entries of
   `limits.tier_thresholds` / `limits.estimator_calibration` — are never
   reported, only the keys beneath a stage.
-- **FR-023**: `strict_settings: true` MUST make a research run refuse to
-  start (exit `2`, the "operator must fix it" code of `077` FR-012) while any
-  such key is present. The orchestrator enforces it before any side effect,
-  reading the flag from the raw file so it holds when the rest of the file
-  fails validation. A non-boolean value MUST raise at load. Default `false`.
-- **FR-024**: Every shipped profile MUST load with zero unknown-key reports.
-
-**Honesty**
-
-- **FR-021**: A key that no code reads MUST NOT ship in a profile. The dead
-  keys enumerated in § Known divergences D1 are the current debt, not a
-  licence to add more.
+- **FR-023**: `strict_settings: true` MUST make a run refuse to start (exit
+  `2`, the "operator must fix it" code of `077` FR-012) while any such key is
+  present. One check, `strict_settings_refusal`, backs every refusal; it runs
+  before any side effect, reading the flag from the raw file so it holds when
+  the rest of the file fails validation. Scope: `orchestrator.run_cycles`
+  (every `generate` run and `generate --resume`), `cycle`, and `pipeline`
+  `full|collect|extract|scout|resume|finish`. Not covered: `cycle
+  --estimate-only`, `pipeline status|prune-runs`, and the shim verbs that
+  invoke an agent directly rather than through those entry points (`ask`,
+  `write`). A non-boolean value MUST raise at load. Default `false`.
+- **FR-024**: Every shipped profile, and every tracked fixture settings file
+  that the loader can read, MUST load with zero unknown-key reports.
+  `examples/settings.yml` is exempt (D3).
+- **FR-025**: Unknown keys MUST be computed before validation, so a typo in a
+  required key (`pipeline.max_cylces`) is reported with the key meant, and the
+  resulting `SettingsError` names it too.
 
 ### Key entities — the schema
 
@@ -220,7 +234,7 @@ Types are YAML types. "Reader" is the subsystem that consumes the key;
 | `vault_commit.retention.{keep_last,max_age_days}` | int \| null | `5` / `90` | branch retention |
 | `default_executor` | map | see below | dispatcher (`078`); not part of `VaultSettings` |
 | `cycles.{initial_max,update_max}` | int | unset | deprecated cycle limits (FR-009) |
-| `source_manager.decay_after_n_cycles` | int | `3` | digest only — the source manager reads `stages.source_manager` (D7) |
+| `source_manager.decay_after_n_cycles` | int | `3` | digest only — the source manager reads `stages.source_manager` (U1) |
 | `dimensions` | list[str] | `[]` | — |
 | `communication.mode` | enum | `cli` | — |
 
@@ -235,6 +249,8 @@ Types are YAML types. "Reader" is the subsystem that consumes the key;
 | `timeout_s` | int | `3600` | dispatch, and the runner's own raw read (`075` FR-025) |
 | `skill` | str \| null | `null` | prompt rendering |
 | `base_url` / `api_path` | str | `http://127.0.0.1:11434` / `/v1/chat/completions` | HTTP dispatch only |
+| `script_path` | str | unset | dispatch, `type: script` only |
+| `variant` / `agent` | str | unset | dispatch, opencode runtime only |
 | `enabled` (stages only) | bool | `true` (`false` for `source_extraction`) | the stage |
 | `tier` (stages only) | key of `tiers:` \| null | `null` (unset) | the stage's model, resolved through `tiers:` at dispatch; exclusive with `model` |
 
@@ -245,10 +261,13 @@ Types are YAML types. "Reader" is the subsystem that consumes the key;
 | `max_cycles` | int ≥1 | **required** | budget ladder |
 | `budget_usd` | float ≥0 | **required** (`0` = unlimited) | budget ladder |
 | `backlog_promotion_threshold` | int ≥1 | `2` | topic harvest |
+| `coverage_growth` | float ≥1.0 | `1.0` | coverage growth (`pipeline/coverage.py`) |
+| `coverage_growth_cap` | int ≥1 | `10` | coverage growth — ceiling per category per round |
+| `required_source_failure_threshold` | int | unset | source signals — legacy spelling of `source_failure_thresholds.required_quorum_loss` |
 | `note_writer_batch_size` | int | `6` | batch scheduler (clamped 3–10) |
 | `max_batches_per_cycle` | int | `10` | batch scheduler |
 | `source_failure_thresholds.required_quorum_loss` | int | `2` | source signals |
-| `source_failure_thresholds.enrichment_max_failures` | int | `0` (disabled) | source signals |
+| `source_failure_thresholds.enrichment_max_failures` | int | `0` | — (D1: no code reads it) |
 | `gates.abstraction_enabled` | bool | `true` | SG-003 / CG-003 kill switch |
 | `gates.sg_003_abstraction_warn_pct` / `…fail_pct` | int % | `20` / `60` | SG-003 |
 | `gates.*` (the other seven) | int | see profile | — (D1) |
@@ -323,8 +342,8 @@ Types are YAML types. "Reader" is the subsystem that consumes the key;
 | FR-017 (credibility) | `tests/pipeline/test_settings_credibility.py` |
 | FR-018 (cycle yield) | `tests/pipeline/test_cg001_yield_model.py` |
 | FR-019 (`default_agent`) | `tests/pipeline/test_settings_cursor.py`, `tests/pipeline/test_settings_ollama.py` |
-| FR-022…FR-024 (unknown keys, strict mode) | `tests/pipeline/test_settings_unknown_keys.py` |
 | FR-021 (no dead config in profiles) | `tests/pipeline/test_shipped_profiles_enforce_budget.py::test_profile_has_no_unparsed_budget_block` |
+| FR-022…FR-025 (unknown keys, strict mode) | `tests/pipeline/test_settings_unknown_keys.py`, `tests/cli/test_strict_settings_verbs.py` |
 
 ---
 
@@ -346,8 +365,8 @@ Types are YAML types. "Reader" is the subsystem that consumes the key;
   `0.2` default in the gate, whose only production call site passes zeros.
   Found while building the unknown-key register (#8), also read by nothing:
   `citation.*`, `commands.*`, `cycles.max_consecutive_verifier_rejections`,
-  `pipeline.source_failure_thresholds.enrichment_max_failures` (the table above
-  lists a reader for it; there is none), `skill` / `on_fail` / `retry` under
+  `pipeline.source_failure_thresholds.enrichment_max_failures` (an earlier
+  revision of the table listed a reader for it; there is none), `skill` / `on_fail` / `retry` under
   `default_executor` and `stages.*` (they are `ExecutorConfig` fields of the
   spec-file loader; the vault dispatcher never reads them), and
   `pipeline.gates.cg_003_{warn,fail}_pct` (quality fixtures only). All of D1 sits
@@ -376,12 +395,12 @@ Types are YAML types. "Reader" is the subsystem that consumes the key;
   D7 stages appear only in `settings.yaml`. Every one defaults, so this is
   not a bug — but the profiles are no longer the same schema by inspection.
 
-- **D7 — Two readers disagree on where `source_manager` lives.**
+- **U1 — Two readers disagree on where `source_manager` lives.**
   `source_manager.py` reads `stages.source_manager.decay_after_n_cycles`;
   `pipeline/digest/sections.py::_decay_threshold` reads a top-level
   `source_manager.decay_after_n_cycles`. Both spellings are accepted so neither
   is reported, but a value set at the top level only moves the digest.
-- **D8 — Stage names are not checked.** `stages.verifer:` is a new stage as far
+- **U2 — Stage names are not checked.** `stages.verifer:` is a new stage as far
   as the register can tell. Only the keys *beneath* a stage are checked.
 
 ## Assumptions
