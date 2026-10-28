@@ -73,7 +73,7 @@ def test_tier_and_model_mutually_exclusive_raises(tmp_path: Path) -> None:
           flagship: opus
         stages:
           schema_gen:
-            tier: basic
+            tier: normal
             model: sonnet
         """,
     )
@@ -164,14 +164,16 @@ def test_tier_resolves_through_tiers_on_every_stage(tmp_path: Path) -> None:
     assert settings.resolve_model("note_writer") == "model-c"
 
 
+@pytest.mark.parametrize("tier", ["normal", "flagship"])
 def test_tier_and_model_on_any_stage_is_refused_naming_the_stage(
-    tmp_path: Path,
+    tmp_path: Path, tier: str
 ) -> None:
+    """A value only the new vocabulary defines cannot be the old label."""
     _write_stages(
         tmp_path,
-        """
+        f"""
         scout:
-          tier: basic
+          tier: {tier}
           model: sonnet
         """,
     )
@@ -216,23 +218,27 @@ def test_legacy_complexity_tier_warns_and_is_ignored(
     message = str(record[0].message)
     assert "stages.plan_narrator.tier" in message
     assert repr(legacy) in message
+    assert str(tmp_path / "settings.yaml") in message
     assert settings.stage("plan_narrator").tier is None
     assert settings.resolve_model("plan_narrator") is None
 
 
+@pytest.mark.parametrize("legacy", ["basic", "standard", "expert"])
 def test_legacy_complexity_tier_beside_model_warns_instead_of_refusing(
-    tmp_path: Path,
+    tmp_path: Path, legacy: str
 ) -> None:
+    """`tier` beside `model` was valid on 1.0.1 and can only be the old label."""
     _write_stages(
         tmp_path,
-        """
+        f"""
         verifier:
-          tier: expert
+          tier: {legacy}
           model: sonnet
         """,
     )
-    with pytest.warns(FutureWarning):
+    with pytest.warns(FutureWarning, match="stages.verifier.tier") as record:
         settings = load_vault_settings(tmp_path)
+    assert str(tmp_path / "settings.yaml") in str(record[0].message)
     assert settings.stage("verifier").tier is None
     assert settings.resolve_model("verifier") == "sonnet"
 
@@ -300,4 +306,99 @@ def test_shipped_profile_loads_without_tier_warnings(
     )
     with warnings.catch_warnings():
         warnings.simplefilter("error", FutureWarning)
+        load_vault_settings(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Review of #13: a vault with no `tiers:` block never opted in
+# ---------------------------------------------------------------------------
+
+_CODEX_NO_TIERS = """
+pipeline:
+  max_cycles: 3
+  budget_usd: 1.0
+default_executor:
+  runtime: codex
+  model: gpt-5.4
+stages:
+  plan_narrator:
+    tier: {tier}
+"""
+
+
+@pytest.mark.parametrize("tier", ["basic", "normal", "flagship", "standard", "expert"])
+def test_no_tiers_block_reads_tier_as_the_legacy_label(
+    tmp_path: Path, tier: str
+) -> None:
+    """A 1.0.1 codex/cursor/ollama/opencode vault has no `tiers:`; its `tier:`
+    was metadata, so it must not start dispatching Anthropic model ids."""
+    tmp_path.mkdir(exist_ok=True)
+    (tmp_path / "settings.yaml").write_text(
+        _CODEX_NO_TIERS.lstrip().format(tier=tier), encoding="utf-8"
+    )
+    with pytest.warns(FutureWarning) as record:
+        settings = load_vault_settings(tmp_path)
+    message = str(record[0].message)
+    assert "stages.plan_narrator.tier" in message
+    assert str(tmp_path / "settings.yaml") in message
+    assert "add a tiers: block to opt in" in message
+    assert settings.stage("plan_narrator").tier is None
+    assert settings.resolve_model("plan_narrator") is None
+
+
+def test_no_tiers_block_still_refuses_a_value_in_neither_vocabulary(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "settings.yaml").write_text(
+        _CODEX_NO_TIERS.lstrip().format(tier="elite"), encoding="utf-8"
+    )
+    with pytest.raises(SettingsError) as exc:
+        load_vault_settings(tmp_path)
+    assert exc.value.key == "stages.plan_narrator.tier"
+
+
+_PARTIAL_TIERS = """
+pipeline:
+  max_cycles: 3
+  budget_usd: 1.0
+default_executor:
+  runtime: {runtime}
+  model: some-model
+tiers:
+  basic: own-basic
+stages:
+  scout:
+    tier: flagship
+"""
+
+
+def test_backfilled_default_tier_on_a_non_claude_runtime_warns(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "settings.yaml").write_text(
+        _PARTIAL_TIERS.lstrip().format(runtime="codex"), encoding="utf-8"
+    )
+    with pytest.warns(UserWarning, match="claude-opus-5") as record:
+        settings = load_vault_settings(tmp_path)
+    message = str(record[0].message)
+    assert "stages.scout.tier" in message
+    assert "'codex'" in message
+    assert str(tmp_path / "settings.yaml") in message
+    assert settings.resolve_model("scout") == "claude-opus-5"
+
+
+def test_backfilled_default_tier_on_claude_does_not_warn(tmp_path: Path) -> None:
+    (tmp_path / "settings.yaml").write_text(
+        _PARTIAL_TIERS.lstrip().format(runtime="claude"), encoding="utf-8"
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        settings = load_vault_settings(tmp_path)
+    assert settings.resolve_model("scout") == "claude-opus-5"
+
+
+def test_stage_runtime_override_decides_the_backfill_warning(tmp_path: Path) -> None:
+    body = _PARTIAL_TIERS.lstrip().format(runtime="claude") + "    runtime: cursor-agent\n"
+    (tmp_path / "settings.yaml").write_text(body, encoding="utf-8")
+    with pytest.warns(UserWarning, match="'cursor-agent'"):
         load_vault_settings(tmp_path)

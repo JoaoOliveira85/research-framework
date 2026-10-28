@@ -31,6 +31,8 @@ def test_load_well_formed(tmp_path: Path) -> None:
           max_cycles: 10
           budget_usd: 5.0
           backlog_promotion_threshold: 3
+        tiers:
+          basic: model-a
         stages:
           scout:
             tier: basic
@@ -168,6 +170,8 @@ def test_stage_convenience_method(tmp_path: Path) -> None:
         pipeline:
           max_cycles: 3
           budget_usd: 1.0
+        tiers:
+          basic: model-a
         stages:
           scout:
             tier: basic

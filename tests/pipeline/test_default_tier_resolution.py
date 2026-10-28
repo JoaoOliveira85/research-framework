@@ -81,7 +81,7 @@ def test_executor_tier_and_model_conflict_raises(tmp_path: Path) -> None:
             stages:
               source_extraction:
                 enabled: true
-                tier: basic
+                tier: normal
                 model: claude-opus-5
             """
         ).strip()
