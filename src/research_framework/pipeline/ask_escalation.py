@@ -25,17 +25,21 @@ this flow reuses. Nothing here writes it anywhere else.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 __all__ = [
     "GAP_LINE_PREFIX",
     "AskAnswer",
     "Gap",
     "GapLineError",
+    "ResearchOutcome",
     "dispatch_ask",
+    "gap_line_near_miss",
     "parse_gap_line",
     "render_ask_prompt",
     "run_ask",
@@ -43,8 +47,27 @@ __all__ = [
 
 #: The one line the ``/ask`` agent writes when the vault cannot answer. The
 #: template (``templates/commands/ask.md.j2``) spells this literal out; a test
-#: renders it and parses its example, so the two cannot drift apart.
+#: renders it and checks its example is refused as a placeholder, so the two
+#: cannot drift apart.
 GAP_LINE_PREFIX = "VAULT-GAP:"
+
+#: The longest topic accepted. A topic names a note, not a paragraph; the cap
+#: also bounds what reaches the scout prompt and the spec's managed region.
+MAX_TOPIC_CHARS = 200
+
+#: ``<the uncovered topic, ...>`` — the template's example, copied verbatim.
+#: Researching it would spend a cycle on the instructions' own placeholder.
+_PLACEHOLDER_RE = re.compile(r"^<.*>$", re.DOTALL)
+
+#: Any ASCII control character, DEL included. JSON can encode a newline inside
+#: the one-line gap, and it would then split the scout prompt and the
+#: spec-073 entry it is written into.
+_CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
+
+#: A mention of the gap marker in any spelling: bold, backticked, bulleted or
+#: lower-cased. Seen without a strict line, it is probably a gap the framework
+#: cannot read — worth a warning, not silence.
+_NEAR_MISS_RE = re.compile(r"vault-gap", re.IGNORECASE)
 
 #: Exactly these keys, no more: a gap line is a report, not a request. A field
 #: such as a budget would be the agent picking its own cap again.
@@ -77,6 +100,23 @@ class AskAnswer:
 
     returncode: int
     text: str
+
+
+@dataclass(frozen=True)
+class ResearchOutcome:
+    """How the escalation's research run ended.
+
+    ``completed`` covers both of the cycle runner's normal exits — 0
+    (CONTINUE) and 1 (TERMINATE, a validate_cycle Condition A/B/C met). A
+    targeted cycle often finds no new topics, and the vault's last allowed
+    cycle always meets A, so 1 is a finished cycle, not a failure.
+    ``paused`` is a budget or approval pause: the ceiling held, and a person
+    has to decide. ``failed`` is everything else, refusals included.
+    """
+
+    status: Literal["completed", "paused", "failed"]
+    returncode: int
+    detail: str = ""
 
 
 def parse_gap_line(answer: str) -> Gap | None:
@@ -117,7 +157,36 @@ def parse_gap_line(answer: str) -> Gap | None:
         raise GapLineError(f"{GAP_LINE_PREFIX} `topic` must be a non-empty string")
     if not isinstance(in_scope, bool):
         raise GapLineError(f"{GAP_LINE_PREFIX} `in_scope` must be true or false")
-    return Gap(topic=topic.strip(), in_scope=in_scope)
+    topic = topic.strip()
+    if _CONTROL_RE.search(topic):
+        raise GapLineError(
+            f"{GAP_LINE_PREFIX} `topic` contains a control character (a newline, "
+            "tab or similar); it must be one plain line"
+        )
+    if len(topic) > MAX_TOPIC_CHARS:
+        raise GapLineError(
+            f"{GAP_LINE_PREFIX} `topic` is {len(topic)} characters; the limit is "
+            f"{MAX_TOPIC_CHARS}"
+        )
+    if _PLACEHOLDER_RE.match(topic):
+        raise GapLineError(
+            f"{GAP_LINE_PREFIX} `topic` {topic!r} is a placeholder copied from "
+            "the template, not a topic"
+        )
+    return Gap(topic=topic, in_scope=in_scope)
+
+
+def gap_line_near_miss(answer: str) -> bool:
+    """True when the answer mentions the gap marker but has no strict line.
+
+    Catches the agent that bolded, backticked, bulleted or lower-cased the
+    marker: :func:`parse_gap_line` correctly reads no gap there, and without a
+    warning the operator would never learn one was reported.
+    """
+    has_strict = any(
+        line.strip().startswith(GAP_LINE_PREFIX) for line in answer.splitlines()
+    )
+    return not has_strict and bool(_NEAR_MISS_RE.search(answer))
 
 
 def render_ask_prompt(command_text: str, question: str) -> str:
@@ -180,15 +249,15 @@ def run_ask(
     *,
     escalate: bool,
     ask: Callable[[str], AskAnswer],
-    research: Callable[[str], int],
+    research: Callable[[str], ResearchOutcome],
     report: Callable[[str], None] = _stderr,
 ) -> int:
     """Answer ``question``; research a reported in-scope gap only if ``escalate``.
 
-    ``research(topic)`` runs the research and returns its exit code; it owns
-    the budget ladder and every refusal the cycle verb makes. It is called at
-    most once: a gap that survives the research is reported, not researched
-    again, so one ask can never turn into a loop of paid runs.
+    ``research(topic)`` runs the research and says how it ended; it owns the
+    budget ladder and every refusal the cycle verb makes. It is called at most
+    once: a gap that survives the research is reported, not researched again,
+    so one ask can never turn into a loop of paid runs.
     """
     answer = ask(question)
     if answer.returncode != 0:
@@ -203,6 +272,13 @@ def run_ask(
         return 1
 
     if gap is None:
+        if gap_line_near_miss(answer.text):
+            report(
+                f"WARN: the answer mentions a vault gap but has no line starting "
+                f"{GAP_LINE_PREFIX!r} with the contract's JSON (bold, backticks, "
+                "a bullet or lower case break it). No gap was read and nothing "
+                "was researched."
+            )
         return 0
     if not gap.in_scope:
         report(
@@ -218,13 +294,21 @@ def run_ask(
         return 0
 
     report(f"escalating: researching {gap.topic!r} under the configured budget ladder.")
-    rc = research(gap.topic)
-    if rc != 0:
+    outcome = research(gap.topic)
+    if outcome.status == "paused":
         report(
-            f"ERROR: the research run for {gap.topic!r} exited {rc}; the question "
-            "was not re-asked."
+            f"research for {gap.topic!r} paused before it finished "
+            f"({outcome.detail or 'a pause marker is standing'}); the question was "
+            "not re-asked. Inspect it with `research-framework pause show`."
         )
-        return rc
+        return outcome.returncode or 1
+    if outcome.status != "completed":
+        detail = f" ({outcome.detail})" if outcome.detail else ""
+        report(
+            f"ERROR: the research run for {gap.topic!r} exited "
+            f"{outcome.returncode}{detail}; the question was not re-asked."
+        )
+        return outcome.returncode or 1
 
     report("research finished; asking again.")
     again = ask(question)

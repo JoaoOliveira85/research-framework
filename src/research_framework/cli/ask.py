@@ -18,13 +18,14 @@ from pathlib import Path
 
 from ..pipeline.ask_escalation import (
     GAP_LINE_PREFIX,
+    ResearchOutcome,
     dispatch_ask,
     render_ask_prompt,
     run_ask,
 )
 from ._budget_resolve import BudgetError, resolve_cycle_budget_from_path
-from .research_cycles import _cmd_cycle
-from .research_resume import _highest_completed_cycle
+from .research_cycles import _cmd_cycle, _standing_pause
+from .research_resume import _cycle_aborted, _highest_completed_cycle
 
 
 def _ask_command_path(vault: Path) -> Path:
@@ -48,17 +49,22 @@ def _next_cycle(vault: Path) -> int:
     return (highest or 0) + 1
 
 
-def _research(vault: Path, topic: str) -> int:
+def _research(vault: Path, topic: str) -> ResearchOutcome:
     """Run ONE cycle at ``topic`` through the ``cycle`` verb, under the ladder.
 
     No dollar figure is chosen here: ``budget_cap=None`` makes ``_cmd_cycle``
     resolve ``pipeline.budget_usd`` from settings.yaml exactly as it does for
     an operator who omits ``--budget-cap``, and the per-cycle
-    ``limits.cycle_budget_usd`` stays enforced before every dispatch. The one
-    check added is the lifetime cycle ceiling, which ``cycle`` leaves to the
-    operator who typed a cycle number — an escalation picks the number itself,
-    so it must not pick one past ``pipeline.max_cycles``.
+    ``limits.cycle_budget_usd`` stays enforced before every dispatch.
+
+    Two lifetime ceilings are checked before the cycle starts, because an
+    escalation picks its own cycle number and nobody typed it:
+    ``pipeline.max_cycles`` (the highest cycle number this vault may run) and
+    ``pipeline.budget_usd`` against the spend already recorded in the cycle
+    cost sidecars — the same sum the multi-cycle loop compares it with.
     """
+    from ..pipeline.orchestrator import _cumulative_sidecar_cost
+
     cycle = _next_cycle(vault)
     try:
         budget = resolve_cycle_budget_from_path(
@@ -66,7 +72,7 @@ def _research(vault: Path, topic: str) -> int:
         )
     except BudgetError as exc:
         print(f"error: {exc}", file=sys.stderr)
-        return 2
+        return ResearchOutcome("failed", 2, "budget settings are invalid")
     if cycle > budget.max_cycles:
         print(
             f"error: escalating would run cycle {cycle}, past this vault's "
@@ -75,7 +81,21 @@ def _research(vault: Path, topic: str) -> int:
             f"{vault / 'settings.yaml'} to research this gap.",
             file=sys.stderr,
         )
-        return 2
+        return ResearchOutcome("failed", 2, "pipeline.max_cycles reached")
+    if budget.max_usd is not None and budget.max_usd > 0:
+        spent = _cumulative_sidecar_cost(vault, up_to=cycle)
+        if spent >= budget.max_usd:
+            print(
+                f"error: this vault has recorded ${spent:.4f} of spend, at or "
+                f"past its lifetime ceiling of ${budget.max_usd:.2f} "
+                f"(pipeline.budget_usd, from {budget.max_usd_source}). No cycle "
+                f"was started. Raise it in {vault / 'settings.yaml'} to research "
+                "this gap.",
+                file=sys.stderr,
+            )
+            return ResearchOutcome("failed", 2, "pipeline.budget_usd reached")
+
+    paused_before = _standing_pause(vault)
     cycle_args = argparse.Namespace(
         vault=vault,
         cycle=cycle,
@@ -84,16 +104,33 @@ def _research(vault: Path, topic: str) -> int:
         target_topics=[topic],
     )
     try:
-        return _cmd_cycle(cycle_args)
+        rc = _cmd_cycle(cycle_args)
     except SystemExit as exc:
         # A budget or approval pause exits the process from inside the cycle
         # (`budget_guard.pause_for_budget`), having written its marker and its
-        # reason. That is the ceiling holding; the ask reports it, not re-asks.
-        return exc.code if isinstance(exc.code, int) and exc.code else 1
+        # reason. It is told apart below by the marker, not by this code.
+        rc = exc.code if isinstance(exc.code, int) and exc.code else 1
+
+    # A marker that was standing BEFORE the run made `_cmd_cycle` refuse; one
+    # that appeared during it is this run pausing at a ceiling.
+    paused_after = _standing_pause(vault)
+    if paused_before is None and paused_after is not None:
+        name, path = paused_after
+        return ResearchOutcome("paused", rc or 1, f"{name} at {path}")
+    if _cycle_aborted(vault / "_pipeline" / "cycles", cycle):
+        return ResearchOutcome("failed", rc or 2, f"cycle {cycle} aborted")
+    # 0 is CONTINUE and 1 is TERMINATE (a validate_cycle condition met): both
+    # are a cycle that ran to its end.
+    if rc in (0, 1):
+        return ResearchOutcome("completed", rc)
+    return ResearchOutcome("failed", rc)
 
 
 def _cmd_ask(args: argparse.Namespace) -> int:
     vault = Path(args.vault).resolve()
+    if not vault.is_dir():
+        print(f"error: vault not found: {vault}", file=sys.stderr)
+        return 2
     question = " ".join(args.question).strip()
     if not question:
         print("error: ask needs a question.", file=sys.stderr)

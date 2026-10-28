@@ -24,6 +24,8 @@ from research_framework.pipeline.ask_escalation import (
     AskAnswer,
     Gap,
     GapLineError,
+    ResearchOutcome,
+    gap_line_near_miss,
     parse_gap_line,
     render_ask_prompt,
     run_ask,
@@ -93,6 +95,69 @@ def test_a_malformed_gap_line_is_refused_not_guessed(line: str) -> None:
         parse_gap_line(f"Some answer.\n{line}\n")
 
 
+@pytest.mark.parametrize(
+    "topic",
+    [
+        pytest.param(
+            "<the uncovered topic, one short line>", id="template-placeholder"
+        ),
+        pytest.param("<topic>", id="angle-bracket-placeholder"),
+    ],
+)
+def test_a_copied_placeholder_topic_is_refused(topic: str) -> None:
+    """Copying the template's example must not buy a paid cycle."""
+    with pytest.raises(GapLineError, match="placeholder"):
+        parse_gap_line(_gap(topic))
+
+
+@pytest.mark.parametrize(
+    "topic",
+    [
+        pytest.param("first line\nsecond line", id="newline"),
+        pytest.param("tab\there", id="tab"),
+        pytest.param("bell\u0007", id="bell"),
+        pytest.param("del\u007f", id="delete"),
+    ],
+)
+def test_a_topic_with_control_characters_is_refused(topic: str) -> None:
+    with pytest.raises(GapLineError, match="control character"):
+        parse_gap_line(_gap(topic))
+
+
+def test_a_topic_longer_than_the_cap_is_refused() -> None:
+    with pytest.raises(GapLineError, match="200"):
+        parse_gap_line(_gap("x" * 201))
+    assert parse_gap_line(_gap("x" * 200)) == Gap("x" * 200, True)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        pytest.param(f"**{GAP_LINE_PREFIX}** {{}}", id="bold"),
+        pytest.param(f"`{GAP_LINE_PREFIX} {{}}`", id="backticks"),
+        pytest.param(f"- {GAP_LINE_PREFIX} {{}}", id="bullet"),
+        pytest.param("vault-gap: {}", id="lowercase"),
+    ],
+)
+def test_a_near_miss_gap_line_is_detected(line: str) -> None:
+    assert parse_gap_line(f"Answer.\n{line}\n") is None
+    assert gap_line_near_miss(f"Answer.\n{line}\n")
+
+
+def test_an_answer_without_any_gap_mention_is_not_a_near_miss() -> None:
+    assert not gap_line_near_miss("Covered.\n\nVault Sources:\n[1] x")
+    assert not gap_line_near_miss(_gap("T"))
+
+
+def test_a_near_miss_is_warned_about_not_passed_silently() -> None:
+    rec = _Recorder([AskAnswer(0, f"Answer.\n**{GAP_LINE_PREFIX}** {{}}")])
+
+    assert rec.run(escalate=True) == 0
+
+    assert rec.researched == []
+    assert any("WARN" in m and GAP_LINE_PREFIX in m for m in rec.messages)
+
+
 def test_two_gap_lines_are_refused() -> None:
     with pytest.raises(GapLineError):
         parse_gap_line(f"{_gap('A')}\n{_gap('B')}\n")
@@ -120,20 +185,24 @@ def test_the_prompt_is_the_command_body_with_the_question_substituted() -> None:
 class _Recorder:
     """Stand-ins for the dispatch and the research run, recording each call."""
 
-    def __init__(self, answers: list[AskAnswer], research_rc: int = 0) -> None:
+    def __init__(
+        self,
+        answers: list[AskAnswer],
+        research: ResearchOutcome = ResearchOutcome("completed", 0),
+    ) -> None:
         self._answers = list(answers)
         self.asked: list[str] = []
         self.researched: list[str] = []
-        self._research_rc = research_rc
+        self._research = research
         self.messages: list[str] = []
 
     def ask(self, question: str) -> AskAnswer:
         self.asked.append(question)
         return self._answers.pop(0)
 
-    def research(self, topic: str) -> int:
+    def research(self, topic: str) -> ResearchOutcome:
         self.researched.append(topic)
-        return self._research_rc
+        return self._research
 
     def report(self, message: str) -> None:
         self.messages.append(message)
@@ -207,14 +276,43 @@ def test_a_failed_dispatch_is_reported_and_starts_no_run() -> None:
     assert rec.researched == []
 
 
-def test_a_research_run_that_fails_or_pauses_is_not_followed_by_a_re_ask() -> None:
-    """A run stopped at the budget ceiling has not closed the gap."""
-    rec = _Recorder([AskAnswer(0, _gap("T"))], research_rc=2)
+def test_a_cycle_that_terminates_with_1_completed_and_is_re_asked() -> None:
+    """The cycle runner's 1 is TERMINATE (Conditions A/B/C), not a failure.
+
+    A targeted cycle often finds no new topics (B), and the last allowed cycle
+    always meets A — so treating 1 as failure would never re-ask.
+    """
+    rec = _Recorder(
+        [AskAnswer(0, _gap("T")), AskAnswer(0, "Covered now.")],
+        research=ResearchOutcome("completed", 1),
+    )
+
+    assert rec.run(escalate=True) == 0
+
+    assert rec.researched == ["T"]
+    assert len(rec.asked) == 2
+
+
+def test_a_failed_research_run_is_not_followed_by_a_re_ask() -> None:
+    rec = _Recorder([AskAnswer(0, _gap("T"))], research=ResearchOutcome("failed", 2))
 
     assert rec.run(escalate=True) == 2
 
     assert rec.researched == ["T"]
     assert len(rec.asked) == 1
+
+
+def test_a_paused_research_run_is_reported_as_a_pause_and_not_re_asked() -> None:
+    """A run stopped at the budget ceiling has not closed the gap."""
+    rec = _Recorder(
+        [AskAnswer(0, _gap("T"))],
+        research=ResearchOutcome("paused", 1, "BUDGET_PAUSED at _pipeline/x"),
+    )
+
+    assert rec.run(escalate=True) == 1
+
+    assert len(rec.asked) == 1
+    assert any("paused" in m and "BUDGET_PAUSED" in m for m in rec.messages)
 
 
 def test_a_gap_that_survives_the_research_is_not_escalated_twice() -> None:

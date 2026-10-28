@@ -50,12 +50,18 @@ def _vault(tmp_path: Path, **kw: Any) -> Path:
     return vault
 
 
-def _record_cycles(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+def _record_cycles(
+    monkeypatch: pytest.MonkeyPatch,
+    rc: int = 0,
+    side_effect: Any = None,
+) -> list[dict[str, Any]]:
     calls: list[dict[str, Any]] = []
 
     def _fake(vault_dir: Path, cycle_num: int, *args: Any, **kwargs: Any) -> int:
         calls.append({"vault_dir": vault_dir, "cycle_num": cycle_num, **kwargs})
-        return 0
+        if side_effect is not None:
+            side_effect(vault_dir)
+        return rc
 
     monkeypatch.setattr(
         "research_framework.pipeline.orchestrator.run_single_cycle", _fake
@@ -192,13 +198,90 @@ def test_ask_has_no_budget_flag_of_its_own() -> None:
     assert options == {"-h", "--help", "--vault", "--escalate"}
 
 
-@pytest.mark.e2e
-def test_an_escalated_gap_produces_a_note_and_a_re_answer(
+def test_a_cycle_that_terminates_with_1_is_followed_by_a_re_ask(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """1 is the runner's TERMINATE (Condition A/B/C met), a finished cycle."""
+    vault = _vault(tmp_path)
+    cycles = _record_cycles(monkeypatch, rc=1)
+
+    rc = _ask(vault, "--escalate")
+
+    assert rc == 0
+    assert len(cycles) == 1
+    assert len(_answers(vault)) == 2
+
+
+def test_a_budget_pause_inside_the_cycle_is_reported_as_a_pause(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """`pause_for_budget` writes its marker and exits 1 — the ceiling holding."""
+    from research_framework.pipeline.budget_guard import budget_marker_path
+
+    def _pause(vault_dir: Path) -> None:
+        marker = budget_marker_path(vault_dir)
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text("{}", encoding="utf-8")
+        raise SystemExit(1)
+
+    vault = _vault(tmp_path)
+    _record_cycles(monkeypatch, side_effect=_pause)
+
+    rc = _ask(vault, "--escalate")
+
+    assert rc == 1
+    assert len(_answers(vault)) == 1, "a paused run must not be followed by a re-ask"
+    err = capsys.readouterr().err
+    assert "paused" in err and "BUDGET_PAUSED" in err
+
+
+def test_the_lifetime_dollar_ceiling_refuses_the_escalation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """Recorded spend at `pipeline.budget_usd` means no new cycle starts."""
+    vault = _vault(tmp_path)  # budget_usd: 10.0
+    calls = vault / "_pipeline" / "cycles" / "cycle-001" / "agent-calls"
+    calls.mkdir(parents=True)
+    (calls / "scout.json").write_text(json.dumps({"cost_usd": 10.0}))
+    cycles = _record_cycles(monkeypatch)
+
+    rc = _ask(vault, "--escalate")
+
+    assert rc == 2
+    assert cycles == []
+    assert len(_answers(vault)) == 1
+    assert "pipeline.budget_usd" in capsys.readouterr().err
+
+
+def test_a_missing_vault_is_named_in_the_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    missing = tmp_path / "no-such-vault"
+
+    rc = main(["ask", "--vault", str(missing), _QUESTION])
+
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert str(missing) in err and "not found" in err
+
+
+@pytest.mark.e2e
+@pytest.mark.parametrize(
+    "max_cycles",
+    [
+        pytest.param(5, id="cycle-continues"),
+        # Cycle 1 of 1 always meets Condition A, so the runner returns 1.
+        pytest.param(1, id="last-allowed-cycle-terminates"),
+    ],
+)
+def test_an_escalated_gap_produces_a_note_and_a_re_answer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, max_cycles: int
 ) -> None:
     """The whole path: gap line -> real cycle (fake agent) -> note -> re-answer."""
     monkeypatch.setenv("FAKE_AGENT_SCENARIO", "happy")
-    vault = _vault(tmp_path, num_categories=1, num_targets_per_category=2)
+    vault = _vault(
+        tmp_path, num_categories=1, num_targets_per_category=2, max_cycles=max_cycles
+    )
     assert _notes(vault) == []
 
     rc = _ask(vault, "--escalate")
