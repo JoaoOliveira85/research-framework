@@ -200,20 +200,6 @@
       "is_user_owned_after_first_write": true
     },
     {
-      "path": "_pipeline/systemd/.tmpl-versions.json",
-      "kind": "json",
-      "template_version": 1,
-      "rendered_sha256": "f8a20ccdbf9dea7c1d11f03c3e1a37d55531a57bfb6d0f38073605027999c5e7",
-      "is_user_owned_after_first_write": true
-    },
-    {
-      "path": "_pipeline/systemd/vault-research.service",
-      "kind": "other",
-      "template_version": 1,
-      "rendered_sha256": "848e4622ca2ca8a6106989f67d726a7ed01cb9e57a002c3058d037d92069dd6c",
-      "is_user_owned_after_first_write": true
-    },
-    {
       "path": "_templates/CHANGELOG.md",
       "kind": "markdown",
       "template_version": 1,

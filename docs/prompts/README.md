@@ -70,7 +70,6 @@ These are already standalone, verbatim, tracked files. Copying them here would m
 | `templates/index-files/_index.md.j2` | an index file, not a prompt |
 | `templates/update_vault.py.j2` | a script |
 | `templates/vault-config.yaml.j2` | configuration |
-| `templates/vault-research.service.j2` | a systemd unit |
 | `templates/vault-script.sh.j2` | the `./vault` shim (spec 077) |
 
 `.claude/skills/` is excluded as a whole: those are spec-kit authoring skills for contributors to this repo, not prompts the framework dispatches at a vault.

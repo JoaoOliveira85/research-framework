@@ -191,7 +191,6 @@ NOT_A_PROMPT: dict[str, str] = {
     "templates/update_vault.py.j2": "a script",
     "templates/vault-config.yaml.j2": "configuration",
     "templates/claude-settings.json.j2": "configuration",
-    "templates/vault-research.service.j2": "a systemd unit",
     "templates/index-files/_index.md.j2": "an index file, not a prompt",
     "templates/index-files/_graph.md.j2": "an index file, not a prompt",
     "templates/index-files/_concepts.md.j2": "an index file, not a prompt",
