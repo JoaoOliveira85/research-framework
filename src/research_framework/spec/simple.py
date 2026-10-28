@@ -740,6 +740,7 @@ def _data_sources(simple: SimpleSpec) -> list[DataSourceConfig]:
                 required=True,
                 priority=2,
                 role="domain",
+                role_declared=False,
                 # Open web search is LLM-fetch guidance, not a module-backed
                 # source — annotate it honestly so spec-069's source-backing
                 # validation treats it as a strategy hint, not an unbacked
@@ -759,6 +760,7 @@ def _data_sources(simple: SimpleSpec) -> list[DataSourceConfig]:
                 access_method=str(s.get("access_method", "") or ""),
                 priority=int(s.get("priority", 2)),
                 role=str(s.get("role", "domain")),
+                role_declared=bool(s.get("role")),
                 phases=[str(p) for p in (s.get("phases") or [])],
                 # Spec 070 F8: these were dropped, which left a simple-format
                 # vault unable to satisfy spec 069's fail-closed source-backing

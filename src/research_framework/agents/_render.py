@@ -56,6 +56,40 @@ def _adapt_settings(spec: Any) -> Any:
     return adapted
 
 
+def _field(source: Any, key: str, default: Any = None) -> Any:
+    """Read *key* from a data source that is a mapping or an object."""
+    if isinstance(source, dict):
+        return source.get(key, default)
+    return getattr(source, key, default)
+
+
+def citation_roles(spec: Any) -> list[dict[str, Any]]:
+    """The declared ``role`` of each data source, in spec order.
+
+    Feeds the ``ask`` template's Tier-2 labels. A source whose spec never
+    wrote a ``role`` is left out, so it is cited without a label — the parser
+    default is not the author's vocabulary. ``role_declared`` is absent on
+    spec stand-ins, where a non-empty ``role`` is taken as declared.
+    """
+    result: list[dict[str, Any]] = []
+    for source in getattr(spec, "data_sources", None) or []:
+        role = str(_field(source, "role", "") or "").strip()
+        if not role or not _field(source, "role_declared", True):
+            continue
+        locators = [str(_field(source, "url", "") or "")]
+        locators += [str(u) for u in _field(source, "urls", None) or []]
+        for repo in _field(source, "repos", None) or []:
+            locators.append(str(_field(repo, "url", "") or ""))
+        result.append(
+            {
+                "role": role,
+                "name": str(_field(source, "name", "") or ""),
+                "locators": [loc for loc in locators if loc],
+            }
+        )
+    return result
+
+
 def _adapt_spec(spec: Any) -> Any:
     """Return a spec-like object compatible with all command templates.
 
@@ -73,6 +107,7 @@ def _adapt_spec(spec: Any) -> Any:
         ns.scope_include = list(getattr(scope, "boundaries", []) or [])
         ns.scope_exclude = list(getattr(scope, "out_of_scope", []) or [])
     ns.settings = _adapt_settings(spec)
+    ns.citation_roles = citation_roles(spec)
     return ns
 
 

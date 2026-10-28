@@ -128,6 +128,7 @@ def test_renameable_commands_render_from_the_generator_source(
     the same file under a fixed name is how a plain `regenerate-agents` used to
     swap a vault's `/research` personality (#252).
     """
+    from research_framework.agents._render import _adapt_spec
     from research_framework.generator.templates import _env, _templates_src
 
     fake_spec.settings = SimpleNamespace(
@@ -135,7 +136,9 @@ def test_renameable_commands_render_from_the_generator_source(
     )
     env = _env(_templates_src())
     for name in RENAMEABLE:
-        expected = env.get_template(f"commands/{name}.md.j2").render(spec=fake_spec)
+        expected = env.get_template(f"commands/{name}.md.j2").render(
+            spec=_adapt_spec(fake_spec)
+        )
         assert render_agent(name, fake_spec, today="2026-05-13") == expected
 
 

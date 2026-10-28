@@ -219,6 +219,12 @@ class DataSourceConfig:
     # Any non-empty list MUST contain only values from `RESEARCH_MODES`;
     # validator enforces that.
     phases: list[str] = field(default_factory=list)
+    # Whether the spec author wrote `role` (vs. the parser filling a default).
+    # `role` always holds a value, so only this flag tells a consumer — the
+    # `ask` template's Tier-2 label — that the vocabulary is the author's.
+    # Directly-constructed sources count as declared; parsers set it from the
+    # raw mapping, and `to_dict` persists only the `False` case.
+    role_declared: bool = True
 
     def applies_to(self, mode: str) -> bool:
         """True iff this source should be consulted during `mode`.
@@ -241,6 +247,8 @@ class DataSourceConfig:
         }
         if self.default_credibility:
             payload["default_credibility"] = self.default_credibility
+        if not self.role_declared:
+            payload["role_declared"] = False
         if self.kind:
             payload["kind"] = self.kind
         if self.local_path:
@@ -270,6 +278,7 @@ class DataSourceConfig:
             url=d.get("url", "") or "",
             urls=[str(u) for u in (d.get("urls") or [])],
             phases=list(d.get("phases", []) or []),
+            role_declared=bool(d.get("role_declared", bool(d.get("role")))),
         )
 
 
