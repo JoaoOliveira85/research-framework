@@ -147,9 +147,7 @@ class TestWikilinkClassification:
         # must not depend on iteration order, and a tie is never a rename.
         assert vh._classify_wikilink("CRD", known) == ("stub", "")
 
-    def test_tied_best_match_falls_through_in_a_scan(
-        self, tmp_path: Path, vh
-    ) -> None:
+    def test_tied_best_match_falls_through_in_a_scan(self, tmp_path: Path, vh) -> None:
         vault = _build_minimal_vault(tmp_path)
         _write_note(vault, "crdt.md", body="## Overview\n")
         _write_note(vault, "kcrd.md", body="## Overview\n")

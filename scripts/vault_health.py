@@ -235,14 +235,19 @@ def _classify_wikilink(target: str, known: set[str]) -> tuple[str, str]:
 
     classification is one of ``"moved"``, ``"stub"``, ``"orphan"``.
     suggestion is the matching stem when classification=="moved", else "".
+    Only a single best match is "moved"; a tie falls through to stub/orphan.
     """
-    best_stem, best_ratio = "", 0.0
-    for stem in known:
+    best: list[str] = []
+    best_ratio = 0.0
+    for stem in sorted(known):
         ratio = SequenceMatcher(None, target.lower(), stem.lower()).ratio()
         if ratio > best_ratio:
-            best_stem, best_ratio = stem, ratio
-    if best_ratio >= _LEVENSHTEIN_SIMILAR:
-        return "moved", best_stem
+            best, best_ratio = [stem], ratio
+        elif ratio == best_ratio:
+            best.append(stem)
+    # An exact-score tie (e.g. CRD ~ crdt / kcrd) is ambiguous: never guess.
+    if best_ratio >= _LEVENSHTEIN_SIMILAR and len(best) == 1:
+        return "moved", best[0]
     if _STUB_TITLE_RE.match(target):
         return "stub", ""
     return "orphan", ""
