@@ -7,15 +7,17 @@ downstream reader — indexer, coverage, quarantine, harvest, wikilinks — spel
 second, empty ``data_vault/`` created under it, its indexes written there, and
 ``met_count`` stuck at 0. A setting accepted and silently ignored.
 
-The name is read from ``_pipeline/spec-parse.json``, which the ``parse-spec``
-step writes on every run. Readers take a vault root, not a corpus path, so the
+The name is read from the parsed spec (``_pipeline/spec-parse.json``) through
+the one loader, ``spec.parsed.load_parsed_spec``, which re-parses when the spec
+file has changed. Readers take a vault root, not a corpus path, so the
 resolution has to happen from the vault root; that is what this module is.
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
+
+from ..spec.parsed import ParsedSpecError, load_parsed_spec
 
 DEFAULT_CORPUS_DIR = "data_vault"
 
@@ -26,12 +28,9 @@ def corpus_dir_name(vault: Path) -> str:
     Never raises: a vault mid-generation has no ``spec-parse.json`` yet, and a
     truncated one must not take down a best-effort reader.
     """
-    spec_parse = vault / "_pipeline" / "spec-parse.json"
     try:
-        data = json.loads(spec_parse.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return DEFAULT_CORPUS_DIR
-    if not isinstance(data, dict):
+        data = load_parsed_spec(vault)
+    except ParsedSpecError:
         return DEFAULT_CORPUS_DIR
     return str(data.get("vault_corpus_dir") or DEFAULT_CORPUS_DIR)
 

@@ -25,6 +25,7 @@ from research_framework.generator.scripts import copy_scripts
 from research_framework.generator.templates import render_all
 from research_framework.pipeline.coverage import save_targets
 from research_framework.pipeline.research_plan import generate_plan
+from research_framework.spec.parsed import stamp_parsed_spec
 from research_framework.spec.schema import (
     BudgetConfig,
     CoverageCategory,
@@ -245,6 +246,9 @@ def build_minimal_vault(
     parse_path = vault / "_pipeline" / "spec-parse.json"
     parse_doc: dict[str, Any] = spec.to_dict()
     parse_doc["location"] = str(vault.resolve())
+    # Stamp against the stub research.spec.md so the loader treats this
+    # hand-built parse as current instead of re-deriving it from the stub.
+    parse_doc = stamp_parsed_spec(parse_doc, vault / "research.spec.md", vault)
     parse_path.write_text(json.dumps(parse_doc, indent=2) + "\n", encoding="utf-8")
 
     _generate_initial_plan(vault, spec)

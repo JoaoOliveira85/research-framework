@@ -28,6 +28,7 @@ from research_framework.pipeline.gates_cycle import (
 )
 from research_framework.pipeline.settings import effective_max_cycles
 from research_framework.pipeline.step_gate_log import read_step_gates
+from research_framework.spec.parsed import ParsedSpecError, load_parsed_spec
 from research_framework.spec.schema import (
     BudgetConfig,
     CoverageTargets,
@@ -42,14 +43,10 @@ from research_framework.vault.frontmatter import (
 
 
 def _load_spec_config(vault_dir: Path) -> SpecConfig:
-    parse_path = vault_dir / "_pipeline" / "spec-parse.json"
-    if parse_path.is_file():
-        try:
-            return SpecConfig.from_dict(
-                json.loads(parse_path.read_text(encoding="utf-8"))
-            )
-        except (json.JSONDecodeError, TypeError, KeyError):
-            pass
+    try:
+        return SpecConfig.from_dict(load_parsed_spec(vault_dir))
+    except (ParsedSpecError, TypeError, KeyError):
+        pass
     spec_md = vault_dir / "research.spec.md"
     if spec_md.is_file():
         from research_framework.spec.simple import load as load_spec

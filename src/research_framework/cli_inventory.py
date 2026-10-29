@@ -13,6 +13,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .spec.parsed import ParsedSpecError, load_parsed_spec
+
 __all__ = ["build_inventory", "format_text", "format_json"]
 
 # Migrator artefact paths to exclude from user-added detection
@@ -26,13 +28,14 @@ _MIGRATOR_ARTEFACTS = frozenset(
 
 
 def _read_spec_parse(vault_root: Path) -> dict[str, Any]:
-    """Read _pipeline/spec-parse.json; return {} on absence/error."""
-    sp = vault_root / "_pipeline" / "spec-parse.json"
-    if not sp.exists():
-        return {}
+    """The vault's parsed spec via the one loader; {} when unavailable.
+
+    Inventory is a read-only diagnostic, so a stale cache is rebuilt in memory
+    but not written back.
+    """
     try:
-        return json.loads(sp.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+        return load_parsed_spec(vault_root, write_cache=False)
+    except ParsedSpecError:
         return {}
 
 
