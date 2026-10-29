@@ -14,10 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - The scaffold no longer writes `_pipeline/systemd/vault-research.service` or its `.tmpl-versions.json`, and the `vault-research.service.j2` template is gone (issue #19). The unit shipped without a timer, so it ran `./vault research` once per login rather than weekly. Schedule with cron or launchd instead (see `generate --help`).
+- `--force-budget` and its `RF_FORCE_BUDGET_ACK` headless acknowledgement (#14). A run over its cap already stops before dispatch; resuming a `BUDGET_PAUSED` vault that is still over now always refuses, in TTY and headless alike, and the message names the setting to raise (`limits.cycle_budget_usd`, `limits.codex_token_budget` or `limits.cycle_wallclock_budget_minutes`, per the pause reason). Every verb rejects `--force-budget` with exit `2` and a message naming what to raise (`--max-usd` / `pipeline.budget_usd` for the run-wide dollar cap), for one release. (test: `tests/cli/test_force_budget_retired.py`)
 
 ### Migration notes
 
 - Existing vaults: `./vault update` leaves a `_pipeline/systemd/` directory you already have untouched (nothing is deleted or re-rendered). Delete it, or keep it if you wired it to your own timer.
+- Scripts passing `--force-budget` (with or without `RF_FORCE_BUDGET_ACK=1`) must instead raise the capped limit in the vault's `settings.yaml` and then run `generate --resume`. `--approve` / `--approve-all` / `--reject` are unchanged.
 
 ## [1.0.1] - 2026-10-12
 

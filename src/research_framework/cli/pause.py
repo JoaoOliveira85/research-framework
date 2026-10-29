@@ -166,8 +166,9 @@ def _render_text(records: dict[str, dict[str, Any] | None]) -> str:
     if not blocks:
         return "No pause markers in this vault — nothing is waiting on you."
     blocks.append(
-        "Resume with `research-framework generate --resume` (add "
-        "`--force-budget` / `--approve <stage>` as the pause requires), or "
+        "Resume with `research-framework generate --resume` (after "
+        "raising the capped `limits.*` setting for a budget pause, or adding "
+        "`--approve <stage>` for an approval gate), or "
         "abandon it with `research-framework pause clear`."
     )
     return "\n\n".join(blocks)

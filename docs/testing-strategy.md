@@ -58,12 +58,12 @@ pytest -m e2e              # tier-5/6 e2e only
 ruff check .               # lint baseline (must be zero)
 ```
 
-<!-- test-count: not_e2e=4314 total=4344 e2e_only=30 refreshed=2026-10-28 -->
+<!-- test-count: not_e2e=4324 total=4354 e2e_only=30 refreshed=2026-10-29 -->
 **This is the one place in the repo a test count is committed** — every
 other doc that mentions a count (README, CLAUDE.md, CONTRIBUTING.md,
 ARCHITECTURE.md, `docs/RELEASE.md`) points here instead of quoting its
-own copy. Today that's **4314** fast-loop tests (`pytest -m "not e2e"`),
-**4344** total (`pytest --collect-only -q`), **30** deselected as `e2e`.
+own copy. Today that's **4324** fast-loop tests (`pytest -m "not e2e"`),
+**4354** total (`pytest --collect-only -q`), **30** deselected as `e2e`.
 `tests/docs/test_one_source_per_fact.py` re-collects the suite and
 fails if the comment above no longer matches — when it fails, update
 the comment **and** the three bolded numbers in this paragraph

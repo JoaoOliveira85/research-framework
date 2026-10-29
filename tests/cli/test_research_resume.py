@@ -37,7 +37,6 @@ def _resume_args(
     args.vault_dir = vault_dir
     args.spec = spec_path
     args.cycle = cycle
-    args.force_budget = False
     args.approve = None
     args.approve_all = False
     args.reject = None

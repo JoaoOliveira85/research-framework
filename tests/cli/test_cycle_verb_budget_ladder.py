@@ -184,7 +184,7 @@ def test_cycle_refuses_to_run_over_a_standing_budget_pause(
 ) -> None:
     """Only ``generate --resume`` honoured pause markers; ``cycle`` re-spent.
 
-    ``cycle`` has no ``--force-budget`` / ``--approve`` surface, so it does not
+    ``cycle`` has no resume or ``--approve`` surface, so it does not
     get to decide a pause — it refuses, names the marker, and points at the
     verb that can (``pause``) and the verb that resumes properly.
     """

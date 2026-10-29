@@ -120,7 +120,6 @@ def test_a_refused_resume_arms_nothing(
     )
 
     args = _resume_args(vault_dir, spec_path, cycle=1)
-    args.force_budget = False
     assert _resume(args) == 1
     assert armed == []
 

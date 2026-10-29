@@ -163,7 +163,7 @@ spec. `pipeline` is specified in `075-pipeline-runner`.
 
 | Verb | Purpose | Key flags | Exit codes |
 | --- | --- | --- | --- |
-| `generate` | Bootstrap or resume a vault | `--spec` (required unless `--regenerate-plan-only`), `--output`, `--dry-run`, `--resume`, `--cycle`, `--max-cycles`, `--max-usd`, `--skip-gate`, `--prepopulate`, `--settings`, `--regenerate-plan-only`, `--force-budget`, `--approve`, `--approve-all`, `--reject` | 0 dry-run/complete; 1 resume precondition unmet, budget/approval refusal, source-exhausted; 2 usage, archived vault, spec invalid, phase-1 gate failed, dirty tree |
+| `generate` | Bootstrap or resume a vault | `--spec` (required unless `--regenerate-plan-only`), `--output`, `--dry-run`, `--resume`, `--cycle`, `--max-cycles`, `--max-usd`, `--skip-gate`, `--prepopulate`, `--settings`, `--regenerate-plan-only`, `--approve`, `--approve-all`, `--reject` | 0 dry-run/complete; 1 resume precondition unmet, budget/approval refusal, source-exhausted; 2 usage, archived vault, spec invalid, phase-1 gate failed, dirty tree |
 | `coverage` | Coverage-target status | `--vault` (required) | 0 met; 1 unmet; 2 bad vault |
 | `validate` | Run the validator suite | `--vault` | max() of five sub-scripts, each 0/1/2 |
 | `reindex` | Rebuild index files | `--vault` | 0; 2 import failure |

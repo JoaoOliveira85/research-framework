@@ -1,6 +1,6 @@
-"""Issue #286: --approve/--approve-all/--reject/--force-budget are resume-only.
+"""Issue #286: --approve/--approve-all/--reject are resume-only.
 
-``generate`` advertises these four flags in its help (they live on the single
+``generate`` advertises these three flags in its help (they live on the single
 subparser that also serves ``--resume``, per spec 033), but ``_cmd_generate``
 only ever reads them from inside the ``--resume`` branch (delegated to
 ``_resume`` / ``cli/budget_resume.py``). Pass any of them to a fresh
@@ -24,7 +24,6 @@ from research_framework.cli.research_generate import _cmd_generate
         (["--approve", "research"], "--approve"),
         (["--approve-all"], "--approve-all"),
         (["--reject", "research"], "--reject"),
-        (["--force-budget"], "--force-budget"),
     ],
 )
 def test_resume_only_flag_without_resume_exits_2(
@@ -47,7 +46,7 @@ def test_multiple_resume_only_flags_are_all_named(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     args = build_parser().parse_args(
-        ["generate", "--spec", "x", "--approve-all", "--force-budget"]
+        ["generate", "--spec", "x", "--approve-all", "--reject", "research"]
     )
 
     rc = _cmd_generate(args)
@@ -55,7 +54,7 @@ def test_multiple_resume_only_flags_are_all_named(
     assert rc == 2
     err = capsys.readouterr().err
     assert "--approve-all" in err
-    assert "--force-budget" in err
+    assert "--reject" in err
 
 
 def test_resume_only_flags_absent_does_not_trip_the_guard(

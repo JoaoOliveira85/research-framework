@@ -91,10 +91,6 @@ ALLOWLIST: dict[str, str] = {
         "control flow: cli/budget_resume.py decides whether to clear a paused "
         "budget marker; the decision, not the flag, reaches the pipeline."
     ),
-    "generate force_budget": (
-        "control flow: cli/budget_resume.py uses it to override the budget "
-        "refusal before dispatching; nothing downstream needs the flag."
-    ),
     "generate legacy_cycle_runner": (
         "control flow: selects which runner cli/research_generate.py and "
         "cli/research_resume.py call. A runtime switch, not a parameter."
@@ -297,7 +293,7 @@ def _read_forms(dest: str) -> tuple[str, ...]:
     """The ways ``cli/`` actually gets a value off the parsed namespace.
 
     Textual rather than AST-shaped because half of them are string keys
-    (``getattr(args, "approve", None)``, ``_flag_is_true(args, "force_budget")``)
+    (``getattr(args, "approve", None)``, ``_flag_is_true(args, "approve_all")``)
     that no identifier walk can see. Anchored on ``args`` so a bare mention of
     the word in a help string or an error message does not count as a read.
     """

@@ -202,6 +202,16 @@ for the content that used to live here.
 
 ---
 
+## Delete the `--force-budget` tripwire after the next release (issue #14)
+
+*(surfaced 2026-10-28)* `cli/__init__.py::_retired_force_budget`,
+`_FORCE_BUDGET_RETIRED` and the early return in `main()` reject the removed flag
+with a pointer to the `limits.*` settings. They are meant to last one release;
+once the release after the removal is tagged, delete them, their tests in
+`tests/cli/test_force_budget_retired.py`, and this entry.
+
+---
+
 ## Recently triaged out (cross-references)
 
 - **Source modules roadmap** → `docs/ROADMAP.md` § Deferred, row "spec 060 tiers"

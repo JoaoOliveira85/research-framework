@@ -21,7 +21,7 @@ _PAUSE_MARKERS: tuple[tuple[str, str], ...] = (
 def _standing_pause(vault: Path) -> tuple[str, Path] | None:
     """The first pause marker standing in ``vault``, or ``None``.
 
-    Deliberately cycle-agnostic. ``cycle`` carries no ``--force-budget`` /
+    Deliberately cycle-agnostic. ``cycle`` carries no resume or
     ``--approve`` surface, so it is in no position to decide a pause for a
     particular cycle; the only honest reading it can take of "a marker exists"
     is "something is waiting on a person".
@@ -46,7 +46,8 @@ def _refuse_over_pause(name: str, path: Path) -> int:
         "operator decision, and `cycle` has no flag that can make one.\n"
         "Inspect it with `research-framework pause show --vault <vault>`, then "
         "either resume properly (`research-framework generate --resume ...` "
-        "with --force-budget / --approve <stage>) or abandon it with "
+        "after raising the capped limit, or with --approve <stage>) or abandon "
+        "it with "
         "`research-framework pause clear --vault <vault>`.",
         file=sys.stderr,
     )
