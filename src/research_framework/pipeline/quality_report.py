@@ -492,9 +492,15 @@ def write_report(vault_dir: Path, cycle_number: int) -> Path:
     snap = _build_coverage_snapshot(targets, prev_snap)
     # Spec 061: the cycle horizon for the yield projection comes from the vault
     # settings (canonical pipeline.max_cycles), not the (now-removed) spec field.
-    # An unlimited ceiling (0, issue #33) projects over a rolling horizon rather
-    # than reading 0 as "the run ends this cycle".
-    max_cycles = max(1, planning_horizon(effective_max_cycles(vault_dir), cycle_number))
+    #
+    # This is a PROJECTION horizon, not an enforced ceiling. With a finite
+    # `max_cycles` the two coincide; with `max_cycles: 0` (no lifetime ceiling,
+    # issue #33) it is a rolling `DEFAULT_MAX_CYCLES`-cycle window from this
+    # cycle (`planning_horizon`), so the gates below never read 0 as "the run
+    # ends this cycle". The gates' parameter is still named `max_cycles`.
+    projection_horizon = max(
+        1, planning_horizon(effective_max_cycles(vault_dir), cycle_number)
+    )
 
     (
         sg_gates,
@@ -539,7 +545,7 @@ def write_report(vault_dir: Path, cycle_number: int) -> Path:
         for c in targets.categories
         if min(before[c.name]["met"], after[c.name]["met"]) < int(c.target_count)
     ]
-    yt = compute_yield_target(vault_dir, cycle_number, max_cycles)
+    yt = compute_yield_target(vault_dir, cycle_number, projection_horizon)
     exp_vel = max(1, yt.target)
     wcs = [_word_count_body(vault_dir, fn) for fn in all_written]
     floor = _min_note_word_floor(spec)
@@ -549,7 +555,7 @@ def write_report(vault_dir: Path, cycle_number: int) -> Path:
         (
             CG001_min_cycle_yield,
             (vault_dir, report_for_cg1),
-            {"cycle_number": cycle_number, "max_cycles": max_cycles},
+            {"cycle_number": cycle_number, "max_cycles": projection_horizon},
         ),
         (CG002_category_diversity, (cycle_notes,), {"unfilled_categories": unfilled}),
         (
@@ -565,7 +571,7 @@ def write_report(vault_dir: Path, cycle_number: int) -> Path:
         (
             CG005_cumulative_coverage_trajectory,
             (snap,),
-            {"max_cycles": max_cycles, "current_cycle": cycle_number},
+            {"max_cycles": projection_horizon, "current_cycle": cycle_number},
         ),
         (CG006_word_count_compliance, (wcs,), {"min_floor": floor}),
         (CG007_orphan_link_pct, (0, 0), {}),
