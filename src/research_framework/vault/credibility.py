@@ -126,7 +126,7 @@ def downgrade_one_step(level: Level) -> Level:
 # accessed <date>" tail. Both are presentation, not part of the URL. Rejecting
 # such an entry as malformed cost a live vault 8 of 10 notes in one run
 # (2026-09-09), so the parser strips them and grades the URL underneath.
-_CITATION_TAG_RE = re.compile(r"^\[[a-z][a-z0-9_-]*\]\s+", re.IGNORECASE)
+_CITATION_TAG_RE = re.compile(r"^\[[^\]\s][^\]]*\]\s+")
 
 
 def citation_url(entry: object) -> str | None:

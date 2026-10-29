@@ -144,9 +144,14 @@ def render_all(
         or [],
     }
 
+    from ..agents._render import citation_roles
+
     # Top-level files
     (vault_dir / "CLAUDE.md").write_text(
-        env.get_template("CLAUDE.md.j2").render(spec=spec), encoding="utf-8"
+        env.get_template("CLAUDE.md.j2").render(
+            spec=spec, citation_roles=citation_roles(spec)
+        ),
+        encoding="utf-8",
     )
     (vault_dir / "AGENTS.md").write_text(
         env.get_template("AGENTS.md.j2").render(spec=spec), encoding="utf-8"
