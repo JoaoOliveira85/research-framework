@@ -209,3 +209,18 @@ def test_no_termination_signal_continues(vc) -> None:
         pipeline_dir=None,
     )
     assert result.status == "CONTINUE"
+
+
+def test_v2_derived_condition_a_never_trips_without_a_lifetime_ceiling(vc) -> None:
+    """Issue #33: ``max_cycles=0`` is no ceiling — ``cycle >= 0`` is not Condition A."""
+    report = _report({})
+    report["cycle"] = 500
+    result = vc.check_termination_v2(
+        report,
+        max_cycles=0,
+        budget_cap=100.0,
+        vault_dir=None,
+        pipeline_dir=None,
+    )
+    assert result.status == "CONTINUE", result.reason
+    assert "500/unlimited" in result.reason

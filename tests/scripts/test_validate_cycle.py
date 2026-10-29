@@ -132,6 +132,36 @@ def test_condition_a_research_at_max_cycles_terminates(
     assert "Condition A" in result.stdout
 
 
+def test_condition_a_never_trips_without_a_lifetime_ceiling(
+    vault_dir: Path, cycle_reports_dir: Path, tmp_path: Path
+) -> None:
+    """Issue #33: ``--max-cycles 0`` is no ceiling, so ``cycle >= 0`` must not
+    read as "reached max cycles" on any cycle."""
+    staged = _stage_vault(vault_dir, cycle_reports_dir, tmp_path)
+    report = _put_report(
+        staged,
+        cycle_reports_dir / "valid-research.json",
+        name="cycle-500-research.json",
+    )
+    data = json.loads(report.read_text())
+    data["cycle"] = 500
+    data["phase"] = "research"
+    report.write_text(json.dumps(data))
+    result = run_script(str(report), "--vault", str(staged), "--max-cycles", "0")
+    assert result.returncode == 0, result.stdout
+    assert "Condition A" not in result.stdout
+
+
+def test_a_negative_max_cycles_is_refused(
+    vault_dir: Path, cycle_reports_dir: Path, tmp_path: Path
+) -> None:
+    staged = _stage_vault(vault_dir, cycle_reports_dir, tmp_path)
+    report = _put_report(staged, cycle_reports_dir / "valid-research.json")
+    result = run_script(str(report), "--vault", str(staged), "--max-cycles", "-1")
+    assert result.returncode == 2
+    assert "--max-cycles" in result.stderr
+
+
 def test_condition_c_budget_terminates(
     vault_dir: Path, cycle_reports_dir: Path, tmp_path: Path
 ) -> None:
