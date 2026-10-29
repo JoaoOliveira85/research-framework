@@ -41,13 +41,15 @@ def default_manifest_path() -> Path:
     env_override = os.environ.get(_MANIFEST_ENV_VAR)
     if env_override:
         return Path(env_override)
-    # Walk up from this file to find the repo root containing dist-templates/
-    here = Path(__file__).resolve()
-    for parent in here.parents:
-        candidate = parent / "dist-templates" / "scaffold-manifest.json"
-        if candidate.exists():
-            return candidate
-    # Fallback: relative to CWD (installed wheel, CI)
+    # Packaged copy (wheel: research_framework/_data/dist-templates/) first,
+    # then the repo checkout's dist-templates/ — both via the asset resolver.
+    from .._assets import asset_path
+
+    try:
+        return asset_path("dist-templates/scaffold-manifest.json")
+    except FileNotFoundError:
+        pass
+    # Last resort: relative to CWD (load_manifest then names the build step)
     return Path("dist-templates") / "scaffold-manifest.json"
 
 
