@@ -47,6 +47,7 @@ packages = ["src/research_framework"]
 "settings.cursor-claude.yaml" = "src/research_framework/_data/settings.cursor-claude.yaml"
 "settings.opencode.yaml" = "src/research_framework/_data/settings.opencode.yaml"
 "settings.ollama.yaml" = "src/research_framework/_data/settings.ollama.yaml"
+"dist-templates/scaffold-manifest.json" = "src/research_framework/_data/dist-templates/scaffold-manifest.json"
 
 [tool.black]
 line-length = 88

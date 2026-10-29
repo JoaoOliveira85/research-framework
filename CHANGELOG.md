@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The scaffold no longer writes `_pipeline/systemd/vault-research.service` or its `.tmpl-versions.json`, and the `vault-research.service.j2` template is gone (issue #19). The unit shipped without a timer, so it ran `./vault research` once per login rather than weekly. Schedule with cron or launchd instead (see `generate --help`).
 - `--force-budget` and its `RF_FORCE_BUDGET_ACK` headless acknowledgement (#14). A run over its cap already stops before dispatch; resuming a `BUDGET_PAUSED` vault that is still over now always refuses, in TTY and headless alike, and the message names the setting to raise (`limits.cycle_budget_usd`, `limits.codex_token_budget` or `limits.cycle_wallclock_budget_minutes`, per the pause reason). Every verb rejects `--force-budget` with exit `2` and a message naming what to raise (`--max-usd` / `pipeline.budget_usd` for the run-wide dollar cap), for one release. (test: `tests/cli/test_force_budget_retired.py`)
 
+### Fixed
+
+- `./vault regenerate-shim --force` failed in every vault installed from the wheel with `FileNotFoundError: Scaffold manifest not found at 'dist-templates/scaffold-manifest.json'` (#34). The manifest now ships in the wheel under `_data/dist-templates/` and `default_manifest_path()` resolves it from there (then the repo checkout); `RESEARCH_VAULT_MANIFEST` still overrides. (tests: `tests/pipeline/test_scaffold_manifest_packaged.py`, `tests/build/test_manifest_packaged.py`)
+
 ### Migration notes
 
 - Existing vaults: `./vault update` leaves a `_pipeline/systemd/` directory you already have untouched (nothing is deleted or re-rendered). Delete it, or keep it if you wired it to your own timer.
