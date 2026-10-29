@@ -29,16 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Existing vaults: `./vault update` leaves a `_pipeline/systemd/` directory you already have untouched (nothing is deleted or re-rendered). Delete it, or keep it if you wired it to your own timer.
 - Scripts passing `--force-budget` (with or without `RF_FORCE_BUDGET_ACK=1`) must instead raise the capped limit in the vault's `settings.yaml` and then run `generate --resume`. `--approve` / `--approve-all` / `--reject` are unchanged.
-- A vault generated from `settings.yaml` carries `tier: standard` on `plan_narrator` and `probe_retrieval`: delete those two lines (or set `tier:` to a key of `tiers:`) to silence the warning — before the next release, which refuses them. Neither line ever selected a model, so removing them changes nothing.
-- A stage that sets `tier: basic` now runs on `tiers.basic` rather than its executor's default model; a stage that sets `tier: basic` **and** `model:` no longer loads — keep one.
-- A codex/cursor/ollama/opencode vault that uses `tier:` should copy its profile's new `tiers:` block into its `settings.yaml`; without it, `basic|normal|flagship` still resolve to the Anthropic defaults.
 - **Nothing breaks on upgrade**: every `tier` a 1.0.1 vault could load still loads; the readings above only warn. Act on the warnings before the next release, which refuses them.
 - A vault generated from `settings.yaml` carries `tier: standard` on `plan_narrator` and `probe_retrieval`: delete those two lines. Neither ever selected a model, so removing them changes nothing.
 - A codex/cursor/ollama/opencode vault has no `tiers:` block (`./vault update` never rewrites `settings.yaml`), so its `tier:` lines are ignored with a warning and its stages keep their executor's model. To opt in, copy the profile's new `tiers:` block into the vault's `settings.yaml`; then `tier: basic` runs on that profile's cheap model.
 - In a vault with a `tiers:` block, a stage that sets `tier: basic` (no `model:`) now runs on `tiers.basic` rather than its executor's default model. That includes `schema_gen` / `source_extraction`, which `settings.yaml`-derived vaults ship with `tier: basic` — latent until those stages dispatch through `agent_call` (today neither does).
 - A stage that sets `tier: basic` together with `model:` keeps its `model:` and warns; remove `tier:`. `tier: normal`/`flagship` together with `model:` no longer loads — keep one.
 - `limits.tier_thresholds` is now keyed by model tier name: `tier_thresholds.standard` / `.expert` no longer match any new sidecar (an untiered call records `""`), so re-key those thresholds to `basic` / `normal` / `flagship` — or drop them.
-
 
 ## [1.0.1] - 2026-10-12
 
