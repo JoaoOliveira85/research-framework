@@ -155,36 +155,88 @@ def test_with_escalate_the_gap_topic_reaches_one_cycle_under_the_ladder(
     assert len(_answers(vault)) == 2
 
 
-def test_a_standing_budget_pause_refuses_the_escalation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def _standing_budget_pause(tmp_path: Path) -> Path:
     from research_framework.pipeline.budget_guard import budget_marker_path
 
     vault = _vault(tmp_path)
     marker = budget_marker_path(vault)
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text(json.dumps({"pause_reason": "cycle_budget_exceeded"}))
-    cycles = _record_cycles(monkeypatch)
-
-    rc = _ask(vault, "--escalate")
-
-    assert rc == 2
-    assert cycles == []
-    assert len(_answers(vault)) == 1, "a refused run must not be followed by a re-ask"
+    return vault
 
 
-def test_the_lifetime_cycle_ceiling_refuses_the_escalation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def _standing_approval_pause(tmp_path: Path) -> Path:
+    vault = _vault(tmp_path)
+    marker = vault / "_pipeline" / "APPROVAL_REQUIRED"
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text("{}", encoding="utf-8")
+    return vault
+
+
+def _cycle_ceiling_reached(tmp_path: Path) -> Path:
     vault = _vault(tmp_path, max_cycles=1)
     cycles_dir = vault / "_pipeline" / "cycles"
     cycles_dir.mkdir(parents=True, exist_ok=True)
     (cycles_dir / "cycle-001-quality-report.json").write_text("{}")
+    return vault
+
+
+def _dollar_ceiling_reached(tmp_path: Path) -> Path:
+    vault = _vault(tmp_path)  # budget_usd: 10.0
+    calls = vault / "_pipeline" / "cycles" / "cycle-001" / "agent-calls"
+    calls.mkdir(parents=True)
+    (calls / "scout.json").write_text(json.dumps({"cost_usd": 10.0}))
+    return vault
+
+
+#: Every refusal the research step would make, with the setting or marker the
+#: message must name so the operator knows what to raise or clear.
+_REFUSALS = [
+    pytest.param(_standing_budget_pause, "BUDGET_PAUSED", id="budget-pause-standing"),
+    pytest.param(_standing_approval_pause, "APPROVAL_REQUIRED", id="approval-standing"),
+    pytest.param(_cycle_ceiling_reached, "pipeline.max_cycles", id="max-cycles"),
+    pytest.param(_dollar_ceiling_reached, "pipeline.budget_usd", id="budget-usd"),
+]
+
+
+@pytest.mark.parametrize(("setup", "names"), _REFUSALS)
+def test_an_escalation_that_would_be_refused_dispatches_nothing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+    setup: Any,
+    names: str,
+) -> None:
+    """The refusal comes BEFORE the paid ask, not after it.
+
+    Rehearsed on copies of 10 live vaults: every one was past
+    `pipeline.max_cycles`, so `--escalate` paid for an ask and then refused
+    the research it was the whole point of.
+    """
+    vault = setup(tmp_path)
     cycles = _record_cycles(monkeypatch)
 
     rc = _ask(vault, "--escalate")
 
     assert rc == 2
+    assert _answers(vault) == [], "the ask was dispatched before the refusal"
+    assert cycles == []
+    assert names in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(("setup", "names"), _REFUSALS)
+def test_a_plain_ask_is_not_affected_by_the_escalation_refusals(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, setup: Any, names: str
+) -> None:
+    """Without --escalate no run can start, so nothing that gates a run applies."""
+    del names
+    vault = setup(tmp_path)
+    cycles = _record_cycles(monkeypatch)
+
+    rc = _ask(vault)
+
+    assert rc == 0
+    assert len(_answers(vault)) == 1
     assert cycles == []
 
 
@@ -251,24 +303,6 @@ def test_a_budget_pause_inside_the_cycle_is_reported_as_a_pause(
     assert rc == 1
     assert len(_answers(vault)) == 1, "a paused run must not be followed by a re-ask"
     assert "paused" in caplog.text and "BUDGET_PAUSED" in caplog.text
-
-
-def test_the_lifetime_dollar_ceiling_refuses_the_escalation(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
-) -> None:
-    """Recorded spend at `pipeline.budget_usd` means no new cycle starts."""
-    vault = _vault(tmp_path)  # budget_usd: 10.0
-    calls = vault / "_pipeline" / "cycles" / "cycle-001" / "agent-calls"
-    calls.mkdir(parents=True)
-    (calls / "scout.json").write_text(json.dumps({"cost_usd": 10.0}))
-    cycles = _record_cycles(monkeypatch)
-
-    rc = _ask(vault, "--escalate")
-
-    assert rc == 2
-    assert cycles == []
-    assert len(_answers(vault)) == 1
-    assert "pipeline.budget_usd" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("escalate", [True, False])

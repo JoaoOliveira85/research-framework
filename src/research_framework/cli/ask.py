@@ -61,51 +61,73 @@ def _next_cycle(vault: Path) -> int:
     return (highest or 0) + 1
 
 
+def _past_cycle_ceiling(cycle: int, max_cycles: int) -> bool:
+    """True when ``cycle`` is past the lifetime ``pipeline.max_cycles`` ceiling.
+
+    The one place an escalation reads that ceiling, so a change to what the
+    value means (issue #33: ``0`` as unlimited) is a change here only.
+    """
+    return cycle > max_cycles
+
+
+def _escalation_refusal(vault: Path) -> tuple[int, str | None]:
+    """``(next cycle, None)`` if an escalation may start, else a refusal.
+
+    Every check the research step makes before it starts a cycle, and the
+    reason each one names the setting or marker to change. ``_cmd_ask`` runs
+    this BEFORE the paid ask is dispatched — a rehearsal on ten live vaults
+    found every one past ``pipeline.max_cycles``, so checking only after the
+    ask paid for an answer whose escalation was certain to be refused.
+    ``_research`` runs it again, so nothing that changed in between slips by.
+    """
+    from ..pipeline.orchestrator import _cumulative_sidecar_cost
+
+    cycle = _next_cycle(vault)
+    settings = vault / "settings.yaml"
+    standing = _standing_pause(vault)
+    if standing is not None:
+        name, path = standing
+        return cycle, (
+            f"{name} is standing at {path}: this vault is waiting on an operator "
+            "decision, so no research cycle can start. Inspect it with "
+            "`research-framework pause show`, then resume or clear it."
+        )
+    try:
+        budget = resolve_cycle_budget_from_path(settings, start_cycle=cycle)
+    except BudgetError as exc:
+        return cycle, f"the budget settings in {settings} are invalid: {exc}"
+    if _past_cycle_ceiling(cycle, budget.max_cycles):
+        return cycle, (
+            f"escalating would run cycle {cycle}, past this vault's lifetime "
+            f"ceiling of {budget.max_cycles} (pipeline.max_cycles, from "
+            f"{budget.max_cycles_source}). Raise pipeline.max_cycles in "
+            f"{settings} to research this gap."
+        )
+    if budget.max_usd is not None and budget.max_usd > 0:
+        spent = _cumulative_sidecar_cost(vault, up_to=cycle)
+        if spent >= budget.max_usd:
+            return cycle, (
+                f"this vault has recorded ${spent:.4f} of spend, at or past its "
+                f"lifetime ceiling of ${budget.max_usd:.2f} (pipeline.budget_usd, "
+                f"from {budget.max_usd_source}). Raise pipeline.budget_usd in "
+                f"{settings} to research this gap."
+            )
+    return cycle, None
+
+
 def _research(vault: Path, topic: str) -> ResearchOutcome:
     """Run ONE cycle at ``topic`` through the ``cycle`` verb, under the ladder.
 
     No dollar figure is chosen here: ``budget_cap=None`` makes ``_cmd_cycle``
     resolve ``pipeline.budget_usd`` from settings.yaml exactly as it does for
     an operator who omits ``--budget-cap``, and the per-cycle
-    ``limits.cycle_budget_usd`` stays enforced before every dispatch.
-
-    Two lifetime ceilings are checked before the cycle starts, because an
-    escalation picks its own cycle number and nobody typed it:
-    ``pipeline.max_cycles`` (the highest cycle number this vault may run) and
-    ``pipeline.budget_usd`` against the spend already recorded in the cycle
-    cost sidecars — the same sum the multi-cycle loop compares it with.
+    ``limits.cycle_budget_usd`` stays enforced before every dispatch. The
+    lifetime ceilings and standing pauses are :func:`_escalation_refusal`'s.
     """
-    from ..pipeline.orchestrator import _cumulative_sidecar_cost
-
-    cycle = _next_cycle(vault)
-    try:
-        budget = resolve_cycle_budget_from_path(
-            vault / "settings.yaml", start_cycle=cycle
-        )
-    except BudgetError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return ResearchOutcome("failed", 2, "budget settings are invalid")
-    if cycle > budget.max_cycles:
-        print(
-            f"error: escalating would run cycle {cycle}, past this vault's "
-            f"lifetime ceiling of {budget.max_cycles} (pipeline.max_cycles, "
-            f"from {budget.max_cycles_source}). Raise it in "
-            f"{vault / 'settings.yaml'} to research this gap.",
-            file=sys.stderr,
-        )
-        return ResearchOutcome("failed", 2, "pipeline.max_cycles reached")
-    if budget.max_usd is not None and budget.max_usd > 0:
-        spent = _cumulative_sidecar_cost(vault, up_to=cycle)
-        if spent >= budget.max_usd:
-            print(
-                f"error: this vault has recorded ${spent:.4f} of spend, at or "
-                f"past its lifetime ceiling of ${budget.max_usd:.2f} "
-                f"(pipeline.budget_usd, from {budget.max_usd_source}). No cycle "
-                f"was started. Raise it in {vault / 'settings.yaml'} to research "
-                "this gap.",
-                file=sys.stderr,
-            )
-            return ResearchOutcome("failed", 2, "pipeline.budget_usd reached")
+    cycle, refusal = _escalation_refusal(vault)
+    if refusal is not None:
+        print(f"error: {refusal} No cycle was started.", file=sys.stderr)
+        return ResearchOutcome("failed", 2, refusal)
 
     paused_before = _standing_pause(vault)
     cycle_args = argparse.Namespace(
@@ -178,6 +200,19 @@ def _cmd_ask(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 2
+
+    if args.escalate:
+        # Refuse before the paid ask, not after it: an escalation whose
+        # research is certain to be refused must cost nothing. A plain ask
+        # starts no run, so none of these gates apply to it.
+        _, refusal = _escalation_refusal(vault)
+        if refusal is not None:
+            print(
+                f"error: {refusal} Nothing was asked; drop --escalate to ask "
+                "without researching.",
+                file=sys.stderr,
+            )
+            return 2
 
     stamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H%M%SZ")
     run_dir = vault / "_pipeline" / "ask" / stamp
