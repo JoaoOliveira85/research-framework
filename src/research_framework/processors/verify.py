@@ -597,11 +597,12 @@ def _resolve_required_frontmatter(
     """Explicit argument > spec config > the vault's templates > the default.
 
     ``template_dirs`` is searched in order and the FIRST directory that
-    declares anything wins. A generated vault has two ``_templates/``
-    directories — the corpus one holds section skeletons with no frontmatter at
-    all, the vault-root one holds the frontmatter-bearing note-type templates —
-    so "the first directory that exists" is the wrong rule and "the first that
-    says something" is the right one.
+    declares anything wins. A generated vault has one ``_templates/`` — at the
+    vault root, framework-owned, holding the frontmatter-bearing note-type
+    templates. Vaults scaffolded before issue #20 also carry a corpus-level one
+    of section skeletons with no frontmatter at all; "the first directory that
+    exists" would be the wrong rule for those, "the first that says something"
+    is the right one.
     """
     if required_frontmatter is not None:
         return tuple(str(k) for k in required_frontmatter)

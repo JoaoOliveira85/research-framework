@@ -3,9 +3,9 @@
 
 Resolves templates in order:
 
-1. ``<vault>/data_vault/_templates/{type}.md``
-2. ``<vault>/_templates/{type}.md`` (legacy)
-3. Bundled ``templates/note-type.md.j2`` (rendered with framework defaults)
+1. ``<vault>/_templates/{type}.md`` (framework-owned; rendered by scaffold and
+   ``./vault update``, never under the corpus)
+2. Bundled ``templates/note-type.md.j2`` (rendered with framework defaults)
 
 With ``--check-version``, also compares each note's frontmatter
 ``template_version`` against the version stamped in the template frontmatter
@@ -86,16 +86,12 @@ def _template_filename(note_type: str) -> str:
     return f"{note_type.replace(' ', '_').lower()}.md"
 
 
-def _data_vault_templates(vault: Path) -> Path:
-    return vault / "data_vault" / "_templates"
-
-
-def _legacy_templates(vault: Path) -> Path:
+def _root_templates(vault: Path) -> Path:
     return vault / "_templates"
 
 
 def _template_sources_present(vault: Path) -> bool:
-    return _data_vault_templates(vault).is_dir() or _legacy_templates(vault).is_dir()
+    return _root_templates(vault).is_dir()
 
 
 def _framework_renderer_available() -> bool:
@@ -197,13 +193,12 @@ def _render_framework_template(vault: Path, note_type: str) -> str | None:
 
 def _resolve_template(vault: Path, note_type: str) -> tuple[dict | None, str] | None:
     """Return ``(frontmatter | None, body)`` for the template, or ``None`` if unresolved."""
-    name = _template_filename(note_type)
-    dv = _data_vault_templates(vault) / name
-    if dv.is_file():
-        return _parse_frontmatter(dv)
-    leg = _legacy_templates(vault) / name
-    if leg.is_file():
-        return _parse_frontmatter(leg)
+    # The renderer names a file for the note type as declared; older callers
+    # use the lowercase, underscored stem. Same file for any slug-style name.
+    for name in (f"{note_type}.md", _template_filename(note_type)):
+        path = _root_templates(vault) / name
+        if path.is_file():
+            return _parse_frontmatter(path)
     text = _render_framework_template(vault, note_type)
     if text is None:
         return None
@@ -389,7 +384,7 @@ def main() -> int:
         ):
             print(
                 "ERROR: no note template sources found. Expected "
-                "<vault>/data_vault/_templates/ or <vault>/_templates/ "
+                "<vault>/_templates/ "
                 "(per-type .md files), or install research-framework with "
                 "bundled templates/note-type.md.j2.",
                 file=sys.stderr,
@@ -400,8 +395,8 @@ def main() -> int:
         ):
             print(
                 "ERROR: this vault needs local templates under "
-                "<vault>/data_vault/_templates/ or <vault>/_templates/ "
-                "(copy or scaffold per-type .md files).",
+                "<vault>/_templates/ "
+                "(re-run ./vault update to render the per-type .md files).",
                 file=sys.stderr,
             )
             return 2

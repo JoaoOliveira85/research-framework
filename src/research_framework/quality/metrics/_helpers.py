@@ -97,13 +97,11 @@ def template_filename(note_type: str) -> str:
 
 
 def resolve_template_path(vault_dir: Path, note_type: str) -> Path | None:
-    name = template_filename(note_type)
-    dv = vault_dir / "data_vault" / "_templates" / name
-    if dv.is_file():
-        return dv
-    leg = vault_dir / "_templates" / name
-    if leg.is_file():
-        return leg
+    """The vault-root note template for *note_type* (``<vault>/_templates/``)."""
+    for name in (f"{note_type}.md", template_filename(note_type)):
+        path = vault_dir / "_templates" / name
+        if path.is_file():
+            return path
     return None
 
 

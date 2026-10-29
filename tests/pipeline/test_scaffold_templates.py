@@ -1,7 +1,7 @@
-"""RED tests (T083): `data_vault/_templates/` per note type from scaffold.
+"""Scaffold emits one `_templates/{note_type}.md` per `NoteTypeConfig` (T083).
 
-Turns green when T085 emits one `{note_type}.md` per `NoteTypeConfig` with
-`required_sections` as `##` headings and idempotent re-scaffold.
+The templates live once, at the vault root (issue #20): `required_sections` as
+`##` headings, nothing under the corpus, idempotent re-scaffold.
 """
 
 from __future__ import annotations
@@ -71,13 +71,14 @@ def test_scaffold_writes_one_template_per_note_type(tmp_path: Path) -> None:
     vault = tmp_path / "v"
     scaffold(spec, vault)
 
-    tmpl_dir = vault / "data_vault" / "_templates"
+    tmpl_dir = vault / "_templates"
     assert tmpl_dir.is_dir()
-    md_files = sorted(tmpl_dir.glob("*.md"))
+    assert not (vault / "data_vault" / "_templates").exists()
+    # The version registry sits beside the per-type templates.
+    md_files = sorted(p for p in tmpl_dir.glob("*.md") if p.name != "CHANGELOG.md")
     assert len(md_files) == len(spec.note_types)
     names_found = {p.stem for p in md_files}
-    expected = {nt.name.replace(" ", "_").lower() for nt in spec.note_types}
-    assert names_found == expected
+    assert names_found == {nt.name for nt in spec.note_types}
 
     for nt in spec.note_types:
         path = tmpl_dir / f"{nt.name}.md"
@@ -91,7 +92,7 @@ def test_rescaffold_templates_idempotent_mtime(tmp_path: Path) -> None:
     spec = _spec_three_note_types()
     vault = tmp_path / "v2"
     scaffold(spec, vault)
-    tmpl_dir = vault / "data_vault" / "_templates"
+    tmpl_dir = vault / "_templates"
     files = sorted(tmpl_dir.glob("*.md"))
     assert files
     before = {p.resolve(): p.stat().st_mtime_ns for p in files}

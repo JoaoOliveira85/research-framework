@@ -261,17 +261,19 @@ class TestPlumbingIsSkippedByTheFrameworksOwnRules:
         doc = export_claims(vault, now=NOW)
         assert [c["title"] for c in doc["claims"]] == ["Real"]
         assert doc["counts"]["claims"] == 1
-        # The generator's own corpus files count too: the index trio plus the
-        # note-type template under `_templates/` — four, before this test adds
-        # `_overview.md` and `_templates/foo.md`.
+        # The generator's own corpus files count too: the index trio — three,
+        # before this test adds `_overview.md` and `_templates/foo.md`. The
+        # note-type templates are no longer among them: they live at the vault
+        # root, outside the corpus (issue #20), so a corpus `_templates/` only
+        # ever holds what an operator or an older scaffold left there.
         assert doc["counts"]["skipped"] == {
-            "scaffold": 6,
+            "scaffold": 5,
             "exempt": 2,
             "malformed": 1,
             "no_frontmatter": 1,
             "missing_fields": 2,
         }
-        assert doc["counts"]["notes_scanned"] == 13
+        assert doc["counts"]["notes_scanned"] == 12
         assert any("broken.md" in w for w in doc["warnings"])
 
 

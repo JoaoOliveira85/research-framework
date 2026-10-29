@@ -17,12 +17,14 @@ import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 _LOG = logging.getLogger(__name__)
 
 __all__ = (
     "Decision",
+    "TemplateRefresh",
+    "refresh_root_templates",
     "compare_versions",
     "decide",
     "is_user_owned",
@@ -301,6 +303,78 @@ def sync_vault_scripts(vault: Path, *, source: Path | None = None) -> list[str]:
         except OSError as exc:  # pragma: no cover - advisory
             _LOG.warning("could not refresh vault script %s: %s", src_file.name, exc)
     return changed
+
+
+@dataclass(frozen=True)
+class TemplateRefresh:
+    """What :func:`refresh_root_templates` changed, as vault-relative paths."""
+
+    rendered: tuple[str, ...]
+    removed: tuple[str, ...]
+    overwritten: tuple[tuple[str, str], ...] = ()
+    """``(template, where its previous content was saved)``, vault-relative."""
+    kept_linked: tuple[tuple[str, int], ...] = ()
+    """``(legacy corpus template, notes linking to it)``: kept, not removed."""
+
+
+def refresh_root_templates(vault: Path) -> TemplateRefresh | None:
+    """Re-render ``<vault>/_templates/`` from the vault's spec (issue #20).
+
+    Note templates are framework-owned and live only at the vault root, so
+    ``./vault update`` always re-renders them (overwriting operator edits) and
+    records the versions in ``_templates/CHANGELOG.md``. It also removes the
+    ``<corpus>/_templates/<type>.md`` files an older scaffold wrote — only
+    those whose text is exactly what that writer produced; an operator's own or
+    edited file stays, and so does the directory if it is not empty.
+
+    The spec is the parsed spec the pipeline itself runs on
+    (``spec.parsed.load_parsed_spec``: ``_pipeline/spec-parse.json`` while it
+    matches the spec file, else a fresh parse). Returns ``None`` — touching
+    nothing — when it cannot be loaded: like :func:`sync_vault_scripts` this is a
+    regenerable artefact and must never fail an upgrade.
+    """
+    from research_framework.generator.templates import (
+        remove_legacy_corpus_templates,
+        render_note_type_templates,
+    )
+
+    spec = _load_vault_spec(vault)
+    if spec is None:
+        return None
+
+    def rel(path: Path) -> str:
+        return path.relative_to(vault).as_posix()
+
+    try:
+        result = render_note_type_templates(spec, vault)
+        cleanup = remove_legacy_corpus_templates(spec, vault)
+    except Exception as exc:  # noqa: BLE001 - a Jinja or I/O error must not fail an upgrade
+        _LOG.warning("could not refresh vault note templates: %s", exc)
+        return None
+    return TemplateRefresh(
+        rendered=tuple(rel(p) for p in result.written),
+        removed=tuple(cleanup.removed),
+        kept_linked=tuple(cleanup.kept_linked.items()),
+        overwritten=tuple((rel(p), rel(saved)) for p, saved in result.overwritten),
+    )
+
+
+def _load_vault_spec(vault: Path) -> Any | None:
+    """The vault's :class:`SpecConfig`, or ``None`` when it cannot be loaded.
+
+    Read through :func:`~research_framework.spec.parsed.load_parsed_spec` (#9),
+    leniently and without writing the cache: a stale ``spec-parse.json`` is
+    re-parsed from the spec file, and a spec that no longer parses falls back
+    to the last good parse.
+    """
+    from research_framework.spec.parsed import load_parsed_spec
+    from research_framework.spec.schema import SpecConfig
+
+    try:
+        return SpecConfig.from_dict(load_parsed_spec(vault))
+    except Exception as exc:  # noqa: BLE001 - ParsedSpecError or a bad cache: skip
+        _LOG.warning("could not load the vault spec for template refresh: %s", exc)
+    return None
 
 
 def resolve_local_version(vault: Path) -> str:
