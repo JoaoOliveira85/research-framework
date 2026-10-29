@@ -440,6 +440,32 @@ def test_an_explicit_unbounded_budget_is_refused_too(
     assert ran == []
 
 
+def test_an_archived_unbounded_vault_gets_the_archived_refusal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """#26's archived guard stays the first refusal: an archived vault that is
+    also unbounded is told it is archived, not asked to
+    add a cycle cap it has no use for."""
+    from research_framework.pipeline import orchestrator as orch
+    from research_framework.pipeline.archived import ARCHIVED_EXIT
+
+    vault = _vault(tmp_path, completed=85, pipeline="  max_cycles: 0\n")
+    settings = vault / "settings.yaml"
+    settings.write_text(
+        "archived: true\n" + settings.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    ran = _runaway_stubs(monkeypatch, rc=1)
+
+    with caplog.at_level(logging.ERROR):
+        result = orch.run_cycles(_spec(vault), vault, start_cycle=86, resume=True)
+
+    assert result == ARCHIVED_EXIT
+    assert ran == []
+    joined = " ".join(r.getMessage() for r in caplog.records)
+    assert "archived" in joined
+    assert "pipeline.cycles_per_run" not in joined
+
+
 @pytest.mark.parametrize(
     ("pipeline", "flags", "expected_ran"),
     [

@@ -419,3 +419,30 @@ def test_resume_with_more_cycles_is_allowed(
 
     assert rc == 0
     assert calls and calls[0]["budget"].max_cycles == 87
+
+
+def test_resume_of_an_archived_unbounded_vault_says_archived(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """#26's archived guard stays the first refusal on the resume path too.
+
+    `generate` checks only `--output` / `vault_dir` before it hands over to
+    `_resume`, so a resume of the current directory reached the unbounded-run
+    refusal first and told an archived vault to add a cycle cap."""
+    from research_framework import cli
+    from research_framework.pipeline.archived import ARCHIVED_EXIT
+
+    vault = _vault(tmp_path, "  max_cycles: 0\n")
+    settings = vault / "settings.yaml"
+    settings.write_text(
+        "archived: true\n" + settings.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    calls = _stub_resume(monkeypatch, vault)
+
+    rc = cli._resume(_resume_args(vault))
+
+    assert rc == ARCHIVED_EXIT
+    assert calls == []
+    err = capsys.readouterr().err
+    assert "is archived" in err
+    assert "pipeline.cycles_per_run" not in err

@@ -14,6 +14,7 @@ from ._budget_resolve import (
     require_bounded_run,
     resolve_cycle_budget_from_path,
 )
+from ._common import refuse_if_archived
 from .budget_resume import (
     handle_approval_marker_on_resume,
     handle_budget_marker_on_resume,
@@ -168,6 +169,13 @@ def _resume(args: argparse.Namespace) -> int:
         return 2
 
     vault_dir = _resume_vault_dir(args)
+    # Spec 071 / issue #26: first, so an archived vault reads "archived" rather
+    # than whichever refusal below it would otherwise hit — #33's unbounded-run
+    # refusal included. `generate` checks only `--output` / `vault_dir` before
+    # handing over, so a resume of the current directory arrives here unchecked.
+    if (archived_rc := refuse_if_archived(vault_dir)) is not None:
+        return archived_rc
+
     # Issue #8: before the spec load, the budget-marker handlers (they clear
     # markers) or anything else that touches the vault.
     refusal = strict_settings_refusal(vault_dir)
