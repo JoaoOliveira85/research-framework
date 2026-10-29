@@ -113,3 +113,21 @@ def test_claude_md_citation_section_follows_declared_roles() -> None:
     some = _rendered_vault_files(_software_spec())["CLAUDE.md"]
     assert "`behaviour` -- Service repos".replace("--", "\u2014") in some
     assert "`intent` -- Design wiki".replace("--", "\u2014") in some
+
+
+def test_locators_are_deduplicated_in_order() -> None:
+    """Real specs set `url` equal to `urls[0]`; the list must not repeat it."""
+    from research_framework.agents._render import citation_roles
+
+    spec = _photography_spec()
+    spec.data_sources = [
+        DataSourceConfig(
+            name="Carpentries",
+            type="external",
+            role="domain",
+            url="https://a.org/",
+            urls=["https://a.org/", "https://b.org/", "https://a.org/"],
+        )
+    ]
+    assert citation_roles(spec)[0]["locators"] == ["https://a.org/", "https://b.org/"]
+    assert render_agent("ask", spec).count("https://a.org/") == 1

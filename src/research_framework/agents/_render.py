@@ -84,7 +84,8 @@ def citation_roles(spec: Any) -> list[dict[str, Any]]:
             {
                 "role": role,
                 "name": str(_field(source, "name", "") or ""),
-                "locators": [loc for loc in locators if loc],
+                # `url` is routinely also `urls[0]`; keep first occurrences.
+                "locators": list(dict.fromkeys(loc for loc in locators if loc)),
             }
         )
     return result
