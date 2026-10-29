@@ -44,9 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In a vault with a `tiers:` block, a stage that sets `tier: basic` (no `model:`) now runs on `tiers.basic` rather than its executor's default model. That includes `schema_gen` / `source_extraction`, which `settings.yaml`-derived vaults ship with `tier: basic` — latent until those stages dispatch through `agent_call` (today neither does).
 - A stage that sets `tier: basic` together with `model:` keeps its `model:` and warns; remove `tier:`. `tier: normal`/`flagship` together with `model:` no longer loads — keep one.
 - `limits.tier_thresholds` is now keyed by model tier name: `tier_thresholds.standard` / `.expert` no longer match any new sidecar (an untiered call records `""`), so re-key those thresholds to `basic` / `normal` / `flagship` — or drop them.
-- Run `./vault reindex` (or let the next cycle do it) to rewrite the Layer-1 files in the new link form. Nothing else needs to change; a consumer that matched `[[Title]]` literally in `_index.md` / `_concepts.md` / `_graph.md` should read the label after the `|`.
 - Run `./vault reindex` (or let the next cycle do it) to rewrite the Layer-1 files in the new link form. A vault's existing `update_vault.py` is user-managed and keeps the old writer until it is regenerated; use `./vault reindex` meanwhile. Root-level `_index.md` / `_concepts.md` / `_graph.md` left by the old writer are folded into `data_vault/` under `## Migrated from vault root` on the next reindex. A consumer that matched `[[Title]]` literally in `_index.md` / `_concepts.md` / `_graph.md` should read the label after the `|`.
-
 
 ## [1.0.1] - 2026-10-12
 
