@@ -36,6 +36,16 @@ class ScaffoldManifest:
     entries: tuple[ManifestEntry, ...]
 
 
+def _packaged_manifest_path() -> Path:
+    """The manifest bundled inside the installed package (see pyproject.toml)."""
+    return (
+        Path(__file__).resolve().parent.parent
+        / "_data"
+        / "dist-templates"
+        / "scaffold-manifest.json"
+    )
+
+
 def default_manifest_path() -> Path:
     """Return the canonical path to the scaffold manifest."""
     env_override = os.environ.get(_MANIFEST_ENV_VAR)
@@ -47,6 +57,11 @@ def default_manifest_path() -> Path:
         candidate = parent / "dist-templates" / "scaffold-manifest.json"
         if candidate.exists():
             return candidate
+    # An installed wheel carries the manifest under research_framework/_data/;
+    # a vault is not a checkout, so nothing else on disk has it.
+    packaged = _packaged_manifest_path()
+    if packaged.exists():
+        return packaged
     # Fallback: relative to CWD (installed wheel, CI)
     return Path("dist-templates") / "scaffold-manifest.json"
 
