@@ -14,6 +14,7 @@ flag ``--more-cycles N`` (#239). Two settings change that:
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import pytest
@@ -29,10 +30,13 @@ from research_framework.cli._budget_resolve import (
 from research_framework.pipeline.settings import (
     UNLIMITED_MAX_CYCLES,
     SettingsError,
+    UnknownSettingsKeyWarning,
     effective_max_cycles,
+    find_unknown_keys,
     format_cycle_ceiling,
     load_vault_settings,
     planning_horizon,
+    strict_settings_refusal,
 )
 
 # --- max_cycles: 0 is no lifetime ceiling ----------------------------------
@@ -209,6 +213,39 @@ def test_loader_types_cycles_per_run(tmp_path: Path) -> None:
     settings = load_vault_settings(vault)
     assert settings.cycles_per_run == 4
     assert "cycles_per_run" not in settings.extras.get("pipeline", {})
+
+
+# --- the unknown-key schema (#8) knows both keys ----------------------------
+
+
+def test_strict_settings_accepts_max_cycles_zero_with_cycles_per_run(
+    tmp_path: Path,
+) -> None:
+    """``pipeline.cycles_per_run`` is a known key and ``max_cycles: 0`` a valid
+    value, so a strict vault using both loads clean and is not refused."""
+    vault = _vault(tmp_path, "  max_cycles: 0\n  cycles_per_run: 6\n")
+    settings_path = vault / "settings.yaml"
+    settings_path.write_text(
+        "strict_settings: true\n" + settings_path.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        settings = load_vault_settings(vault)
+
+    assert [
+        w for w in caught if issubclass(w.category, UnknownSettingsKeyWarning)
+    ] == []
+    assert (settings.max_cycles, settings.cycles_per_run) == (0, 6)
+    assert strict_settings_refusal(vault) is None
+
+
+def test_cycles_per_run_outside_pipeline_is_an_unknown_key() -> None:
+    """The typed field lives under ``pipeline:``; at the top level it is read by
+    nothing, so it is reported (with the pipeline spelling as the hint)."""
+    unknown = find_unknown_keys({"pipeline": {"max_cycles": 0}, "cycles_per_run": 6})
+    assert [u.path for u in unknown] == ["cycles_per_run"]
 
 
 @pytest.mark.parametrize("bad", ["-1", "1.5", "true", "'5'"])

@@ -1402,6 +1402,7 @@ class _Keyed:
 _PIPELINE_FIELDS = frozenset(
     {
         "max_cycles",
+        "cycles_per_run",  # issue #33
         "budget_usd",
         "backlog_promotion_threshold",
         "coverage_growth",
