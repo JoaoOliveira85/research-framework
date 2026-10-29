@@ -188,6 +188,56 @@ def test_update_script_refresh_fails_on_a_signal_killed_metrics_run(
     assert result.returncode == 2, f"stdout={result.stdout}"
 
 
+def test_update_script_reindex_is_the_package_indexer(
+    sample_spec_path: Path, tmp_path: Path
+) -> None:
+    """One Layer-1 writer: ``update_vault.py reindex`` links by stem, lists a
+    note with no front matter, and writes nothing at the vault root."""
+    script = _rendered_update_script(sample_spec_path, tmp_path)
+    vault = script.parent
+    notes = vault / "data_vault" / "01 - Concepts"
+    notes.mkdir(parents=True)
+    (notes / "outbox_pattern.md").write_text(
+        "---\ntitle: Transactional Outbox Pattern\ntype: concept\n"
+        "summary: One transaction.\n---\n\nBody.\n",
+        encoding="utf-8",
+    )
+    (notes / "scratch.md").write_text("# Scratch\n\nNo front matter.\n", "utf-8")
+
+    result = _run_update_script(script, "reindex")
+
+    assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
+    index = (vault / "data_vault" / "_index.md").read_text(encoding="utf-8")
+    assert (
+        "- [[outbox_pattern|Transactional Outbox Pattern]] — One transaction." in index
+    )
+    assert "- [[scratch]]" in index
+    assert "[[Transactional Outbox Pattern]]" not in index
+    for name in ("_index.md", "_concepts.md", "_graph.md"):
+        assert not (vault / name).exists(), f"{name} written at the vault root"
+
+
+def test_update_script_reindex_without_the_package_is_an_error(
+    sample_spec_path: Path, tmp_path: Path
+) -> None:
+    """The vault's own interpreter (``.venv``) is the one that must hold
+    ``research_framework``; when it does not, say so and exit 2 rather than
+    fall back to a second, older writer."""
+    script = _rendered_update_script(sample_spec_path, tmp_path)
+    vault = script.parent
+    (vault / "data_vault").mkdir()
+    fake_python = vault / ".venv" / "bin" / "python"
+    fake_python.parent.mkdir(parents=True)
+    fake_python.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    fake_python.chmod(0o755)
+
+    result = _run_update_script(script, "reindex")
+
+    assert result.returncode == 2, f"stdout={result.stdout}"
+    assert "research-framework" in result.stderr
+    assert not (vault / "data_vault" / "_index.md").exists()
+
+
 # Code-first template tests (feature 002).
 
 

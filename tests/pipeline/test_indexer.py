@@ -27,7 +27,7 @@ def _write_note(
     path.parent.mkdir(parents=True, exist_ok=True)
     rel_fm = ""
     if related:
-        rel_fm = "related:\n" + "".join(f"  - [[{t}]]\n" for t in related)
+        rel_fm = "related:\n" + "".join(f'  - "[[{t}]]"\n' for t in related)
     else:
         rel_fm = "related: []\n"
     path.write_text(
@@ -140,8 +140,10 @@ class TestRebuildAllUs6:
         )
 
         # Confirms the edge set this test pins matches the shared-edges
-        # invariant the two functions' own docstrings claim.
-        assert inbound_link_counts(vault_dir).get("Beta Two", 0) == 0
+        # invariant the two functions' own docstrings claim: "Gamma Three"
+        # relates to "Beta Two", and that is the one edge into it.
+        assert inbound_link_counts(vault_dir)["Beta Two"] == 1
+        assert g_text.count("|Beta Two]]") == 1
 
     def test_rebuild_all_is_idempotent_byte_identical(self, tmp_path: Path) -> None:
         vault_dir = tmp_path / "vault"

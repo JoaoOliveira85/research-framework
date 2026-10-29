@@ -25,7 +25,7 @@ def test_undecodable_note_is_skipped_and_legacy_index_is_migrated(
     paths = rebuild_all(tmp_path)
 
     index = paths["index"].read_text(encoding="utf-8")
-    assert "[[OK]]" in index
+    assert "[[ok|OK]]" in index
     assert "hand-curated legacy index" in index
     assert not (tmp_path / "_index.md").exists()
 
@@ -75,5 +75,5 @@ def test_a_corpus_at_the_vault_root_does_not_append_its_own_indexes(
         again = {k: p.read_text("utf-8") for k, p in rebuild_all(tmp_path).items()}
 
     assert again == first
-    assert "[[OK]]" in again["index"]
+    assert "[[ok|OK]]" in again["index"]
     assert "Migrated from vault root" not in "".join(again.values())

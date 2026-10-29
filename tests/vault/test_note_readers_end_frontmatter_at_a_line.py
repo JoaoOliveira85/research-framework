@@ -220,7 +220,9 @@ def test_generated_update_script_indexes_a_note_with_dashes_in_a_value(
     """`update_vault.py reindex` reads each note's title, type and summary.
 
     Cut at the slug URL, the note was indexed under its file name with no
-    summary and left out of `_concepts.md`.
+    summary and left out of `_concepts.md`. The reindex is the package
+    indexer's (the same one `./vault reindex` runs), so this also pins that the
+    generated script has no second writer.
     """
     vault = tmp_path / "vault"
     vault.mkdir()
@@ -236,6 +238,10 @@ def test_generated_update_script_indexes_a_note_with_dashes_in_a_value(
     )
 
     assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
-    entry = "- [[Kafka]] — The log."
-    assert entry in (vault / "_index.md").read_text(encoding="utf-8")
-    assert entry in (vault / "_concepts.md").read_text(encoding="utf-8")
+    # The package indexer writes the Layer-1 files, into data_vault/.
+    data_vault = vault / "data_vault"
+    entry = "- [[kafka|Kafka]] — The log."
+    assert entry in (data_vault / "_index.md").read_text(encoding="utf-8")
+    assert "- [[kafka|Kafka]]" in (data_vault / "_concepts.md").read_text(
+        encoding="utf-8"
+    )
