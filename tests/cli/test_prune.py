@@ -82,6 +82,24 @@ def test_no_pruneable_paths_exits_0(tmp_path: Path) -> None:
     assert "nothing to prune" in result.stdout
 
 
+@pytest.mark.skipif(not shutil.which("git"), reason="git not available")
+def test_declining_without_a_terminal_says_why(tmp_path: Path) -> None:
+    """No terminal on stdin: the prompt reads EOF and prune declines. It must
+    say so and name --yes, not trip cli.main's silent-exit backstop."""
+    vault = _make_minimal_vault(tmp_path)
+    target = vault / "scripts" / "collect_rss.py"
+    target.parent.mkdir(exist_ok=True)
+    target.write_text("# vault-local rss collector\n")
+    _git_init_vault(vault)
+
+    result = _run_prune([str(vault)], stdin=subprocess.DEVNULL)
+    assert result.returncode == 1
+    assert "framework bug" not in result.stderr
+    assert "not a terminal" in result.stderr
+    assert "--yes" in result.stderr
+    assert target.exists()
+
+
 # ---------------------------------------------------------------------------
 # 2. Prune with --yes — removes file + two snapshot commits
 # ---------------------------------------------------------------------------
