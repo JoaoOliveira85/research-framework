@@ -146,7 +146,19 @@ stubs:
 # ---------------------------------------------------------------------------
 pipeline:
   # B7 canonical loader required keys (spec 025 US9); tune per vault as needed.
+  #
+  # LIFETIME cycle ceiling: the highest cycle NUMBER this vault may reach
+  # (spec 061 ladder; `--max-cycles` overrides). `0` means NO lifetime
+  # ceiling, the same reading of zero `budget_usd` has (issue #33) — the run
+  # then stops on coverage, fuel or the dollar caps. Negative or non-integer
+  # values are refused.
   max_cycles: 20
+  # Optional per-RUN cap: one `./vault research` runs at most this many cycles
+  # (a run starting at cycle k stops after k+N-1). The settings spelling of
+  # `--more-cycles N`; `--more-cycles` / `--max-cycles` still win. With a
+  # finite `max_cycles`, the lower of the two stops the run. Absent = no
+  # per-run cap. Integer >= 1.
+  # cycles_per_run: 5
   # Run-level CUMULATIVE dollar cap (spec 061 ladder; `--max-usd` overrides).
   #
   # `0` — or `0.0`, or an absent key — means UNLIMITED, never "spend nothing"

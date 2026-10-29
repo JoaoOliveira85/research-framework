@@ -146,6 +146,15 @@ features the keys configure, which live in their own specs (`033`, `061`,
 - **FR-010**: A dollar value of `0` on **any** rung of that ladder MUST mean
   **unlimited**, identical to absent or null. A negative flag MUST be a usage
   error; a negative settings value MUST be ignored.
+- **FR-010a** *(issue #33)*: `pipeline.max_cycles: 0` MUST mean **no lifetime
+  cycle ceiling**, and every reader of the resolved ceiling (the cycle loop,
+  `validate_cycle` Condition A, the plan quota and CG-005, `./vault status`,
+  the run report, GA-004, `--estimate-only`) MUST treat it so. A negative or
+  non-integer `max_cycles` MUST be refused; `--max-cycles 0` stays a usage
+  error. The optional `pipeline.cycles_per_run: N` (integer ≥1) MUST cap a run
+  that starts at cycle *k* at cycle *k+N−1* — the settings spelling of
+  `--more-cycles N` — or at a finite lifetime ceiling if that is lower;
+  `--more-cycles` / `--max-cycles` MUST win over it.
 - **FR-011**: `limits.budget_usd` MUST be accepted as a deprecated alias for
   `limits.cycle_budget_usd`, migrating only when the canonical key is absent
   and warning once per process.
@@ -267,7 +276,8 @@ Types are YAML types. "Reader" is the subsystem that consumes the key;
 
 | Key | Type | Default | Reader |
 | --- | --- | --- | --- |
-| `max_cycles` | int ≥1 | **required** | budget ladder |
+| `max_cycles` | int ≥0 | **required** (`0` = no lifetime ceiling) | budget ladder |
+| `cycles_per_run` | int ≥1 | unset = no per-run cap | budget ladder (folded into the ceiling like `--more-cycles`) |
 | `budget_usd` | float ≥0 | **required** (`0` = unlimited) | budget ladder |
 | `backlog_promotion_threshold` | int ≥1 | `2` | topic harvest |
 | `coverage_growth` | float ≥1.0 | `1.0` | coverage growth (`pipeline/coverage.py`) |
@@ -345,6 +355,7 @@ Types are YAML types. "Reader" is the subsystem that consumes the key;
 | FR-004…FR-007 (loading) | `tests/pipeline/test_settings_loader.py` |
 | FR-008 (executor precedence) | `tests/scripts/test_agent_call.py::TestResolveExecutor` |
 | FR-009…FR-011 (budget ladder) | `tests/cli/test_budget_resolver.py`, `tests/cli/test_budget_usd_zero_is_unlimited.py`, `tests/pipeline/test_cycle_budget_settings.py`, `tests/pipeline/test_settings.py::test_budget_usd_alias_migrates_to_cycle_budget_usd` |
+| FR-010a (cycle ceiling `0`, `cycles_per_run`) | `tests/cli/test_cycle_limits_settings.py`, `tests/pipeline/test_cycle_limits_orchestrator.py`, `tests/scripts/test_validate_cycle.py::test_condition_a_never_trips_without_a_lifetime_ceiling` |
 | FR-012…FR-014 (tiers) | `tests/pipeline/test_tier_resolution.py`, `tests/pipeline/test_default_tier_resolution.py` |
 | FR-015 (odd quorum) | `tests/pipeline/test_settings_loader.py::test_consensus_n_values_must_be_odd` |
 | FR-016 (`archived`) | `tests/pipeline/test_archived_vault.py` |

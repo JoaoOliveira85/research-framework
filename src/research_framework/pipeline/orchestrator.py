@@ -1025,7 +1025,8 @@ def run_cycles(
             "cycle ceiling is %d (from %s). `max_cycles` is an ABSOLUTE ceiling, "
             "not a count of additional cycles, and cycle %d has already completed. "
             "Raise the ceiling above %d (`--max-cycles %d`, or `pipeline.max_cycles` "
-            "in the vault's settings.yaml) to run another cycle.",
+            "in the vault's settings.yaml, where 0 means no lifetime ceiling) to "
+            "run another cycle.",
             start_cycle,
             max_cycles,
             budget.max_cycles_source,
@@ -1389,8 +1390,9 @@ def _constrained_exit(
         for cat in unmet:
             _LOG.warning(f"      · {cat}")
     _LOG.warning(
-        "[orchestrator] raise `pipeline.max_cycles` (or `pipeline.budget_usd`) "
-        "in the vault's settings.yaml — or pass `--max-cycles N` — and re-run "
+        "[orchestrator] raise `pipeline.max_cycles` (0 = no lifetime ceiling) or "
+        "`pipeline.budget_usd` in the vault's settings.yaml — or pass "
+        "`--max-cycles N` / `--more-cycles N` — and re-run "
         "`research-framework generate --resume` to keep going."
     )
     return 1

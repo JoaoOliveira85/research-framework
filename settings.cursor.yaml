@@ -117,7 +117,14 @@ default_executor:
 # profile so the cursor profile reaches the same defaults.
 # ---------------------------------------------------------------------------
 pipeline:
+  # LIFETIME cycle ceiling (highest cycle NUMBER; `--max-cycles` overrides).
+  # `0` means NO lifetime ceiling, like `budget_usd: 0` (issue #33); see
+  # settings.yaml for the full rationale.
   max_cycles: 20
+  # Optional per-RUN cap, the settings spelling of `--more-cycles N`: a run
+  # starting at cycle k stops after k+N-1 (or at a lower finite `max_cycles`).
+  # Absent = no per-run cap; the CLI flags still win. Integer >= 1.
+  # cycles_per_run: 5
   # Run-level CUMULATIVE dollar cap. `0` / `0.0` / an absent key mean
   # UNLIMITED, decided in the spec-061 resolver itself (amendment
   # 2026-09-07); see settings.yaml for the full rationale.
