@@ -46,10 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A stage that sets `tier: basic` together with `model:` keeps its `model:` and warns; remove `tier:`. `tier: normal`/`flagship` together with `model:` no longer loads — keep one.
 - `limits.tier_thresholds` is now keyed by model tier name: `tier_thresholds.standard` / `.expert` no longer match any new sidecar (an untiered call records `""`), so re-key those thresholds to `basic` / `normal` / `flagship` — or drop them.
 - Run `./vault reindex` (or let the next cycle do it) to rewrite the Layer-1 files in the new link form. A vault's existing `update_vault.py` is user-managed and keeps the old writer until it is regenerated; use `./vault reindex` meanwhile. Root-level `_index.md` / `_concepts.md` / `_graph.md` left by the old writer are folded into `data_vault/` under `## Migrated from vault root` on the next reindex. A consumer that matched `[[Title]]` literally in `_index.md` / `_concepts.md` / `_graph.md` should read the label after the `|`.
-- Existing vaults keep their old `.claude/commands/ask.md` until `regenerate-agents` re-renders it. `templates/CLAUDE.md.j2`'s citation section still uses the fixed tags and is out of scope here.
 - Existing vaults keep their old `.claude/commands/ask.md` until `regenerate-agents` re-renders it. `regenerate-agents` also re-parses the spec; a `_pipeline/spec-parse.json` written before this change records every `role` as declared, so a vault whose spec fails to parse should be re-parsed first (`parse-spec`) or its old cache will keep labelling sources with the parser defaults.
 - `CLAUDE.md`'s Citation Format section, `research.md` and `vault-config.yaml` no longer teach `[code]/[intent]/[domain]` either; they take the same role list. The `source_urls` parser now also strips a free-form leading label with spaces or capitals (`[Home cooking] https://…`).
-
 
 ## [1.0.1] - 2026-10-12
 
