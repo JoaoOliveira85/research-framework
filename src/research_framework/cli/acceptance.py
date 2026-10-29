@@ -327,7 +327,9 @@ def gate_run_completion(vault: Path) -> GateResult:
     configured = budget.get("configured")
     actual = budget.get("actual")
     exit_status = str(budget.get("exit_status") or "").strip() or "unknown"
-    metric = f"{actual}/{configured}"
+    # `configured: 0` is no cycle ceiling (issue #33, `pipeline.max_cycles: 0`).
+    unlimited = configured == 0 and not isinstance(configured, bool)
+    metric = f"{actual}/{'unlimited' if unlimited else configured}"
     if exit_status == "complete":
         return GateResult(
             "GA-004",
@@ -335,6 +337,20 @@ def gate_run_completion(vault: Path) -> GateResult:
             metric,
             "complete",
             f"Run completed (configured {configured}, actual {actual}).",
+        )
+    if exit_status == "constrained" and unlimited:
+        return GateResult(
+            "GA-004",
+            "WARN",
+            metric,
+            "complete",
+            (
+                f"Constrained exit after {actual} cycle(s) with no cycle ceiling "
+                f"(pipeline.max_cycles: 0); another cap (dollar / wall-clock / "
+                f"source-exhausted) stopped the run — legitimate, but worth "
+                f"knowing."
+            ),
+            ["_pipeline/run-report.json"],
         )
     if exit_status == "constrained":
         # actual == configured is the canonical "hit your cap" shape called

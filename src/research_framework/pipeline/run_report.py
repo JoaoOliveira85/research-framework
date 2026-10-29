@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .settings import format_cycle_ceiling
+
 __all__ = ["write_run_report"]
 
 _LOG = logging.getLogger(__name__)
@@ -303,8 +305,14 @@ def write_run_report(
 
         # Spec 061 FR4: human-readable budget provenance headline.
         if cycle_budget_configured is not None or cycle_budget_source is not None:
+            # `0` is no lifetime ceiling (issue #33); the JSON keeps the value.
+            configured = (
+                format_cycle_ceiling(cycle_budget_configured)
+                if isinstance(cycle_budget_configured, int)
+                else cycle_budget_configured
+            )
             out.append(
-                f"**Cycle budget**: configured **{cycle_budget['configured']}** "
+                f"**Cycle budget**: configured **{configured}** "
                 f"(source `{cycle_budget['source']}`), "
                 f"actual **{cycle_budget['actual']}** "
                 f"→ **{cycle_budget['exit_status']}**\n"

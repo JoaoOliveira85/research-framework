@@ -127,6 +127,23 @@ def test_total_is_the_sum_of_the_rows(tmp_path: Path) -> None:
     assert est.total_usd == pytest.approx(sum(row.subtotal_usd for row in est.stages))
 
 
+def test_an_unlimited_cycle_ceiling_still_estimates_from_the_vault_settings(
+    tmp_path: Path,
+) -> None:
+    """Issue #33: ``max_cycles: 0`` must load, not drop the estimate onto the
+    bare fallback settings (which would lose the disabled verifier and the
+    vault's own cycle cap)."""
+    settings = _SETTINGS.replace("max_cycles: 4", "max_cycles: 0").replace(
+        "    enabled: true", "    enabled: false"
+    )
+    vault = _with_coverage_gap(_vault(tmp_path, settings))
+
+    est = estimate_cycle(vault, cycle_num=40)
+
+    assert "verifier" not in [row.stage for row in est.stages]
+    assert est.cycle_budget_usd == pytest.approx(5.0)
+
+
 def test_a_disabled_verifier_is_not_projected(tmp_path: Path) -> None:
     vault = _with_coverage_gap(
         _vault(tmp_path, _SETTINGS.replace("    enabled: true", "    enabled: false"))
