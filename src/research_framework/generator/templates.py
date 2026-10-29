@@ -412,6 +412,34 @@ def render_scout_prompt(
     return prompt_path
 
 
+STAGE_PROMPTS: tuple[str, ...] = ("scout-prompt.md", "dfs-prompt.md")
+"""The stage prompts ``render_all`` writes to ``_pipeline/prompts/``."""
+
+
+def render_stage_prompt(
+    spec: SpecConfig,
+    vault_dir: Path,
+    name: str,
+    templates_dir: Path | None = None,
+) -> str:
+    """Render one stage prompt exactly as :func:`render_all` writes it.
+
+    ``./vault update`` uses this to re-render an outdated
+    ``_pipeline/prompts/<name>`` in an existing vault (#12). The context must
+    stay the one ``render_all`` builds (no resume targets);
+    ``tests/pipeline/test_vault_update_prompt_refresh.py`` pins the two equal.
+    """
+    if name not in STAGE_PROMPTS:
+        raise ValueError(f"unknown stage prompt: {name!r}; known: {STAGE_PROMPTS}")
+    env = _env(templates_dir or _templates_src())
+    return env.get_template(f"prompts/{name}.j2").render(
+        spec=spec,
+        target_topics=[],
+        exclude_topics=[],
+        forbidden_prefixes=resolve_forbidden_filename_prefixes(spec, vault_dir) or [],
+    )
+
+
 def render_all(
     spec: SpecConfig,
     vault_dir: Path,

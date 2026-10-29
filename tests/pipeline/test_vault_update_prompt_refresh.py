@@ -133,6 +133,7 @@ def test_render_stage_prompt_matches_what_generate_writes(
     spec = _load_spec_parse(vault)
     assert spec is not None
     out = tmp_path / "fresh"
+    out.mkdir()
     render_all(spec, out)
 
     assert render_stage_prompt(spec, out, name) == (out / _PROMPTS / name).read_text(
