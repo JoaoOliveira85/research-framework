@@ -7,6 +7,7 @@ import re
 import sys
 from pathlib import Path
 
+from ..pipeline.settings import strict_settings_refusal
 from ..spec.schema import SpecValidationError
 from ._budget_resolve import BudgetError, resolve_cycle_budget_from_path
 from .budget_resume import (
@@ -163,6 +164,13 @@ def _resume(args: argparse.Namespace) -> int:
         return 2
 
     vault_dir = _resume_vault_dir(args)
+    # Issue #8: before the spec load, the budget-marker handlers (they clear
+    # markers) or anything else that touches the vault.
+    refusal = strict_settings_refusal(vault_dir)
+    if refusal:
+        print(f"error: {refusal}", file=sys.stderr)
+        return 2
+
     # Import via the public cli package so tests can monkeypatch cli.load_spec.
     from research_framework.cli import load_spec as _load_spec
     from research_framework.cli import validate as _validate

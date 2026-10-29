@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import dataclasses
+import difflib
 import warnings
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, get_type_hints
 
 import yaml
 
@@ -227,6 +230,12 @@ class VaultSettings:
     # (pipeline.coverage_growth_cap). Keeps the multiplier from compounding
     # into a target nobody will ever write; ignored when coverage_growth is 1.0.
     coverage_growth_cap: int = 10
+    # Issue #8: when true, a research run is refused (exit 2) while
+    # ``settings.yaml`` carries a key nothing recognises. Off by default — an
+    # unknown key is then a warning, so a vault written for a newer framework
+    # still runs. Enforced by ``strict_settings_refusal`` at the entry of each verb
+    # that dispatches work (run_cycles, cycle, pipeline ...), not in the loader.
+    strict_settings: bool = False
     extras: dict[str, Any] = field(default_factory=dict)
 
     def stage(self, name: str) -> StageSettings:
@@ -291,6 +300,12 @@ def load_vault_settings(vault_dir: Path) -> VaultSettings:
             vault_dir=vault_dir,
         )
 
+    # Issue #8: report unknown keys BEFORE validating. A typo in a required key
+    # (`max_cylces`) otherwise surfaces only as "max_cycles ... got None", with
+    # nothing to say which key was meant.
+    unknown_keys = find_unknown_keys(raw)
+    _warn_unknown_keys(unknown_keys, settings_path)
+
     pipeline = raw.get("pipeline")
     if pipeline is None:
         pipeline = {}
@@ -301,25 +316,28 @@ def load_vault_settings(vault_dir: Path) -> VaultSettings:
             key="pipeline",
         )
 
-    max_cycles = _require_positive_int(
-        pipeline.get("max_cycles"),
-        key="max_cycles",
-        vault_dir=vault_dir,
-        label="max_cycles must be an integer >= 1",
-    )
-    budget_usd = _require_non_negative_number(
-        pipeline.get("budget_usd"),
-        key="budget_usd",
-        vault_dir=vault_dir,
-    )
+    try:
+        max_cycles = _require_positive_int(
+            pipeline.get("max_cycles"),
+            key="max_cycles",
+            vault_dir=vault_dir,
+            label="max_cycles must be an integer >= 1",
+        )
+        budget_usd = _require_non_negative_number(
+            pipeline.get("budget_usd"),
+            key="budget_usd",
+            vault_dir=vault_dir,
+        )
 
-    threshold_raw = pipeline.get("backlog_promotion_threshold", 2)
-    backlog_promotion_threshold = _require_positive_int(
-        threshold_raw,
-        key="pipeline.backlog_promotion_threshold",
-        vault_dir=vault_dir,
-        label="backlog_promotion_threshold must be an integer >= 1",
-    )
+        threshold_raw = pipeline.get("backlog_promotion_threshold", 2)
+        backlog_promotion_threshold = _require_positive_int(
+            threshold_raw,
+            key="pipeline.backlog_promotion_threshold",
+            vault_dir=vault_dir,
+            label="backlog_promotion_threshold must be an integer >= 1",
+        )
+    except SettingsError as exc:
+        raise _with_typo_hint(exc, unknown_keys) from exc
 
     pipeline_extra = {
         k: v for k, v in pipeline.items() if k not in _PIPELINE_TYPED_KEYS
@@ -346,6 +364,9 @@ def load_vault_settings(vault_dir: Path) -> VaultSettings:
         extras["pipeline"] = pipeline_extra
 
     archived = _parse_archived(raw.get("archived"), vault_dir=vault_dir)
+    strict_settings = _parse_strict_settings(
+        raw.get("strict_settings"), vault_dir=vault_dir
+    )
     coverage_growth = _parse_coverage_growth(
         (raw.get("pipeline") or {}).get("coverage_growth"), vault_dir=vault_dir
     )
@@ -392,6 +413,7 @@ def load_vault_settings(vault_dir: Path) -> VaultSettings:
         archived=archived,
         coverage_growth=coverage_growth,
         coverage_growth_cap=coverage_growth_cap,
+        strict_settings=strict_settings,
         tiers=tiers,
         modules=modules,
         reports=reports,
@@ -805,6 +827,23 @@ def _parse_archived(raw: object, *, vault_dir: Path) -> bool:
         f"archived must be a boolean (true/false), got {raw!r}",
         vault_dir=vault_dir,
         key="archived",
+    )
+
+
+def _parse_strict_settings(raw: object, *, vault_dir: Path) -> bool:
+    """Parse ``settings.yaml::strict_settings`` (issue #8). Absent ⇒ ``False``.
+
+    A literal boolean only, for the reason ``archived`` is: a value that quietly
+    reads as "off" defeats the switch it names.
+    """
+    if raw is None:
+        return False
+    if isinstance(raw, bool):
+        return raw
+    raise SettingsError(
+        f"strict_settings must be a boolean (true/false), got {raw!r}",
+        vault_dir=vault_dir,
+        key="strict_settings",
     )
 
 
@@ -1242,4 +1281,338 @@ def _require_non_negative_number(
         f"budget_usd must be a non-negative number, got {value!r}",
         vault_dir=vault_dir,
         key=key,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Unknown-key reporting (issue #8)
+#
+# ``settings.yaml`` is read by more than the typed loader (the dispatcher, the
+# source manager, the digest, vault_commit ... each parse the raw file), so
+# "known" cannot mean "has a typed field". The schema below is built in three
+# layers:
+#
+#   1. keys with a typed field in the dataclasses above -- derived, so adding a
+#      field makes its key known with no second edit;
+#   2. keys the loader leaves in ``extras`` for another reader to consume --
+#      listed in ``_build_schema`` with the reader named next to each;
+#   3. keys that ship in the profiles but that NOTHING reads (spec 076 D1) --
+#      listed in ``_INERT_PATHS``. They are tolerated, not endorsed: the list is
+#      the debt spec 076 T001 pays down, and it only ever shrinks.
+#
+# Anything else is reported. Map-valued sections whose keys the operator picks
+# (``stages`` names, ``tiers`` labels) are modelled as ``_Keyed`` so a
+# user-chosen name is never reported.
+# ---------------------------------------------------------------------------
+
+
+class UnknownSettingsKeyWarning(UserWarning):
+    """A ``settings.yaml`` key no part of the framework recognises."""
+
+
+@dataclass(frozen=True)
+class UnknownKey:
+    """One unrecognised key: its dotted path and the closest known sibling."""
+
+    path: str
+    suggestion: str | None = None
+
+    def message(self) -> str:
+        text = f"unknown settings key {self.path!r}"
+        if self.suggestion:
+            text += f" - did you mean {self.suggestion!r}?"
+        return text
+
+
+@dataclass(frozen=True)
+class _Keyed:
+    """A mapping whose keys the operator chooses; only values are checked.
+
+    ``per_key`` overrides the value schema for specific, framework-defined keys
+    (the stage-specific blocks under ``stages``).
+    """
+
+    value: Any = None
+    per_key: Mapping[str, Any] = field(default_factory=dict)
+
+
+# VaultSettings fields that are parsed from ``pipeline:`` rather than top level.
+_PIPELINE_FIELDS = frozenset(
+    {
+        "max_cycles",
+        "budget_usd",
+        "backlog_promotion_threshold",
+        "coverage_growth",
+        "coverage_growth_cap",
+    }
+)
+# YAML spelling where it differs from the dataclass field name.
+_YAML_KEY_RENAMES = {"from_address": "from"}
+
+
+def _section_from(cls: type) -> dict[str, Any]:
+    """Schema node for a settings dataclass; nested dataclasses recurse."""
+    hints = get_type_hints(cls)
+    node: dict[str, Any] = {}
+    for f in dataclasses.fields(cls):
+        if f.name == "extras":
+            continue
+        hint = hints.get(f.name)
+        node[_YAML_KEY_RENAMES.get(f.name, f.name)] = (
+            _section_from(hint) if dataclasses.is_dataclass(hint) else None
+        )
+    return node
+
+
+# Keys the dispatcher (scripts/agent_call.py::_resolve_executor) merges into an
+# executor config -- valid under ``default_executor`` and under every stage.
+_EXECUTOR_KEYS = (
+    "type",
+    "runtime",
+    "model",
+    "args",
+    "timeout_s",
+    "base_url",  # HTTP runtimes
+    "api_path",  # HTTP runtimes
+    "script_path",  # type: script
+    "variant",  # opencode
+    "agent",  # opencode
+)
+
+# Stage-specific blocks, each read by the stage named. Keys that ship but are
+# unread are in ``_INERT_PATHS``, not here.
+_STAGE_SPECIFIC: dict[str, dict[str, Any]] = {
+    "source_manager": {"decay_after_n_cycles": None},  # source_manager.py
+    "source_extraction": {  # source_bridge/orchestrator.py
+        "signal_retention_days": None,
+        "consensus": {"tiers": None},
+    },
+    "topic_propose": {  # scripts/topic_propose.py
+        "max_proposals": None,
+        "max_degree": None,
+        "relation_types": None,
+        "on_missing_out_of_scope": None,
+    },
+    "verifier": {},  # verifier.py reads only the executor keys + enabled
+}
+
+
+def _build_schema() -> dict[str, Any]:
+    executor = dict.fromkeys(_EXECUTOR_KEYS)
+    stage_common = {**executor, "enabled": None, "tier": None}
+
+    hints = get_type_hints(VaultSettings)
+    schema: dict[str, Any] = {}
+    for f in dataclasses.fields(VaultSettings):
+        if f.name in _PIPELINE_FIELDS or f.name == "extras":
+            continue
+        hint = hints.get(f.name)
+        schema[f.name] = _section_from(hint) if dataclasses.is_dataclass(hint) else None
+    # Map-valued sections whose keys are the operator's to choose.
+    schema["stages"] = _Keyed(
+        value=stage_common,
+        per_key={
+            name: {**stage_common, **extra} for name, extra in _STAGE_SPECIFIC.items()
+        },
+    )
+    schema["tiers"] = _Keyed()  # tier labels -> model ids
+    schema["limits"]["budget_usd"] = None  # deprecated alias, FR-011
+
+    schema["pipeline"] = {
+        **dict.fromkeys(sorted(_PIPELINE_FIELDS)),
+        # Read from the raw file by the batch scheduler / source signals.
+        "note_writer_batch_size": None,
+        "max_batches_per_cycle": None,
+        "required_source_failure_threshold": None,  # legacy spelling, still read
+        "source_failure_thresholds": {"required_quorum_loss": None},
+        # The gate thresholds that are live; see _INERT_PATHS for the rest.
+        "gates": {
+            "abstraction_enabled": None,
+            "sg_003_abstraction_warn_pct": None,
+            "sg_003_abstraction_fail_pct": None,
+        },
+    }
+
+    # Left in ``extras`` on purpose: another subsystem parses these from the raw
+    # file. The comment names that reader.
+    schema.update(
+        {
+            "default_executor": executor,  # scripts/agent_call.py
+            "output_dir": None,  # _assets.load_output_dir_from_settings
+            "local_providers": None,  # scripts/agent_call.py (opencode cost class)
+            # Deprecated cycle limits, still honoured with a warning (spec 061).
+            "cycles": {"initial_max": None, "update_max": None},
+            "vault_commit": {  # pipeline/vault_commit.py, branch_retention.py
+                "enabled": None,
+                "push_on_complete": None,
+                "auto_merge": None,
+                "retention": {"keep_last": None, "max_age_days": None},
+            },
+            # pipeline/digest/sections.py reads this at the TOP level, while
+            # source_manager.py reads ``stages.source_manager``.
+            "source_manager": {"decay_after_n_cycles": None},
+        }
+    )
+    return schema
+
+
+_SCHEMA = _build_schema()
+
+# Dotted paths ("*" matches any one segment; a match covers the whole subtree)
+# that ship in the profiles and examples but that no code reads. Tolerated so
+# the shipped files stay quiet; NOT endorsed. Spec 076 D1 / T001 own removing
+# them, and each removal deletes its line here.
+_INERT_PATHS: tuple[tuple[str, ...], ...] = tuple(
+    tuple(p.split("."))
+    for p in (
+        "schema_version",
+        "communication",
+        "model_router",
+        "research_modes",
+        "exit_invariant",
+        "citation",
+        "commands",
+        "cycles.max_consecutive_verifier_rejections",
+        "pipeline.queryability_score_regression_pp",
+        "pipeline.source_failure_thresholds.enrichment_max_failures",
+        "pipeline.gates.cg_001_min_yield_factor",
+        "pipeline.gates.cg_002_min_categories_per_cycle",
+        "pipeline.gates.cg_003_warn_pct",
+        "pipeline.gates.cg_003_fail_pct",
+        "pipeline.gates.cg_004_min_avg_word_count",
+        "pipeline.gates.cg_006_min_word_count_compliance_pct",
+        "pipeline.gates.cg_007_max_orphan_link_pct",
+        "pipeline.gates.sg_001_min_topics_warn_floor",
+        "pipeline.gates.sg_002_min_categories",
+        # ExecutorConfig fields the spec-file loader reads; the vault dispatcher
+        # does not.
+        "default_executor.skill",
+        "default_executor.on_fail",
+        "default_executor.retry",
+        "stages.*.skill",
+        "stages.source_manager.auto_promote_discovered",
+        "stages.verifier.on_timeout",
+        "stages.verifier.output_filename",
+        "stages.topic_propose.auto_promote",
+    )
+)
+
+
+def _is_inert(path: tuple[str, ...]) -> bool:
+    for end in range(1, len(path) + 1):
+        prefix = path[:end]
+        for pattern in _INERT_PATHS:
+            if len(pattern) == end and all(
+                want in ("*", got) for want, got in zip(pattern, prefix, strict=True)
+            ):
+                return True
+    return False
+
+
+def _walk_unknown(
+    value: object, node: Any, path: tuple[str, ...], out: list[UnknownKey]
+) -> None:
+    if not isinstance(value, dict):
+        return  # shape errors are the typed parsers' to raise
+    if isinstance(node, _Keyed):
+        for key, child in value.items():
+            seg = str(key)
+            _walk_unknown(child, node.per_key.get(seg, node.value), path + (seg,), out)
+        return
+    if not isinstance(node, dict):
+        return  # a leaf: nothing below it is checked
+    for key, child in value.items():
+        seg = str(key)
+        here = path + (seg,)
+        if seg in node:
+            _walk_unknown(child, node[seg], here, out)
+            continue
+        if _is_inert(here):
+            continue
+        candidates = [k for k in node if not _is_inert(path + (k,))]
+        close = difflib.get_close_matches(seg, candidates, n=1)
+        out.append(
+            UnknownKey(
+                ".".join(here),
+                ".".join(path + (close[0],)) if close else None,
+            )
+        )
+
+
+def find_unknown_keys(raw: Mapping[str, Any]) -> list[UnknownKey]:
+    """Every key in a parsed ``settings.yaml`` that nothing recognises."""
+    out: list[UnknownKey] = []
+    _walk_unknown(raw, _SCHEMA, (), out)
+    return out
+
+
+def _warn_unknown_keys(unknown: list[UnknownKey], settings_path: Path) -> None:
+    """Emit one warning per unknown key.
+
+    The loader runs many times in a cycle (every reader calls it). The warnings
+    module's own dedupe keeps that to one line per key per process under the
+    default filter: ``stacklevel=1`` makes the location this line, not the
+    caller, so callers do not each get their own copy. No bookkeeping of ours,
+    so a filtered warning cannot consume a report.
+    """
+    for key in unknown:
+        warnings.warn(
+            UnknownSettingsKeyWarning(f"{settings_path}: {key.message()}"),
+            stacklevel=1,
+        )
+
+
+def _with_typo_hint(exc: SettingsError, unknown: list[UnknownKey]) -> SettingsError:
+    """Append "found unknown key X, did you mean Y" when X explains *exc*."""
+    if exc.key is None:
+        return exc
+    hints = [
+        f"found unknown key {u.path!r} - did you mean {u.suggestion!r}?"
+        for u in unknown
+        if u.suggestion
+        and (u.suggestion == exc.key or u.suggestion.endswith(f".{exc.key}"))
+    ]
+    if not hints:
+        return exc
+    return SettingsError(
+        f"{exc} ({'; '.join(hints)})", vault_dir=exc.vault_dir, key=exc.key
+    )
+
+
+def strict_settings_violations(vault_dir: Path) -> list[UnknownKey]:
+    """Unknown keys that strict mode forbids; ``[]`` when strict mode is off.
+
+    Reads the file directly rather than through :func:`load_vault_settings`, the
+    way ``orchestrator.is_archived`` does: the typed loader validates the whole
+    file and raises on the first bad value, which would hide the very report
+    this is asked for. Only a literal ``strict_settings: true`` switches it on;
+    an unreadable file or a typo in the flag reads as off (the loader rejects a
+    non-boolean outright wherever settings do load).
+    """
+    try:
+        raw = yaml.safe_load((vault_dir / "settings.yaml").read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return []
+    if not isinstance(raw, dict) or raw.get("strict_settings") is not True:
+        return []
+    return find_unknown_keys(raw)
+
+
+def strict_settings_refusal(vault_dir: Path) -> str | None:
+    """The message a verb prints when strict mode forbids its run, else ``None``.
+
+    The ONE check behind every refusal: ``orchestrator.run_cycles`` and the CLI
+    entry points of the verbs that dispatch cycles or LLM work (``cycle``,
+    ``generate --resume``, ``pipeline full|collect|extract|scout|resume|finish``)
+    all call it, before they have any side effect, and exit 2.
+    """
+    unknown = strict_settings_violations(vault_dir)
+    if not unknown:
+        return None
+    listed = "\n  ".join(u.message() for u in unknown)
+    return (
+        f"{vault_dir / 'settings.yaml'} has unknown keys and "
+        f"`strict_settings: true` is set, so nothing was started:\n  {listed}\n"
+        "Fix or remove them, or set `strict_settings: false` to run with a "
+        "warning instead."
     )

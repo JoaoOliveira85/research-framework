@@ -41,6 +41,7 @@ from .gates import GateResult, run_gate
 from .gates_cycle import CG001_min_cycle_yield
 from .gates_step import SG005_frontmatter_completeness
 from .run_report import write_run_report as _write_run_report
+from .settings import strict_settings_refusal
 from .stubs import scan_stubs
 
 _LOG = logging.getLogger(__name__)
@@ -915,6 +916,16 @@ def run_cycles(
             vault_dir,
             vault_dir / "settings.yaml",
         )
+        return 2
+
+    # Issue #8: `strict_settings: true` refuses a run while settings.yaml
+    # carries a key nothing recognises (a typo that otherwise looks applied).
+    # Before any side effect, like the archived guard above. The CLI verbs that
+    # dispatch work without passing through here (`cycle`, `pipeline ...`) call
+    # the same check at their own entry points.
+    refusal = strict_settings_refusal(vault_dir)
+    if refusal:
+        _LOG.error("[orchestrator] refusing to run: %s", refusal)
         return 2
 
     # Spec 050 / Principle X: open a research branch (or reuse on

@@ -134,7 +134,8 @@ precondition of the one after it, and #249 composes all of them.
   from the shim. Today the shim lists it and execs a script that does not
   exist; the docs now say so rather than advertise it.
 - 077 T006 — wire or delete the orphaned `schema acknowledge-drift` CLI.
-- 076 T001 — dead settings keys, and a strict mode (#271's other half).
+- 076 T001 — dead settings keys (the strict-mode half shipped, #8); each key
+  removed also leaves the inert register in `pipeline/settings.py`.
 - 079 T001 / T002 — the note template emits 4 frontmatter keys where the
   validator requires 8.
 - 078 T001 / T002 — every reference to a `pipeline/agent_call.py` that never
