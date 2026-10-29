@@ -28,6 +28,27 @@ from .vault import (
 )
 from .wikilinks import cmd_wikilinks
 
+# Scheduling examples (issue #19). `./vault research` expands to exactly this
+# `generate ... --resume` call, so these are the unattended path today. Absolute
+# paths because cron and launchd start with a minimal PATH and no cwd.
+GENERATE_SCHEDULING_EPILOG = """\
+scheduling an unattended weekly run (cron and launchd start with a minimal PATH,
+so the agent CLI -- claude, and codex/cursor/opencode if used -- is not found
+unless its directory is on PATH):
+  cron (Mondays 06:00; --max-usd is a LIFETIME dollar ceiling, 0 disables it):
+    PATH=/abs/dir/of/claude:/usr/bin:/bin
+    0 6 * * 1 /abs/vault/.venv/bin/research-framework generate --spec /abs/vault/research.spec.md --output /abs/vault --resume --max-usd 25 >> /abs/vault/_pipeline/research.log 2>&1
+
+  launchd (macOS): put these arguments in a LaunchAgent plist's ProgramArguments,
+  add EnvironmentVariables PATH as above, StartCalendarInterval, and
+  StandardOutPath/StandardErrorPath set to the log; then
+  `launchctl bootstrap gui/$(id -u) <path-to-plist>` (full plist in the README):
+    /abs/vault/.venv/bin/research-framework generate --spec /abs/vault/research.spec.md --output /abs/vault --resume --max-usd 25
+
+  `./vault research` expands to this same call. These examples will move to
+  `pipeline <vault> run` when ROADMAP v1.1.0 row 7 ships.
+"""
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -36,7 +57,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_log_level_arg(parser)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    g = sub.add_parser("generate", help="Generate a vault from a spec file")
+    g = sub.add_parser(
+        "generate",
+        help="Generate a vault from a spec file",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=GENERATE_SCHEDULING_EPILOG,
+    )
     g.add_argument(
         "vault_dir",
         type=Path,

@@ -38,7 +38,7 @@ _SAMPLE_SPEC = REPO_ROOT / "tests" / "fixtures" / "sample-spec.md"
 _DIST = REPO_ROOT / "dist-templates"
 
 # Canonical vault_dir substituted when rendering templates that embed the path.
-# Using the spec's location field makes vault-script and systemd-service
+# Using the spec's location field makes vault-script
 # byte-stable across manifest rebuilds regardless of which temp dir was used.
 _CANONICAL_VAULT_DIR = "/tmp/research_framework-test-vault"
 
@@ -73,7 +73,6 @@ _USER_OWNED_PATTERNS: tuple[str, ...] = (
     "data_vault/",
     "_templates/",  # user-owned templates including concept.md and CHANGELOG.md
     "vault",  # path-specific shell script
-    "_pipeline/systemd/vault-research.service",  # path-specific systemd unit
     "_pipeline/coverage-targets.json",  # contains runtime timestamps
     "_pipeline/spec-parse.json",  # per-vault parsed spec; framework MUST NOT overwrite
     "_pipeline/sources.db",  # SQLite database (user data)
@@ -168,7 +167,7 @@ def _fix_timestamps(vault_dir: Path) -> None:
 def _re_render_with_canonical_vault_dir(vault_dir: Path, spec) -> None:  # type: ignore[no-untyped-def]
     """Re-render templates that embed vault_dir with a fixed canonical path.
 
-    vault-script.sh.j2 and vault-research.service.j2 embed the absolute vault
+    vault-script.sh.j2 embeds the absolute vault
     path at render time. Without this step, manifest SHA256s differ between
     runs because tempdir paths differ.
     """
@@ -183,9 +182,6 @@ def _re_render_with_canonical_vault_dir(vault_dir: Path, spec) -> None:  # type:
     ctx = {"vault_dir": _CANONICAL_VAULT_DIR, "spec": spec}
     (vault_dir / "vault").write_text(
         env.get_template("vault-script.sh.j2").render(**ctx), encoding="utf-8"
-    )
-    (vault_dir / "_pipeline" / "systemd" / "vault-research.service").write_text(
-        env.get_template("vault-research.service.j2").render(**ctx), encoding="utf-8"
     )
 
 

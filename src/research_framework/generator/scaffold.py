@@ -213,7 +213,7 @@ def scaffold(
     # tool calls so Claude Code can run autonomously inside this vault.
     _write_claude_settings(vault_dir)
 
-    # Write vault/vault script — unified entry point callable from systemd/cron/Shortcuts.
+    # Write vault/vault script — unified entry point callable from cron/launchd/Shortcuts.
     _write_vault_script(vault_dir, spec)
 
     # Seed sources.db with spec-declared sources (locked — never auto-archived).
@@ -419,38 +419,17 @@ def render_vault_shim(vault_dir: Path, spec: SpecConfig) -> str:
 
 
 def _write_vault_script(vault_dir: Path, spec: SpecConfig) -> None:
-    """Render ``vault`` (the unified entry-point script) and a systemd unit.
+    """Render ``vault`` (the unified entry-point script).
 
     Does not overwrite an existing ``vault`` file so user customisations
-    survive a re-scaffold.  The systemd unit is always (re-)written because
-    it's a generated artefact that only embeds ``vault_dir`` and ``spec.name``
-    — both of which may change on re-scaffold.
+    survive a re-scaffold.  No systemd unit is written (issue #19): vaults
+    scaffolded before that change keep theirs untouched.
     """
     # vault script — skip if already present so user edits are preserved.
     script_path = vault_dir / "vault"
     if not script_path.exists():
         script_path.write_text(render_vault_shim(vault_dir, spec), encoding="utf-8")
         os.chmod(script_path, 0o755)
-
-    templates_dir = asset_path("templates")
-    env = Environment(
-        loader=FileSystemLoader(str(templates_dir)),
-        undefined=StrictUndefined,
-        trim_blocks=True,
-        lstrip_blocks=True,
-        keep_trailing_newline=True,
-    )
-    ctx = {"vault_dir": str(vault_dir.resolve()), "spec": spec}
-    # systemd unit — always rendered (contains only generated values).
-    systemd_dir = vault_dir / "_pipeline" / "systemd"
-    systemd_dir.mkdir(parents=True, exist_ok=True)
-    (systemd_dir / "vault-research.service").write_text(
-        env.get_template("vault-research.service.j2").render(**ctx),
-        encoding="utf-8",
-    )
-    (systemd_dir / ".tmpl-versions.json").write_text(
-        json.dumps({"vault-research.service": 1}, indent=2) + "\n", encoding="utf-8"
-    )
 
 
 def _init_vault_git(vault_dir: Path, spec_name: str) -> None:

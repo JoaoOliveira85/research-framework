@@ -328,6 +328,47 @@ verb whose backing script is absent to say so and exit non-zero:
 which is 077 T001 (ship the script or delete the verb). The
 `research-framework` console script has 21 verbs of its own (077 FR-004).
 
+Schedule an unattended weekly research run with cron or launchd. `./vault research`
+expands to `research-framework generate --spec <spec> --output <vault> --resume`;
+`--max-usd` is the lifetime dollar ceiling (0 disables it). Use absolute paths:
+cron and launchd start with a minimal `PATH` and no working directory, so put the
+directory of the `claude` CLI on `PATH` (the same goes for `codex`, `cursor` and
+`opencode` binaries if you use them); the vault's own `.venv` runs the framework
+version `./vault` uses.
+
+```bash
+# cron: Mondays 06:00, appended to the vault's research log
+PATH=/abs/dir/of/claude:/usr/bin:/bin
+0 6 * * 1 /abs/vault/.venv/bin/research-framework generate --spec /abs/vault/research.spec.md --output /abs/vault --resume --max-usd 25 >> /abs/vault/_pipeline/research.log 2>&1
+```
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- macOS: ~/Library/LaunchAgents/com.example.vault-research.plist
+     then: launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.vault-research.plist -->
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.example.vault-research</string>
+  <key>ProgramArguments</key><array>
+    <string>/abs/vault/.venv/bin/research-framework</string><string>generate</string>
+    <string>--spec</string><string>/abs/vault/research.spec.md</string>
+    <string>--output</string><string>/abs/vault</string>
+    <string>--resume</string><string>--max-usd</string><string>25</string>
+  </array>
+  <key>EnvironmentVariables</key><dict>
+    <key>PATH</key><string>/abs/dir/of/claude:/usr/bin:/bin</string>
+  </dict>
+  <key>StartCalendarInterval</key><dict>
+    <key>Weekday</key><integer>1</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key><string>/abs/vault/_pipeline/research.log</string>
+  <key>StandardErrorPath</key><string>/abs/vault/_pipeline/research.log</string>
+</dict></plist>
+```
+
+These examples will move to `pipeline <vault> run` when ROADMAP v1.1.0 row 7 ships.
+The same cron and launchd lines are in `research-framework generate --help`.
+
 Schedule a weekly digest with cron or launchd (explicit opt-in — the verb never auto-runs):
 
 ```bash

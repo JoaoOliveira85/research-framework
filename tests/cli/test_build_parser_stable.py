@@ -233,3 +233,34 @@ def test_parsed_namespace_carries_a_callable_handler(subcommand: str) -> None:
         "callable `func`. main() would raise AttributeError at args.func — "
         "the subparser is missing its set_defaults(func=...)."
     )
+
+
+def test_generate_help_documents_cron_and_launchd_one_liners() -> None:
+    """Issue #19: `generate --help` carries runnable scheduling examples.
+
+    Each example's argv is parsed by the real parser (a flag typo fails), calls
+    ``generate ... --resume`` (what ``./vault research`` expands to) with the
+    budget ceiling, and the cron example sets a PATH for the agent CLI.
+    """
+    import shlex
+
+    text = _run_help("generate", "--help").decode()
+    lines = [ln.strip() for ln in text.splitlines()]
+    cron = [ln for ln in lines if ln.startswith("0 6 * * 1 ")]
+    launchd = [
+        ln for ln in lines if ln.startswith("/abs/vault/.venv/bin/research-framework")
+    ]
+    assert len(cron) == 1 and len(launchd) == 1
+    assert any(ln.startswith(("PATH=", "CLAUDE_BIN=")) for ln in lines)
+
+    cron_cmd = cron[0].removeprefix("0 6 * * 1 ").split(" >> ")[0]
+    for cmd in (cron_cmd, launchd[0]):
+        argv = shlex.split(cmd)
+        assert argv[0] == "/abs/vault/.venv/bin/research-framework"
+        ns = build_parser().parse_args(argv[1:])
+        assert ns.command == "generate"
+        assert ns.resume is True
+        assert ns.max_usd == 25.0
+        assert ns.spec is not None and ns.output is not None
+    assert "launchctl bootstrap" in text
+    assert "pipeline <vault> run" in text

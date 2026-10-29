@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 
+from research_framework._assets import asset_path
 from research_framework.generator.scaffold import scaffold
 from research_framework.spec.parser import parse
 
@@ -321,16 +322,29 @@ def test_vault_script_not_overwritten(sample_spec_path: Path, tmp_path: Path) ->
     )
 
 
-def test_systemd_service_created(sample_spec_path: Path, tmp_path: Path) -> None:
+def test_scaffold_writes_no_systemd_unit(
+    sample_spec_path: Path, tmp_path: Path
+) -> None:
+    """Issue #19: the unit ran `./vault research` with no timer; it is gone."""
     spec = parse(sample_spec_path)
     vault = tmp_path / "vault"
     scaffold(spec, vault)
 
-    service = vault / "_pipeline" / "systemd" / "vault-research.service"
-    assert service.exists(), "systemd unit must be created at _pipeline/systemd/"
-    content = service.read_text(encoding="utf-8")
-    assert spec.name in content, "systemd unit must reference spec.name"
-    assert str(vault.resolve()) in content, "systemd unit must embed vault_dir"
+    assert not (vault / "_pipeline" / "systemd").exists()
+    assert not (asset_path("templates") / "vault-research.service.j2").exists()
+
+
+def test_rescaffold_leaves_an_existing_systemd_unit_alone(
+    sample_spec_path: Path, tmp_path: Path
+) -> None:
+    spec = parse(sample_spec_path)
+    vault = tmp_path / "vault"
+    unit = vault / "_pipeline" / "systemd" / "vault-research.service"
+    unit.parent.mkdir(parents=True)
+    unit.write_text("# operator-owned\n", encoding="utf-8")
+    scaffold(spec, vault)
+
+    assert unit.read_text(encoding="utf-8") == "# operator-owned\n"
 
 
 def _assert_scaffold_preserves_user_owned_settings(
