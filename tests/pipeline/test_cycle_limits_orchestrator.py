@@ -321,6 +321,60 @@ def test_cycle_runner_backfill_anchors_cycles_per_run_at_its_cycle(
     assert cycle_runner._resolved_budget(vault, None, None, cycle_num=30) == (0.0, 31)
 
 
+def test_the_ceiling_a_cycles_per_run_run_passes_down_stays_constant(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Anchoring end to end: the run resolves k+N-1 ONCE and every cycle of it
+    hands that same ceiling to the cycle runner. A per-cycle re-anchor would
+    move the ceiling with each cycle and never stop the run."""
+    from research_framework.pipeline import cycle_runner
+    from research_framework.pipeline import orchestrator as orch
+
+    vault = _vault(
+        tmp_path, completed=9, pipeline="  max_cycles: 0\n  cycles_per_run: 3\n"
+    )
+    seen: list[tuple[int, int | None, int]] = []
+    real_single_cycle = orch.run_single_cycle
+
+    def _runner(
+        vault_dir: Path,
+        cycle_num: int,
+        budget_cap: float | None = None,
+        max_cycles: int | None = None,
+        scripts_dir: Path | None = None,
+    ) -> int:
+        _ = scripts_dir
+        resolved = cycle_runner._resolved_budget(
+            vault_dir, budget_cap, max_cycles, cycle_num=cycle_num
+        )[1]
+        seen.append((cycle_num, max_cycles, resolved))
+        (
+            vault_dir / "_pipeline" / "cycles" / f"cycle-{cycle_num:03d}-scout.json"
+        ).write_text(json.dumps({"topics_found": {"new": ["t"]}}), encoding="utf-8")
+        return 1
+
+    def _through_the_real_single_cycle(vault_dir, cycle, budget_cap, max_cycles, **kw):
+        return real_single_cycle(
+            vault_dir,
+            cycle,
+            budget_cap,
+            max_cycles,
+            resume=kw.get("resume", False),
+            cycle_runner=_runner,
+        )
+
+    monkeypatch.setattr(orch, "run_single_cycle", _through_the_real_single_cycle)
+    monkeypatch.setattr(orch, "merge_expected_filenames_from_scan", lambda _v: None)
+    monkeypatch.setattr(orch, "_run_health_gate", lambda _v: [])
+    monkeypatch.setattr(orch, "scan_stubs", lambda _v, _s: [])
+    monkeypatch.setattr(orch, "all_targets_met", lambda _v: False)
+
+    rc = orch.run_cycles(_spec(vault), vault, start_cycle=10, resume=True)
+
+    assert rc == 1
+    assert seen == [(10, 12, 12), (11, 12, 12), (12, 12, 12)]
+
+
 # --- an unbounded multi-cycle run is refused (review of #33) ----------------
 
 
