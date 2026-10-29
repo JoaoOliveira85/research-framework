@@ -22,6 +22,7 @@ from research_framework.cli._budget_resolve import (
     DEFAULT_MAX_CYCLES,
     BudgetError,
     fill_missing_run_budget,
+    require_bounded_run,
     resolve_cycle_budget,
     resolve_cycle_budget_from_path,
 )
@@ -242,3 +243,142 @@ def test_planning_horizon_rolls_forward_when_unlimited() -> None:
     """No end point ⇒ plan as if the default horizon started at this cycle."""
     assert planning_horizon(0, 1) == DEFAULT_MAX_CYCLES
     assert planning_horizon(0, 30) == 30 + DEFAULT_MAX_CYCLES - 1
+
+
+# --- a multi-cycle run must have SOME bound (review of #33) -----------------
+#
+# `max_cycles: 0` with no per-run cap and no dollar cap leaves a run with fuel
+# nothing to stop it: Condition B/C TERMINATE comes back as rc 1 and the loop
+# continues, and the `limits.*` caps are per cycle. Run resolution refuses that
+# combination; `load_vault_settings` does not, so status and digest still load.
+
+
+def _unbounded_settings(**pipeline: object) -> dict:
+    return {"pipeline": {"max_cycles": 0, "budget_usd": 0, **pipeline}}
+
+
+def test_an_unbounded_multi_cycle_run_is_refused() -> None:
+    res = resolve_cycle_budget(_unbounded_settings(), start_cycle=86)
+    with pytest.raises(BudgetError) as exc:
+        require_bounded_run(res)
+    message = str(exc.value)
+    for remedy in (
+        "pipeline.cycles_per_run",
+        "pipeline.max_cycles",
+        "pipeline.budget_usd",
+        "--more-cycles",
+        "--max-cycles",
+        "--max-usd",
+        "--max-usd-this-run",
+    ):
+        assert remedy in message, f"the refusal must name {remedy}"
+
+
+def test_a_zero_dollar_flag_is_no_escape_hatch() -> None:
+    """``--max-usd 0`` / ``--max-usd-this-run 0`` mean unlimited, not a bound."""
+    res = resolve_cycle_budget(
+        _unbounded_settings(), flag_max_usd=0.0, flag_max_usd_this_run=0.0
+    )
+    with pytest.raises(BudgetError):
+        require_bounded_run(res)
+
+
+@pytest.mark.parametrize(
+    ("settings", "flags"),
+    [
+        (_unbounded_settings(cycles_per_run=3), {}),
+        ({"pipeline": {"max_cycles": 40, "budget_usd": 0}}, {}),
+        (_unbounded_settings(budget_usd=25.0), {}),
+        (_unbounded_settings(), {"flag_more_cycles": 2}),
+        (_unbounded_settings(), {"flag_max_cycles": 100}),
+        (_unbounded_settings(), {"flag_max_usd": 5.0}),
+        (_unbounded_settings(), {"flag_max_usd_this_run": 2.0}),
+    ],
+    ids=[
+        "cycles_per_run",
+        "finite-max_cycles",
+        "budget_usd",
+        "--more-cycles",
+        "--max-cycles",
+        "--max-usd",
+        "--max-usd-this-run",
+    ],
+)
+def test_each_escape_hatch_bounds_the_run(settings: dict, flags: dict) -> None:
+    require_bounded_run(resolve_cycle_budget(settings, start_cycle=86, **flags))
+
+
+def test_the_typed_loader_still_loads_an_unbounded_vault(tmp_path: Path) -> None:
+    """Refusal lives in run resolution, so `status` / `digest` keep working."""
+    vault = _vault(tmp_path, "  max_cycles: 0\n")
+    assert load_vault_settings(vault).max_cycles == 0
+
+
+# --- the multi-cycle CLI verbs refuse before any cycle runs ------------------
+
+
+def _resume_args(vault_dir: Path, **over: object):
+    from unittest import mock
+
+    args = mock.Mock()
+    args.legacy_cycle_runner = False
+    args.output = vault_dir
+    args.spec = vault_dir / "research.spec.md"
+    args.cycle = 86
+    args.max_cycles = None
+    args.max_usd = None
+    args.more_cycles = None
+    args.max_usd_this_run = None
+    for key, value in over.items():
+        setattr(args, key, value)
+    return args
+
+
+def _stub_resume(monkeypatch: pytest.MonkeyPatch, vault_dir: Path) -> list[dict]:
+    from types import SimpleNamespace
+
+    from research_framework import cli
+
+    calls: list[dict] = []
+    (vault_dir / "research.spec.md").write_text("---\nname: t\n---\n", "utf-8")
+    monkeypatch.setattr(cli, "load_spec", lambda *_a, **_k: SimpleNamespace(name="t"))
+    monkeypatch.setattr(cli, "validate", lambda _spec: None)
+    monkeypatch.setattr(cli, "_run_phase3", lambda *_a: 0)
+    monkeypatch.setattr(
+        "research_framework.pipeline.preconditions.check",
+        lambda _vd, *, for_resume: (True, []),
+    )
+    monkeypatch.setattr(
+        "research_framework.pipeline.orchestrator.run_cycles",
+        lambda _spec, _vd, **kw: calls.append(kw) or 0,
+    )
+    return calls
+
+
+def test_resume_refuses_an_unbounded_run_with_exit_2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    from research_framework import cli
+
+    vault = _vault(tmp_path, "  max_cycles: 0\n")
+    calls = _stub_resume(monkeypatch, vault)
+
+    rc = cli._resume(_resume_args(vault))
+
+    assert rc == 2
+    assert calls == [], "no cycle may run"
+    assert "pipeline.cycles_per_run" in capsys.readouterr().err
+
+
+def test_resume_with_more_cycles_is_allowed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from research_framework import cli
+
+    vault = _vault(tmp_path, "  max_cycles: 0\n")
+    calls = _stub_resume(monkeypatch, vault)
+
+    rc = cli._resume(_resume_args(vault, more_cycles=2))
+
+    assert rc == 0
+    assert calls and calls[0]["budget"].max_cycles == 87

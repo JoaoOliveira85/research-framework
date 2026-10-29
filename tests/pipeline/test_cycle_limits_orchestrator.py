@@ -319,3 +319,127 @@ def test_cycle_runner_backfill_anchors_cycles_per_run_at_its_cycle(
     vault = _vault(tmp_path, pipeline="  max_cycles: 0\n  cycles_per_run: 2\n")
 
     assert cycle_runner._resolved_budget(vault, None, None, cycle_num=30) == (0.0, 31)
+
+
+# --- an unbounded multi-cycle run is refused (review of #33) ----------------
+
+
+def _runaway_stubs(monkeypatch: pytest.MonkeyPatch, *, rc: int) -> list[int]:
+    """The reviewer's probe: one stub the agent never fixes is enough fuel, the
+    scout finds nothing, each cycle costs $1 and returns `rc`. Without a bound
+    this ran 300+ cycles."""
+    from research_framework.pipeline import orchestrator as orch
+
+    ran: list[int] = []
+
+    def _one_cycle(vault_dir, cycle_num, *args, **kwargs):
+        ran.append(cycle_num)
+        if len(ran) > 50:
+            raise AssertionError("runaway: the run has no bound")
+        _sidecar(vault_dir, cycle_num, 1.0)
+        return rc
+
+    monkeypatch.setattr(orch, "run_single_cycle", _one_cycle)
+    monkeypatch.setattr(orch, "merge_expected_filenames_from_scan", lambda _v: None)
+    monkeypatch.setattr(orch, "_run_health_gate", lambda _v: [])
+    monkeypatch.setattr(orch, "scan_stubs", lambda _v, _s: ["stuck-stub.md"])
+    monkeypatch.setattr(orch, "all_targets_met", lambda _v: False)
+    return ran
+
+
+@pytest.mark.parametrize("rc", [0, 1])
+def test_an_unbounded_run_is_refused_before_any_cycle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    rc: int,
+) -> None:
+    from research_framework.pipeline import orchestrator as orch
+
+    vault = _vault(tmp_path, completed=85, pipeline="  max_cycles: 0\n")
+    ran = _runaway_stubs(monkeypatch, rc=rc)
+
+    with caplog.at_level(logging.ERROR):
+        result = orch.run_cycles(_spec(vault), vault, start_cycle=86, resume=True)
+
+    assert result == 2
+    assert ran == [], "refused before any cycle runs"
+    assert not (vault / "_pipeline" / "run-report.json").exists()
+    joined = " ".join(r.getMessage() for r in caplog.records)
+    assert "pipeline.cycles_per_run" in joined
+
+
+def test_an_explicit_unbounded_budget_is_refused_too(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A caller that resolved the budget itself gets the same answer."""
+    from research_framework.pipeline import orchestrator as orch
+
+    vault = _vault(tmp_path, completed=85)
+    ran = _runaway_stubs(monkeypatch, rc=1)
+
+    result = orch.run_cycles(
+        _spec(vault), vault, start_cycle=86, resume=True, budget=_budget()
+    )
+
+    assert result == 2
+    assert ran == []
+
+
+@pytest.mark.parametrize(
+    ("pipeline", "flags", "expected_ran"),
+    [
+        ("  max_cycles: 0\n  cycles_per_run: 2\n", {}, [86, 87]),
+        ("  max_cycles: 87\n", {}, [86, 87]),
+        ("  max_cycles: 0\n", {"flag_more_cycles": 2}, [86, 87]),
+        ("  max_cycles: 0\n", {"flag_max_cycles": 87}, [86, 87]),
+        ("  max_cycles: 0\n", {"flag_max_usd_this_run": 2.0}, [86, 87]),
+        ("  max_cycles: 0\n", {"flag_max_usd": 2.0}, [86, 87]),
+    ],
+    ids=[
+        "cycles_per_run",
+        "finite-max_cycles",
+        "--more-cycles",
+        "--max-cycles",
+        "--max-usd-this-run",
+        "--max-usd",
+    ],
+)
+def test_each_escape_hatch_lets_the_run_proceed_and_stop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    pipeline: str,
+    flags: dict,
+    expected_ran: list[int],
+) -> None:
+    from research_framework.pipeline import orchestrator as orch
+
+    vault = _vault(tmp_path, completed=85, pipeline=pipeline)
+    ran = _runaway_stubs(monkeypatch, rc=1)
+    budget = resolve_cycle_budget_from_path(
+        vault / "settings.yaml", start_cycle=86, **flags
+    )
+
+    result = orch.run_cycles(
+        _spec(vault), vault, start_cycle=86, resume=True, budget=budget
+    )
+
+    assert ran == expected_ran
+    assert result == 1
+
+
+def test_a_settings_dollar_cap_lets_the_run_proceed_and_stop(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from research_framework.pipeline import orchestrator as orch
+
+    vault = _vault(tmp_path)
+    (vault / "settings.yaml").write_text(
+        "pipeline:\n  max_cycles: 0\n  budget_usd: 2.0\n", encoding="utf-8"
+    )
+    ran = _runaway_stubs(monkeypatch, rc=1)
+
+    result = orch.run_cycles(_spec(vault), vault)
+
+    assert ran == [1, 2]
+    assert result == 1

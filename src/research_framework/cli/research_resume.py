@@ -9,7 +9,11 @@ from pathlib import Path
 
 from ..pipeline.settings import strict_settings_refusal
 from ..spec.schema import SpecValidationError
-from ._budget_resolve import BudgetError, resolve_cycle_budget_from_path
+from ._budget_resolve import (
+    BudgetError,
+    require_bounded_run,
+    resolve_cycle_budget_from_path,
+)
 from .budget_resume import (
     handle_approval_marker_on_resume,
     handle_budget_marker_on_resume,
@@ -214,6 +218,7 @@ def _resume(args: argparse.Namespace) -> int:
             flag_max_usd_this_run=getattr(args, "max_usd_this_run", None),
             start_cycle=args.cycle,
         )
+        require_bounded_run(budget)
     except BudgetError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

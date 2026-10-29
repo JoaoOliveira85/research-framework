@@ -930,6 +930,20 @@ def run_cycles(
         _LOG.error("[orchestrator] refusing to run: %s", refusal)
         return 2
 
+    # Issue #33 review: an unlimited ceiling with no per-run cap and no dollar
+    # cap never stops while there is fuel (Condition B/C TERMINATE is rc 1 and
+    # the loop carries on). Refuse before ANY side effect — no branch, no run
+    # report — for every caller, as the archived guard above does. The CLI run
+    # verbs refuse earlier with exit 2; this covers direct callers and stale
+    # shims.
+    from ..cli._budget_resolve import BudgetError, require_bounded_run
+
+    try:
+        require_bounded_run(budget)
+    except BudgetError as exc:
+        _LOG.error("[orchestrator] %s", exc)
+        return 2
+
     # Spec 050 / Principle X: open a research branch (or reuse on
     # ``--resume``). HARD STOP on dirty main — translate into exit 2 so
     # the user sees the operator-friendly message without a traceback.

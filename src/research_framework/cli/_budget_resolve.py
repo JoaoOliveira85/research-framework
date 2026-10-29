@@ -47,6 +47,7 @@ __all__ = [
     "BudgetError",
     "BudgetResolution",
     "fill_missing_run_budget",
+    "require_bounded_run",
     "resolve_cycle_budget",
     "resolve_cycle_budget_from_path",
 ]
@@ -248,6 +249,36 @@ def resolve_cycle_budget(
         max_usd_source=usd_source,
         deprecated_keys_seen=deprecated_seen,
         max_usd_this_run=max_usd_this_run,
+    )
+
+
+def require_bounded_run(resolution: BudgetResolution) -> None:
+    """Refuse a multi-cycle run that nothing would ever stop (issue #33 review).
+
+    With no lifetime ceiling (``pipeline.max_cycles: 0``), no per-run cap
+    (``pipeline.cycles_per_run``, ``--more-cycles``, ``--max-cycles`` — each is
+    already folded into ``max_cycles``, so a non-zero value means one is set)
+    and no dollar ceiling (``pipeline.budget_usd`` / ``--max-usd`` /
+    ``--max-usd-this-run`` above zero), a run with fuel loops forever:
+    Condition B/C TERMINATE returns rc 1 and the orchestrator carries on, and
+    the ``limits.*`` caps are per cycle. Raised from run resolution rather than
+    ``load_vault_settings`` so ``status`` / ``digest`` still load such a vault;
+    the single-cycle ``cycle`` verb does not call it.
+    """
+    if (
+        resolution.max_cycles != UNLIMITED_MAX_CYCLES
+        or resolution.max_usd is not None
+        or resolution.max_usd_this_run is not None
+    ):
+        return
+    raise BudgetError(
+        f"refusing an unbounded multi-cycle run: {_CANONICAL_KEY} is 0 (no "
+        "lifetime ceiling) and there is neither a per-run cycle cap nor a "
+        "dollar cap, so a run that keeps finding work would never stop. Bound "
+        f"it with one of: {_PER_RUN_KEY}: N or a finite {_CANONICAL_KEY}: N or "
+        f"{_CANONICAL_USD_KEY} > 0 in settings.yaml; or --more-cycles N, "
+        "--max-cycles N, --max-usd N (> 0) or --max-usd-this-run N (> 0) on "
+        "the command line."
     )
 
 
