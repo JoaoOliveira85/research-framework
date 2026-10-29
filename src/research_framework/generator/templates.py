@@ -300,7 +300,7 @@ def _linking_notes(corpus: Path, stems: set[str], skip: set[Path]) -> dict[str, 
     path prefix is dropped to its last segment, a heading anchor or alias is
     ignored, and spaces match ``_`` / ``-`` in the stem.
     """
-    from ..pipeline.wikilinks import _resolve_titlecase_stem
+    from ..pipeline.wikilinks import resolve_stem
 
     counts = {stem: 0 for stem in stems}
     for path in sorted(corpus.rglob("*.md")):
@@ -314,7 +314,7 @@ def _linking_notes(corpus: Path, stems: set[str], skip: set[Path]) -> dict[str, 
         except OSError:
             continue
         hit = {
-            _resolve_titlecase_stem(target.rsplit("/", 1)[-1], stems)
+            resolve_stem(target.rsplit("/", 1)[-1], stems)
             for target in _link_targets(text)
         }
         for stem in hit - {None}:

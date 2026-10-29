@@ -296,3 +296,19 @@ def test_handles_missing_data_vault_dir(tmp_path: Path) -> None:
     vault = tmp_path / "vault"
     vault.mkdir()
     assert fix(vault) == 0
+
+
+def test_other_modules_resolve_links_through_the_public_name() -> None:
+    """``resolve_stem`` is the public name for resolving a link the way this
+    module does; the private ``_resolve_titlecase_stem`` stays module-local, so
+    a rename inside ``wikilinks.py`` breaks nobody."""
+    import research_framework
+
+    pkg = Path(research_framework.__file__).parent
+    offenders = [
+        path.relative_to(pkg).as_posix()
+        for path in sorted(pkg.rglob("*.py"))
+        if path.name != "wikilinks.py"
+        and "_resolve_titlecase_stem" in path.read_text(encoding="utf-8")
+    ]
+    assert offenders == []
