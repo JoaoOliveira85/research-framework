@@ -387,7 +387,7 @@ def _load_vault_spec(vault: Path) -> Any | None:
     try:
         return SpecConfig.from_dict(load_parsed_spec(vault))
     except Exception as exc:  # noqa: BLE001 - ParsedSpecError or a bad cache: skip
-        _LOG.warning("could not load the vault spec for template refresh: %s", exc)
+        _LOG.warning("could not load the vault spec; nothing re-rendered: %s", exc)
     return None
 
 
@@ -407,30 +407,11 @@ def shipped_prompt_version(name: str) -> int:
     return int(match.group(1))
 
 
-def _load_spec_parse(vault: Path) -> Any | None:
-    """The vault's ``SpecConfig`` from ``_pipeline/spec-parse.json``, or ``None``.
-
-    ``spec-parse.json`` is what the pipeline itself runs on, written by every
-    scaffold. Any failure means "cannot re-render", never an exception.
-    """
-    import json
-
-    from research_framework.spec.schema import SpecConfig
-
-    path = vault / "_pipeline" / "spec-parse.json"
-    try:
-        return SpecConfig.from_dict(json.loads(path.read_text(encoding="utf-8")))
-    except FileNotFoundError:
-        _LOG.warning("no %s; stage prompts not re-rendered", path)
-    except Exception as exc:  # noqa: BLE001 - any unreadable spec means "skip"
-        _LOG.warning("unreadable %s (%s); stage prompts not re-rendered", path, exc)
-    return None
-
-
 def refresh_vault_prompts(vault: Path) -> list[str]:
     """Re-render outdated ``_pipeline/prompts/`` stage prompts (#12).
 
     A prompt is re-rendered from the installed package and the vault's spec
+    (:func:`_load_vault_spec`, so a stale ``spec-parse.json`` is re-parsed)
     only when its recorded ``_template_version`` is older than the shipped
     template's. A missing file is not created, a file without a recorded
     version is not a framework render and is left alone, and a newer one is
@@ -464,7 +445,7 @@ def refresh_vault_prompts(vault: Path) -> list[str]:
             outdated.append((name, recorded, shipped))
     if not outdated:
         return []
-    spec = _load_spec_parse(vault)
+    spec = _load_vault_spec(vault)
     if spec is None:
         return []
 

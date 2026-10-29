@@ -105,8 +105,26 @@ def test_both_stage_prompts_are_refreshed(vault: Path) -> None:
     ]
 
 
+def test_a_prompt_is_re_rendered_from_the_current_spec_not_a_stale_cache(
+    vault: Path,
+) -> None:
+    """The spec is read through ``load_parsed_spec`` (#9), so a
+    ``spec-parse.json`` that no longer matches the vault's spec file is
+    re-parsed rather than trusted."""
+    (vault / "research.spec.md").write_text(
+        '---\nname: "Renamed Vault"\nowner: "test"\ntopic: "A topic"\n---\n',
+        encoding="utf-8",
+    )
+    dfs = vault / _PROMPTS / "dfs-prompt.md"
+    _downgrade(dfs, 1)
+
+    assert refresh_vault_prompts(vault) == ["_pipeline/prompts/dfs-prompt.md"]
+    assert "Renamed Vault vault." in dfs.read_text(encoding="utf-8")
+
+
 def test_without_a_readable_spec_nothing_is_touched(vault: Path) -> None:
     (vault / "_pipeline" / "spec-parse.json").unlink()
+    (vault / "research.spec.md").unlink()
     dfs = vault / _PROMPTS / "dfs-prompt.md"
     old = _downgrade(dfs, 1)
 
@@ -128,9 +146,9 @@ def test_render_stage_prompt_matches_what_generate_writes(
     vault: Path, tmp_path: Path, name: str
 ) -> None:
     """The update renderer and `render_all` must not drift apart."""
-    from research_framework.pipeline.vault_update import _load_spec_parse
+    from research_framework.pipeline.vault_update import _load_vault_spec
 
-    spec = _load_spec_parse(vault)
+    spec = _load_vault_spec(vault)
     assert spec is not None
     out = tmp_path / "fresh"
     out.mkdir()
