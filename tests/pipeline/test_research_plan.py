@@ -310,6 +310,28 @@ class TestCycleQuota:
         expect = math.ceil(remaining / remaining_cycles)
         assert plan.cycle_quota == expect
 
+    def test_unlimited_ceiling_plans_over_a_rolling_default_horizon(
+        self, tmp_path: Path
+    ) -> None:
+        """Issue #33: ``max_cycles: 0`` is no ceiling, not "this is the last
+        cycle" — the quota must not demand every remaining note at once."""
+        from research_framework.pipeline.research_plan import generate_plan
+        from research_framework.pipeline.settings import DEFAULT_MAX_CYCLES
+
+        cats = [
+            CoverageCategory(
+                name="a", note_type="concept", target_count=100, met_count=0
+            ),
+        ]
+        _write_coverage(tmp_path, categories=cats)
+        (tmp_path / "_pipeline" / "research-backlog.md").write_text(
+            "# x\n", encoding="utf-8"
+        )
+        spec = _minimal_spec(categories=cats)
+        _write_settings_max_cycles(tmp_path, 0)
+        plan = generate_plan(tmp_path, spec, cycle_number=30)
+        assert plan.cycle_quota == math.ceil(100 / DEFAULT_MAX_CYCLES)
+
 
 class TestInsufficientQueue:
     """``require_nonempty_queue=True`` callers still get the v0.2.20 raise."""

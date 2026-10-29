@@ -393,3 +393,45 @@ class TestWordCountReadsTheDeclaredCorpus:
 
         gate = json.loads(out.read_text(encoding="utf-8"))["gates"]["CG-006"]
         assert gate["status"] == "PASS", gate["message"]
+
+
+class TestTrajectoryWithoutALifetimeCeiling:
+    """Issue #33: CG-005 projects to the ceiling, and ``0`` is no ceiling."""
+
+    def _cg005(self, tmp_path: Path, max_cycles: int) -> dict:
+        from research_framework.pipeline.coverage import save_targets
+        from research_framework.pipeline.quality_report import write_report
+        from research_framework.spec.schema import CoverageCategory, CoverageTargets
+
+        vault = tmp_path / "vault"
+        (vault / "_pipeline" / "cycles").mkdir(parents=True)
+        (vault / "data_vault").mkdir()
+        (vault / "settings.yaml").write_text(
+            f"pipeline:\n  max_cycles: {max_cycles}\n  budget_usd: 0\n",
+            encoding="utf-8",
+        )
+        save_targets(
+            vault,
+            CoverageTargets(
+                categories=[
+                    CoverageCategory(
+                        name="concepts",
+                        note_type="concept",
+                        target_count=10,
+                        met_count=3,
+                    )
+                ]
+            ),
+        )
+        out = write_report(vault, cycle_number=2)
+        return json.loads(out.read_text(encoding="utf-8"))["gates"]["CG-005"]
+
+    def test_unlimited_ceiling_is_not_read_as_ending_this_cycle(
+        self, tmp_path: Path
+    ) -> None:
+        gate = self._cg005(tmp_path / "unlimited", max_cycles=0)
+        assert gate["status"] == "PASS", gate["message"]
+
+    def test_a_finite_ceiling_at_this_cycle_still_warns(self, tmp_path: Path) -> None:
+        gate = self._cg005(tmp_path / "finite", max_cycles=2)
+        assert gate["status"] == "WARN", gate["message"]

@@ -26,7 +26,10 @@ from research_framework.pipeline.gates_cycle import (
     CG006_word_count_compliance,
     CG007_orphan_link_pct,
 )
-from research_framework.pipeline.settings import effective_max_cycles
+from research_framework.pipeline.settings import (
+    effective_max_cycles,
+    planning_horizon,
+)
 from research_framework.pipeline.step_gate_log import read_step_gates
 from research_framework.spec.parsed import ParsedSpecError, load_parsed_spec
 from research_framework.spec.schema import (
@@ -489,7 +492,9 @@ def write_report(vault_dir: Path, cycle_number: int) -> Path:
     snap = _build_coverage_snapshot(targets, prev_snap)
     # Spec 061: the cycle horizon for the yield projection comes from the vault
     # settings (canonical pipeline.max_cycles), not the (now-removed) spec field.
-    max_cycles = max(1, effective_max_cycles(vault_dir))
+    # An unlimited ceiling (0, issue #33) projects over a rolling horizon rather
+    # than reading 0 as "the run ends this cycle".
+    max_cycles = max(1, planning_horizon(effective_max_cycles(vault_dir), cycle_number))
 
     (
         sg_gates,
