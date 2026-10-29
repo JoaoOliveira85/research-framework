@@ -112,7 +112,6 @@ def _write_minimal_settings(
     ]
     if probe_enabled is False:
         lines.append("    enabled: false")
-    lines.append("    tier: standard")
     vault_dir.joinpath("settings.yaml").write_text(
         "\n".join(lines) + "\n",
         encoding="utf-8",
@@ -166,7 +165,8 @@ class TestCycleRunnerProbeDispatchRouting:
         mock_dispatch.assert_called_once()
         call_kwargs = mock_dispatch.call_args.kwargs
         assert call_kwargs["stage"] == "probe_retrieval"
-        assert call_kwargs["tier"] == "standard"
+        # dispatch() resolves `stages.probe_retrieval.tier` itself (issue #13).
+        assert "tier" not in call_kwargs
         assert "Probes:" in call_kwargs["prompt"]
         assert call_kwargs["vault_dir"] == tmp_path
         assert call_kwargs["cycle_dir"] == (

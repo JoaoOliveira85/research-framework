@@ -176,8 +176,10 @@ This is load-bearing for:
   story and makes hard budget caps unreachable.
 - **Runtime selection** — `runtime: claude | codex | local` from
   `settings.yaml` is resolved here.
-- **Tier resolution** (spec 020, D7) — `tier: basic | normal | flagship`
-  is resolved against the `settings.yaml::tiers` block here.
+- **Tier resolution** (spec 020, D7; issue #13) — a stage's
+  `tier: basic | normal | flagship` (any key of `settings.yaml::tiers`) is
+  resolved to its model here, on every stage. `tier` and `model` are
+  exclusive; the settings loader refuses both, or an unknown tier, at load.
 - **Per-call audit logging** (spec 020 FR-024) — every invocation
   writes a full record (prompt + response + cost + latency) to
   `_pipeline/cycles/cycle-NNN/agent-calls/<ts>-<stage>-<call-id>.json`.

@@ -328,3 +328,17 @@ def test_estimate_only_json_shape_is_stable(tmp_path: Path) -> None:
     assert {"stage", "dispatches", "per_dispatch_usd", "subtotal_usd"} <= set(
         doc["stages"][0]
     )
+
+
+def test_render_labels_an_untiered_stage_like_the_cycle_report(tmp_path: Path) -> None:
+    """A stage with no tier shows the cycle report's "untiered" bucket label."""
+    settings = _SETTINGS.replace(
+        "  verifier:\n    enabled: true\n    tier: basic\n",
+        "  verifier:\n    enabled: true\n    model: picked\n",
+    )
+    vault = _with_coverage_gap(_vault(tmp_path, settings))
+
+    text = render_estimate_text(estimate_cycle(vault, cycle_num=1))
+
+    verifier_line = next(line for line in text.splitlines() if "verifier" in line)
+    assert "untiered" in verifier_line

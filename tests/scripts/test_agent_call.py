@@ -233,6 +233,168 @@ class TestResolveExecutor:
             agent_call._load_settings(tmp_path)
 
 
+class TestStageTierResolution:
+    """Issue #13: `stages.<name>.tier` selects the model through `tiers:` for
+    every stage that dispatches — the loader's resolver had no production
+    caller, so before this the key never reached the executor at all."""
+
+    @staticmethod
+    def _settings(**stage_cfg: object) -> dict:
+        return {
+            "default_executor": {"runtime": "codex", "model": "gpt-default"},
+            "tiers": {"basic": "gpt-mini", "normal": "gpt-mid", "flagship": "gpt-max"},
+            "stages": {"note_writer": dict(stage_cfg)},
+        }
+
+    def test_stage_tier_selects_the_model_from_tiers(self, agent_call) -> None:
+        settings = self._settings(tier="flagship")
+        executor = agent_call._resolve_executor(settings, "note_writer")
+        assert executor["model"] == "gpt-max"
+
+    @pytest.mark.parametrize("tier", ["basic", "normal", "flagship", "standard"])
+    def test_no_tiers_block_reads_tier_as_the_legacy_label(
+        self, agent_call, tier
+    ) -> None:
+        """Review repro: main's codex profile (no `tiers:`) plus
+        `plan_narrator: {tier: basic}` ran `codex exec --model claude-haiku-4-5`.
+        A vault that never opted in keeps its executor's model."""
+        settings = {
+            "default_executor": {"runtime": "codex", "model": "gpt-5.4"},
+            "stages": {"plan_narrator": {"tier": tier}},
+        }
+        executor = agent_call._resolve_executor(settings, "plan_narrator")
+        assert executor["model"] == "gpt-5.4"
+        assert agent_call._stage_tier(settings, "plan_narrator") == ""
+
+    def test_partial_tiers_block_backfills_the_defaults(self, agent_call) -> None:
+        settings = {"tiers": {"basic": "own"}, "stages": {"scout": {"tier": "normal"}}}
+        executor = agent_call._resolve_executor(settings, "scout")
+        assert executor["model"] == "claude-sonnet-5"
+
+    @pytest.mark.parametrize("legacy", ["basic", "standard", "expert"])
+    def test_old_label_beside_model_keeps_the_model(self, agent_call, legacy) -> None:
+        settings = self._settings(tier=legacy, model="explicit")
+        executor = agent_call._resolve_executor(settings, "note_writer")
+        assert executor["model"] == "explicit"
+        assert agent_call._stage_tier(settings, "note_writer") == ""
+
+    def test_per_call_model_override_wins_over_stage_tier(self, agent_call) -> None:
+        settings = agent_call._apply_stage_model_override(
+            self._settings(tier="basic"), "note_writer", "explicit-model"
+        )
+        executor = agent_call._resolve_executor(settings, "note_writer")
+        assert executor["model"] == "explicit-model"
+
+    @pytest.mark.parametrize("legacy", ["standard", "expert"])
+    def test_legacy_complexity_tier_selects_nothing(self, agent_call, legacy) -> None:
+        executor = agent_call._resolve_executor(
+            self._settings(tier=legacy), "note_writer"
+        )
+        assert executor["model"] == "gpt-default"
+
+    def test_unknown_tier_raises_naming_stage_and_known_tiers(self, agent_call) -> None:
+        with pytest.raises(ValueError) as exc:
+            agent_call._resolve_executor(self._settings(tier="elite"), "note_writer")
+        assert "note_writer" in str(exc.value)
+        assert "basic, flagship, normal" in str(exc.value)
+
+    def test_cost_record_tier_is_the_stage_tier_name(self, agent_call) -> None:
+        assert agent_call._stage_tier(self._settings(tier="normal"), "note_writer") == (
+            "normal"
+        )
+
+    @pytest.mark.parametrize("cfg", [{}, {"tier": "standard"}, {"model": "x"}])
+    def test_cost_record_tier_is_empty_when_the_stage_names_none(
+        self, agent_call, cfg
+    ) -> None:
+        assert agent_call._stage_tier(self._settings(**cfg), "note_writer") == ""
+
+    def test_dispatch_runs_the_tier_model_and_records_the_tier(
+        self, agent_call, tmp_path: Path
+    ) -> None:
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        (vault / "settings.yaml").write_text(
+            "default_executor:\n  runtime: claude\n  model: sonnet\n"
+            "tiers:\n  basic: claude-haiku-4-5\n"
+            "stages:\n  plan_narrator:\n    tier: basic\n",
+            encoding="utf-8",
+        )
+        cycle_dir = vault / "_pipeline" / "cycles" / "cycle-001"
+        cycle_dir.mkdir(parents=True)
+        fake_proc = MagicMock()
+        fake_proc.stdin = MagicMock()
+        fake_proc.stdout = iter(['{"type":"result","total_cost_usd":0.01}\n'])
+        fake_proc.stderr = MagicMock(read=MagicMock(return_value=""))
+        fake_proc.wait.return_value = 0
+        with patch.object(
+            agent_call.subprocess, "Popen", return_value=fake_proc
+        ) as popen:
+            result = agent_call.dispatch(
+                "plan_narrator",
+                "hi",
+                agent="claude",
+                vault_dir=vault,
+                cycle_dir=cycle_dir,
+            )
+        assert result.exit_code == 0
+        argv = popen.call_args.args[0]
+        assert argv[argv.index("--model") + 1] == "claude-haiku-4-5"
+        sidecar = json.loads(
+            (cycle_dir / "agent-calls" / "plan_narrator.json").read_text("utf-8")
+        )
+        assert sidecar["tier"] == "basic"
+
+    def test_default_tiers_and_legacy_values_match_the_settings_loader(
+        self, agent_call
+    ) -> None:
+        """agent_call keeps its own copy (it must run without the package);
+        pin it to the loader's so the two cannot drift."""
+        from research_framework.pipeline import settings as loader
+
+        assert agent_call._DEFAULT_MODEL_TIERS == loader._DEFAULT_MODEL_TIERS
+        assert agent_call._OLD_COMPLEXITY_LABELS == loader._OLD_COMPLEXITY_LABELS
+
+    @pytest.mark.parametrize(
+        ("tiers_block", "stage_cfg"),
+        [
+            (None, "tier: basic"),
+            (None, "tier: flagship"),
+            ("basic: own-basic", "tier: basic"),
+            ("basic: own-basic", "tier: flagship"),
+            ("basic: own-basic", "tier: standard"),
+            ("basic: own-basic", "tier: expert\n    model: picked"),
+            ("basic: own-basic", "tier: basic\n    model: picked"),
+            ("standard: own-standard", "tier: standard"),
+            ("basic: own-basic", "model: picked"),
+        ],
+    )
+    def test_dispatch_model_agrees_with_the_settings_loader(
+        self, agent_call, tmp_path: Path, tiers_block, stage_cfg
+    ) -> None:
+        """The loader validates and agent_call dispatches: for every legacy and
+        new-vocabulary reading, both must pick the same model."""
+        import warnings
+
+        from research_framework.pipeline.settings import load_vault_settings
+
+        body = (
+            "pipeline:\n  max_cycles: 1\n  budget_usd: 1.0\n"
+            "default_executor:\n  runtime: claude\n  model: executor-default\n"
+        )
+        if tiers_block is not None:
+            body += f"tiers:\n  {tiers_block}\n"
+        body += f"stages:\n  scout:\n    {stage_cfg}\n"
+        (tmp_path / "settings.yaml").write_text(body, encoding="utf-8")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            loaded = load_vault_settings(tmp_path).resolve_model("scout")
+        executor = agent_call._resolve_executor(
+            agent_call._load_settings(tmp_path), "scout"
+        )
+        assert executor["model"] == (loaded or "executor-default")
+
+
 # ---------------------------------------------------------------------------
 # Per-runtime command construction
 # ---------------------------------------------------------------------------

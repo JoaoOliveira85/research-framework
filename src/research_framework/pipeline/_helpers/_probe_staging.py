@@ -82,7 +82,7 @@ def _run_probe_retrieval_and_cache(vault_dir: Path, spec, cycle_num: int) -> Non
             missing_prompt = True
 
         if missing_prompt and _probe_retrieval_enabled(vault_dir):
-            from ..plan_narrator import _bootstrap_scripts_agent_call, _load_vault_tier
+            from ..plan_narrator import _bootstrap_scripts_agent_call
 
             probe_lines = "\n".join(f"- {p.probe_id}: {p.question}" for p in probe_rows)
             prompt = (
@@ -94,14 +94,13 @@ def _run_probe_retrieval_and_cache(vault_dir: Path, spec, cycle_num: int) -> Non
                 f"Probes:\n{probe_lines}\n"
             )
             cycle_dir = vault_dir / "_pipeline" / "cycles" / f"cycle-{cycle_num:03d}"
-            tier = _load_vault_tier(vault_dir, "probe_retrieval")
             agent_call = _bootstrap_scripts_agent_call(vault_dir=vault_dir)
             call_result = None
             try:
+                # No `tier=`: dispatch resolves `stages.probe_retrieval.tier`.
                 call_result = agent_call.dispatch(
                     stage="probe_retrieval",
                     prompt=prompt,
-                    tier=tier,
                     vault_dir=vault_dir,
                     cycle_dir=cycle_dir,
                     timeout_s=120,

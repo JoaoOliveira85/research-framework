@@ -31,11 +31,13 @@ def test_load_well_formed(tmp_path: Path) -> None:
           max_cycles: 10
           budget_usd: 5.0
           backlog_promotion_threshold: 3
+        tiers:
+          basic: model-a
         stages:
           scout:
             tier: basic
           verifier:
-            tier: expert
+            tier: flagship
             enabled: false
         dimensions:
           - technical
@@ -47,7 +49,7 @@ def test_load_well_formed(tmp_path: Path) -> None:
     assert settings.budget_usd == 5.0
     assert settings.backlog_promotion_threshold == 3
     assert settings.stages["scout"] == StageSettings(tier="basic")
-    assert settings.stages["verifier"] == StageSettings(tier="expert", enabled=False)
+    assert settings.stages["verifier"] == StageSettings(tier="flagship", enabled=False)
     assert settings.dimensions == ["technical"]
     assert settings.default_agent == "codex"
 
@@ -168,13 +170,16 @@ def test_stage_convenience_method(tmp_path: Path) -> None:
         pipeline:
           max_cycles: 3
           budget_usd: 1.0
+        tiers:
+          basic: model-a
         stages:
           scout:
             tier: basic
         """,
     )
     settings = load_vault_settings(tmp_path)
-    assert settings.stage("plan_narrator") == StageSettings(tier="standard")
+    assert settings.stage("plan_narrator") == StageSettings()
+    assert settings.stage("plan_narrator").tier is None
     assert settings.stage("scout").tier == "basic"
 
 
@@ -286,8 +291,11 @@ def test_backwards_compat_existing_vault(tmp_path: Path) -> None:
             tier: expert
         """,
     )
-    settings = load_vault_settings(tmp_path)
-    assert settings.stage("plan_narrator").tier == "standard"
-    assert settings.stage("probe_retrieval").tier == "standard"
+    # The retired complexity label still loads for one release (issue #13).
+    with pytest.warns(FutureWarning, match="stages.verifier.tier"):
+        settings = load_vault_settings(tmp_path)
+    assert settings.stage("verifier").tier is None
+    assert settings.stage("plan_narrator").tier is None
+    assert settings.stage("probe_retrieval").tier is None
     assert settings.stage("probe_retrieval").enabled is True
     assert settings.extras["default_executor"]["runtime"] == "claude"

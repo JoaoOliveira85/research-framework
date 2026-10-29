@@ -32,6 +32,19 @@
 schema_version: 1
 
 # ---------------------------------------------------------------------------
+# Model tiers (spec 020 D7) — the table above, as config. Any stage may set
+# `tier: <name>` instead of `model:` (never both) and dispatches on
+# `tiers.<name>`; an undefined name is refused at load. Without this block
+# the tiers default to Anthropic ids, which codex cannot run. Codex's cheap
+# tier is gpt-5.4 at low reasoning: a tiered stage still needs its
+# `args: [-c, model_reasoning_effort=low]` for that.
+# ---------------------------------------------------------------------------
+tiers:
+  basic: gpt-5.4
+  normal: gpt-5.4
+  flagship: gpt-5.5
+
+# ---------------------------------------------------------------------------
 # Where generated vaults land.
 #
 # Same semantics as `output_dir:` in the Claude profile — see settings.yaml

@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `research-framework generate --help` and the README now show a cron one-liner and a launchd setup for an unattended weekly run (`generate --spec <spec> --output <vault> --resume --max-usd <X>`, which `./vault research` expands to). They will move to `pipeline <vault> run` when ROADMAP v1.1.0 row 7 ships (issue #19).
 
+### Changed
+
+- **`stages.<name>.tier` has one meaning on every stage: a model tier, resolved through the profile's `tiers:` map** (#13). It used to be a `basic|standard|expert` complexity label on most stages and a model tier on `schema_gen`/`source_extraction` only — and even there nothing dispatched on it, because the settings resolver had no production caller. `scripts/agent_call.py` now dispatches a stage that sets `tier` (and no `model`) on `tiers.<tier>`, applying the same rules as the settings loader (a test pins the two to the same model case by case). The loader refuses a stage that pairs `model` with a tier only the new vocabulary defines (`normal`, `flagship`, or a profile's own name), naming the stage, and refuses a tier in neither vocabulary, naming the stage and the known tiers. An unset `tier` is now `None`, not `"standard"`; the cost sidecar's `tier` is the stage's tier name, or `""` when it names none — the fake agent records the same. A tier that resolves through a built-in (Anthropic) default because `tiers:` omits it, while the stage runs on another runtime, warns, naming the settings file. Every shipped profile (`settings*.yaml`) now defines `tiers:` from its own model table — before, the codex/cursor/ollama/opencode profiles fell back to Anthropic ids. Specs 076 and 078 carry the new rule; the `basic|standard|expert` / `"standard"` examples in shipped specs 028 (`data-model.md`, `quickstart.md`) and 018 (fake-agent contract) are superseded by them and left as written. (test: `tests/pipeline/test_tier_resolution.py`, `tests/scripts/test_agent_call.py::TestStageTierResolution`, `tests/_helpers/test_fake_agent_parity.py`)
+- **A call with no tier is reported as `untiered`** in the cycle report's `per_tier_breakdown` (was `unknown`), the `--estimate-only` table (was the tier column left blank) and the approval summary — one label, `budget_guard.UNTIERED_LABEL`. (test: `tests/pipeline/test_reporter_cost.py::test_untiered_calls_share_one_bucket_label`, `tests/cli/test_estimate_only.py::test_render_labels_an_untiered_stage_like_the_cycle_report`)
+
+### Deprecated
+
+- **The 1.0.1 complexity-label reading of `tier` is deprecated.** For one release, a `tier` value that can only mean the old label loads with a `FutureWarning` naming the settings file and the stage, and selects no model: any of `basic|normal|flagship|standard|expert` in a `settings.yaml` with no `tiers:` block (the warning says to add one to opt in; a name in neither vocabulary is still refused); `basic`, `standard` or `expert` beside `model:`; and `standard`/`expert` when `tiers:` does not define them. The next release will refuse these. (test: `tests/pipeline/test_tier_resolution.py::test_no_tiers_block_reads_tier_as_the_legacy_label`, `::test_legacy_complexity_tier_beside_model_warns_instead_of_refusing`, `::test_legacy_complexity_tier_warns_and_is_ignored`)
+
 ### Removed
 
 - The scaffold no longer writes `_pipeline/systemd/vault-research.service` or its `.tmpl-versions.json`, and the `vault-research.service.j2` template is gone (issue #19). The unit shipped without a timer, so it ran `./vault research` once per login rather than weekly. Schedule with cron or launchd instead (see `generate --help`).
@@ -20,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Existing vaults: `./vault update` leaves a `_pipeline/systemd/` directory you already have untouched (nothing is deleted or re-rendered). Delete it, or keep it if you wired it to your own timer.
 - Scripts passing `--force-budget` (with or without `RF_FORCE_BUDGET_ACK=1`) must instead raise the capped limit in the vault's `settings.yaml` and then run `generate --resume`. `--approve` / `--approve-all` / `--reject` are unchanged.
+- **Nothing breaks on upgrade**: every `tier` a 1.0.1 vault could load still loads; the readings above only warn. Act on the warnings before the next release, which refuses them.
+- A vault generated from `settings.yaml` carries `tier: standard` on `plan_narrator` and `probe_retrieval`: delete those two lines. Neither ever selected a model, so removing them changes nothing.
+- A codex/cursor/ollama/opencode vault has no `tiers:` block (`./vault update` never rewrites `settings.yaml`), so its `tier:` lines are ignored with a warning and its stages keep their executor's model. To opt in, copy the profile's new `tiers:` block into the vault's `settings.yaml`; then `tier: basic` runs on that profile's cheap model.
+- In a vault with a `tiers:` block, a stage that sets `tier: basic` (no `model:`) now runs on `tiers.basic` rather than its executor's default model. That includes `schema_gen` / `source_extraction`, which `settings.yaml`-derived vaults ship with `tier: basic` — latent until those stages dispatch through `agent_call` (today neither does).
+- A stage that sets `tier: basic` together with `model:` keeps its `model:` and warns; remove `tier:`. `tier: normal`/`flagship` together with `model:` no longer loads — keep one.
+- `limits.tier_thresholds` is now keyed by model tier name: `tier_thresholds.standard` / `.expert` no longer match any new sidecar (an untiered call records `""`), so re-key those thresholds to `basic` / `normal` / `flagship` — or drop them.
 
 ## [1.0.1] - 2026-10-12
 

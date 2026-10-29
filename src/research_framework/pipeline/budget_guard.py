@@ -676,6 +676,12 @@ def resolve_max_tokens(vault_settings: VaultSettings, stage: str) -> int:
     return 4096
 
 
+# The label a call with no model tier is shown under (issue #13): the
+# cycle report's per-tier bucket, the preflight table and the approval
+# summary all use it, so the three agree on what an untiered call is.
+UNTIERED_LABEL = "untiered"
+
+
 def collect_tier_cost_warnings(
     sidecars: list[dict[str, Any]], tier_thresholds: dict[str, float]
 ) -> list[dict[str, Any]]:
@@ -742,7 +748,7 @@ class CycleBudgetSession:
         stage: str,
         prompt_text: str = "",
         agent: str = "claude",
-        tier: str = "standard",
+        tier: str = "",
         max_tokens: int = 4096,
     ) -> None:
         from research_framework.pipeline.cost_estimator import estimate_dispatch

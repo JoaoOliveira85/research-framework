@@ -203,3 +203,26 @@ def test_phase1_report_survives_a_malformed_cycle_file(
         assert "\n| 2 | research |" not in summary
     else:
         assert bad_row in summary
+
+
+def test_untiered_calls_share_one_bucket_label(tmp_path: Path) -> None:
+    """Issue #13 review: a call with no tier (a stage that sets `model`, or a
+    legacy label) lands in the same "untiered" bucket the preflight shows,
+    not an "unknown" that reads like missing data."""
+    import shutil
+
+    from research_framework.pipeline.budget_guard import UNTIERED_LABEL
+
+    vault = tmp_path / "vault"
+    shutil.copytree(_FIXTURE_VAULT, vault)
+    calls = vault / "_pipeline" / "cycles" / "cycle-001" / "agent-calls"
+    row = json.loads((calls / "scout.json").read_text(encoding="utf-8"))
+    row.update({"stage": "verifier", "tier": "", "cost_usd": 0.25})
+    (calls / "verifier.json").write_text(json.dumps(row), encoding="utf-8")
+    tally = CycleSpendTally(cycle_num=1)
+    refresh_actuals(vault, 1, tally)
+    append_cycle_cost_report(vault, 1, tally=tally, limits=LimitsSettings())
+    breakdown = _report_payload(vault, 1)["per_tier_breakdown"]
+    assert UNTIERED_LABEL == "untiered"
+    assert breakdown[UNTIERED_LABEL] == pytest.approx(0.25)
+    assert "unknown" not in breakdown

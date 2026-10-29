@@ -13,6 +13,7 @@ from typing import Any
 from research_framework.cli._tty import is_interactive_tty
 from research_framework.pipeline.budget_guard import (
     PAUSE_REASON_SETTING,
+    UNTIERED_LABEL,
     ApprovalDecision,
     ApprovalRequiredMarker,
     BudgetPausedMarker,
@@ -93,7 +94,7 @@ def _render_approval_summary(marker: ApprovalRequiredMarker) -> str:
     """
     lines = [
         f"APPROVAL_REQUIRED — stage {marker.stage_name!r}, cycle {marker.cycle_number}",
-        f"  tier                   {marker.tier}",
+        f"  tier                   {marker.tier or UNTIERED_LABEL}",
     ]
     if marker.agent:
         lines.append(f"  agent                  {marker.agent}")
