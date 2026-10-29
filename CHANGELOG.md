@@ -1431,9 +1431,8 @@ this block; the private commit history is not carried over, and its versions
   below it passed unchecked. The frontmatter now closes at a `---` line, read
   by a new `vault.frontmatter.split_frontmatter` helper for the readers that
   must not raise on malformed YAML. (regression test:
-  `tests/pipeline/test_skill_check.py::test_a_skill_with_dashes_in_a_value_is_not_overwritten_from_the_bundle`,
-  `::test_broken_yaml_below_dashes_in_a_value_is_still_flagged`,
-  `tests/vault/test_frontmatter.py::test_split_does_not_end_the_frontmatter_at_dashes_inside_a_line`)
+  `tests/vault/test_frontmatter.py::test_split_does_not_end_the_frontmatter_at_dashes_inside_a_line`,
+  the preflight's own tests were removed with it in #12)
 
 - **A finished note with `---` inside a frontmatter value is no longer a stub
   every cycle.** `pipeline/stubs.py` split on the first `---` substring, so a
