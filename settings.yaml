@@ -150,8 +150,11 @@ pipeline:
   # LIFETIME cycle ceiling: the highest cycle NUMBER this vault may reach
   # (spec 061 ladder; `--max-cycles` overrides). `0` means NO lifetime
   # ceiling, the same reading of zero `budget_usd` has (issue #33) — the run
-  # then stops on coverage, fuel or the dollar caps. Negative or non-integer
-  # values are refused.
+  # then stops on coverage, fuel or the dollar caps. A multi-cycle run with `0`
+  # also needs `cycles_per_run` below or `budget_usd > 0` (or a CLI bound), or
+  # it is refused. Run `./vault update` first: an older vault's
+  # scripts/validate_cycle.py reads `0` as "ceiling reached". Negative or
+  # non-integer values are refused.
   max_cycles: 20
   # Optional per-RUN cap: one `./vault research` runs at most this many cycles
   # (a run starting at cycle k stops after k+N-1). The settings spelling of

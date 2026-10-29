@@ -154,7 +154,9 @@ features the keys configure, which live in their own specs (`033`, `061`,
   error. The optional `pipeline.cycles_per_run: N` (integer ≥1) MUST cap a run
   that starts at cycle *k* at cycle *k+N−1* — the settings spelling of
   `--more-cycles N` — or at a finite lifetime ceiling if that is lower;
-  `--more-cycles` / `--max-cycles` MUST win over it.
+  `--more-cycles` / `--max-cycles` MUST win over it. A multi-cycle run with
+  `max_cycles: 0`, no per-run cap and no dollar cap MUST be refused at run
+  resolution (exit 2, naming the remedies); loading the file MUST NOT fail.
 - **FR-011**: `limits.budget_usd` MUST be accepted as a deprecated alias for
   `limits.cycle_budget_usd`, migrating only when the canonical key is absent
   and warning once per process.
