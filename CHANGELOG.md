@@ -67,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Your shim must be refreshed once.** The re-render and clean-up run from `./vault update`'s own script, which a vault's existing `vault` shim does not contain: run `./vault regenerate-shim` (then `./vault update`) to get them. A vault whose shim you have customised needs the new `RVTMPL` block copied across by hand from `templates/vault-script.sh.j2`.
 - **A corpus-level template you edited is left in place** but no longer read by `check_template_compliance.py` or the quality metrics (and `verify` only falls back to it); fold its sections into the spec and delete it.
+- **A legacy skeleton that a note links to is kept.** `[[concept]]`, `[[Case Law]]`, `[[x/concept#Heading]]` and `related:` entries resolved to `<corpus>/_templates/<type>.md`; removing it would leave a dead link, so cleanup resolves links the way the validator does (case, space/`_`/`-`, path prefix, anchor, alias), keeps the file, and `./vault update` prints `kept <file>: linked from N note(s)`. Once the links are gone (or point at a real note), the next update removes the file.
 - **A stale legacy skeleton is kept too.** Cleanup deletes `<corpus>/_templates/<type>.md` only when it equals what the old writer produced for the *current* spec. If the spec changed since the vault was first scaffolded (a section added, a question reworded), the old file no longer matches and stays; delete `<corpus>/_templates/` by hand once you have nothing in it you want.
 
 ## [1.0.1] - 2026-10-12

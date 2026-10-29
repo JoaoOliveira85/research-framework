@@ -314,6 +314,8 @@ class TemplateRefresh:
     removed: tuple[str, ...]
     overwritten: tuple[tuple[str, str], ...] = ()
     """``(template, where its previous content was saved)``, vault-relative."""
+    kept_linked: tuple[tuple[str, int], ...] = ()
+    """``(legacy corpus template, notes linking to it)``: kept, not removed."""
 
 
 def refresh_root_templates(vault: Path) -> TemplateRefresh | None:
@@ -345,13 +347,14 @@ def refresh_root_templates(vault: Path) -> TemplateRefresh | None:
 
     try:
         result = render_note_type_templates(spec, vault)
-        removed = remove_legacy_corpus_templates(spec, vault)
+        cleanup = remove_legacy_corpus_templates(spec, vault)
     except Exception as exc:  # noqa: BLE001 - a Jinja or I/O error must not fail an upgrade
         _LOG.warning("could not refresh vault note templates: %s", exc)
         return None
     return TemplateRefresh(
         rendered=tuple(rel(p) for p in result.written),
-        removed=tuple(removed),
+        removed=tuple(cleanup.removed),
+        kept_linked=tuple(cleanup.kept_linked.items()),
         overwritten=tuple((rel(p), rel(saved)) for p, saved in result.overwritten),
     )
 

@@ -351,6 +351,8 @@ if result is not None:
         print(f"[update] re-rendered {len(result.rendered)} note template(s): {', '.join(result.rendered)}")
     if result.removed:
         print(f"[update] removed {len(result.removed)} corpus-level template(s): {', '.join(result.removed)}")
+    for template, count in result.kept_linked:
+        print(f"[update] kept {template}: linked from {count} note(s)")
 RVTMPL
     # A git archive of the repo carries the MAINTAINER dev-setup install.sh at
     # its root (it runs `pip install -e` and would try to pip-install this

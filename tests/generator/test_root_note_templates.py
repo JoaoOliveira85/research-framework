@@ -332,7 +332,7 @@ def test_a_non_utf8_corpus_template_is_kept_not_a_crash(tmp_path: Path) -> None:
     path.parent.mkdir(parents=True)
     path.write_bytes(LATIN1)
 
-    assert remove_legacy_corpus_templates(spec, vault) == []
+    assert remove_legacy_corpus_templates(spec, vault).removed == []
     assert path.read_bytes() == LATIN1
 
 
@@ -395,7 +395,7 @@ def test_remove_legacy_deletes_framework_written_and_keeps_operator_files(
     operator_added = tmpl / "my-own-note-type.md"
     operator_added.write_text("# mine\n", encoding="utf-8")
 
-    removed = remove_legacy_corpus_templates(spec, vault)
+    removed = remove_legacy_corpus_templates(spec, vault).removed
 
     assert sorted(removed) == _rel(vault, list(framework.values()))
     assert sorted(removed) == [
@@ -415,7 +415,7 @@ def test_remove_legacy_keeps_a_file_the_operator_edited(tmp_path: Path) -> None:
     edited = path.read_text(encoding="utf-8") + "\nOperator addition.\n"
     path.write_text(edited, encoding="utf-8")
 
-    assert remove_legacy_corpus_templates(spec, vault) == []
+    assert remove_legacy_corpus_templates(spec, vault).removed == []
     assert path.read_text(encoding="utf-8") == edited
 
 
@@ -429,8 +429,142 @@ def test_remove_legacy_keeps_a_stale_skeleton_the_spec_no_longer_matches(
     (path,) = _seed_legacy(vault, spec).values()
     spec.note_types[0].required_sections.append("Added Later")
 
-    assert remove_legacy_corpus_templates(spec, vault) == []
+    assert remove_legacy_corpus_templates(spec, vault).removed == []
     assert path.is_file()
+
+
+def _link_note(vault: Path, rel: str, body: str, *, related: list[str] | None = None):
+    path = vault / "data_vault" / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fm = "---\ntype: note\nsummary: s\n"
+    if related:
+        fm += "related:\n" + "".join(f'  - "{r}"\n' for r in related)
+    path.write_text(fm + "---\n\n" + body, encoding="utf-8")
+    return path
+
+
+def test_a_linked_legacy_template_is_kept_and_an_unlinked_one_removed(
+    tmp_path: Path,
+) -> None:
+    """``[[concept]]`` resolved to the skeleton; removing it would kill the link."""
+    spec = _spec(two_types=True)
+    vault = tmp_path / "v"
+    scaffold(spec, vault)
+    _seed_legacy(vault, spec)
+    _link_note(vault, "01 - Concepts/real.md", "See [[concept]] for the shape.\n")
+
+    result = remove_legacy_corpus_templates(spec, vault)
+
+    assert result.removed == ["data_vault/_templates/case_law.md"]
+    assert result.kept_linked == {"data_vault/_templates/concept.md": 1}
+    assert (vault / "data_vault" / "_templates" / "concept.md").is_file()
+    assert not (vault / "data_vault" / "_templates" / "case_law.md").exists()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "See [[Case Law]].\n",  # space variant of the snake_case stem
+        "See [[CASE LAW|the case law shape]].\n",  # case + alias
+        "See [[Case Law#Holding]].\n",  # heading anchor
+        "See [[02 - Case Law/case_law]].\n",  # path-prefixed
+    ],
+)
+def test_link_variants_resolve_the_way_the_validator_resolves_them(
+    tmp_path: Path, body: str
+) -> None:
+    spec = _spec(two_types=True)
+    vault = tmp_path / "v"
+    scaffold(spec, vault)
+    _seed_legacy(vault, spec)
+    _link_note(vault, "02 - Case Law/real.md", body)
+
+    result = remove_legacy_corpus_templates(spec, vault)
+
+    assert result.kept_linked == {"data_vault/_templates/case_law.md": 1}
+    assert (vault / "data_vault" / "_templates" / "case_law.md").is_file()
+
+
+def test_a_related_frontmatter_entry_counts_as_a_link(tmp_path: Path) -> None:
+    spec = _spec(two_types=True)
+    vault = tmp_path / "v"
+    scaffold(spec, vault)
+    _seed_legacy(vault, spec)
+    _link_note(vault, "01 - Concepts/real.md", "No body link.\n", related=["Concept"])
+    _link_note(vault, "01 - Concepts/other.md", "x\n", related=["[[concept]]"])
+
+    result = remove_legacy_corpus_templates(spec, vault)
+
+    assert result.kept_linked == {"data_vault/_templates/concept.md": 2}
+
+
+def test_an_acronym_stub_inside_the_templates_dir_counts_as_a_linking_note(
+    tmp_path: Path,
+) -> None:
+    spec = _spec(two_types=True)
+    vault = tmp_path / "v"
+    scaffold(spec, vault)
+    _seed_legacy(vault, spec)
+    stub = vault / "data_vault" / "_templates" / "cb.md"
+    stub.write_text(
+        "---\nnote_type: alias\nredirect_to: concept\n---\nSee [[concept]].\n"
+    )
+
+    result = remove_legacy_corpus_templates(spec, vault)
+
+    assert result.kept_linked == {"data_vault/_templates/concept.md": 1}
+    assert stub.is_file()
+
+
+def test_the_count_is_distinct_notes_not_links(tmp_path: Path) -> None:
+    spec = _spec(two_types=True)
+    vault = tmp_path / "v"
+    scaffold(spec, vault)
+    _seed_legacy(vault, spec)
+    _link_note(vault, "a.md", "[[concept]] and again [[Concept]]\n")
+    _link_note(vault, "b.md", "[[concept]]\n")
+
+    assert remove_legacy_corpus_templates(spec, vault).kept_linked == {
+        "data_vault/_templates/concept.md": 2
+    }
+
+
+def test_links_in_non_note_dirs_do_not_keep_a_template_when_corpus_is_dot(
+    tmp_path: Path,
+) -> None:
+    """With ``vault_corpus_dir: "."`` the scan must not wade through the venv etc."""
+    spec = _spec(corpus=".", two_types=True)
+    vault = tmp_path / "v"
+    scaffold(spec, vault)
+    _seed_legacy(vault, spec)  # <vault>/_templates/{concept,case_law}.md
+    noise = vault / ".venv" / "lib" / "readme.md"
+    noise.parent.mkdir(parents=True)
+    noise.write_text("[[case_law]]\n", encoding="utf-8")
+    (vault / "_pipeline").mkdir(exist_ok=True)
+    (vault / "_pipeline" / "log.md").write_text("[[case_law]]\n", encoding="utf-8")
+
+    result = remove_legacy_corpus_templates(spec, vault)
+
+    assert "_templates/case_law.md" in result.removed
+
+
+def test_update_reports_a_kept_linked_template(tmp_path: Path) -> None:
+    vault, _spec_ = _old_vault(tmp_path)
+    _link_note(vault, "01 - Concepts/real.md", "[[concept]]\n")
+
+    result = refresh_root_templates(vault)
+
+    assert result is not None
+    assert result.removed == ("data_vault/_templates/case_law.md",)
+    assert result.kept_linked == (("data_vault/_templates/concept.md", 1),)
+    assert (vault / "data_vault" / "_templates" / "concept.md").is_file()
+
+
+def test_the_shim_reports_each_kept_linked_template() -> None:
+    from research_framework.generator.scaffold import render_vault_shim
+
+    shim = render_vault_shim(Path("/tmp/vault-under-test"), _spec())
+    assert "kept {template}: linked from {count} note(s)" in shim
 
 
 def test_remove_legacy_drops_the_directory_when_it_ends_up_empty(
@@ -452,7 +586,7 @@ def test_remove_legacy_is_a_noop_without_a_corpus_templates_dir(
     spec = _spec()
     vault = tmp_path / "v"
     scaffold(spec, vault)
-    assert remove_legacy_corpus_templates(spec, vault) == []
+    assert remove_legacy_corpus_templates(spec, vault).removed == []
 
 
 def test_scaffold_over_an_old_vault_removes_the_framework_written_copies(
@@ -492,7 +626,7 @@ def test_remove_legacy_with_corpus_dir_dot_never_removes_the_directory(
     vault = tmp_path / "v"
     scaffold(spec, vault)
 
-    assert remove_legacy_corpus_templates(spec, vault) == []
+    assert remove_legacy_corpus_templates(spec, vault).removed == []
     assert (vault / "_templates" / "concept.md").is_file()
 
 

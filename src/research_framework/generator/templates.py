@@ -12,6 +12,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from .._assets import asset_path
 from ..pipeline.abstraction import resolve_forbidden_filename_prefixes
 from ..spec.schema import NoteTypeConfig, SpecConfig
+from ..vault.frontmatter import FrontmatterParseError, parse_frontmatter_str
 
 
 def _templates_src() -> Path:
@@ -262,7 +263,66 @@ def _legacy_corpus_template(nt: NoteTypeConfig) -> str:
     return "\n".join(lines)
 
 
-def remove_legacy_corpus_templates(spec: SpecConfig, vault_dir: Path) -> list[str]:
+@dataclass
+class LegacyCleanup:
+    """What :func:`remove_legacy_corpus_templates` did, as vault-relative paths."""
+
+    removed: list[str] = field(default_factory=list)
+    kept_linked: dict[str, int] = field(default_factory=dict)
+    """Framework-written skeletons left in place, with how many notes link to each."""
+
+
+_WIKILINK = re.compile(r"\[\[([^\]|#]+?)(?:[#|][^\]]*)?\]\]")
+# Under a vault-root corpus (``vault_corpus_dir: "."``) these are not notes.
+_NOT_NOTE_DIRS = frozenset({"_pipeline", "raw_data", "scripts", "modules"})
+
+
+def _link_targets(text: str) -> set[str]:
+    """Every wikilink target in a note: body ``[[links]]`` and ``related:`` entries."""
+    targets = {m.strip() for m in _WIKILINK.findall(text)}
+    try:
+        fm, _body = parse_frontmatter_str(text)
+    except FrontmatterParseError:
+        fm = {}
+    related = fm.get("related") if fm else None
+    if isinstance(related, list):
+        for entry in related:
+            inner = _WIKILINK.search(str(entry))
+            targets.add((inner.group(1) if inner else str(entry)).strip())
+    targets.discard("")
+    return targets
+
+
+def _linking_notes(corpus: Path, stems: set[str], skip: set[Path]) -> dict[str, int]:
+    """For each stem in *stems*, how many corpus notes link to it.
+
+    Resolves a link the way the validator and indexer do: case-insensitive, a
+    path prefix is dropped to its last segment, a heading anchor or alias is
+    ignored, and spaces match ``_`` / ``-`` in the stem.
+    """
+    from ..pipeline.wikilinks import _resolve_titlecase_stem
+
+    counts = {stem: 0 for stem in stems}
+    for path in sorted(corpus.rglob("*.md")):
+        parts = path.relative_to(corpus).parts
+        if path in skip or any(
+            part.startswith(".") or part in _NOT_NOTE_DIRS for part in parts[:-1]
+        ):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        hit = {
+            _resolve_titlecase_stem(target.rsplit("/", 1)[-1], stems)
+            for target in _link_targets(text)
+        }
+        for stem in hit - {None}:
+            counts[stem] += 1  # type: ignore[index]
+    return counts
+
+
+def remove_legacy_corpus_templates(spec: SpecConfig, vault_dir: Path) -> LegacyCleanup:
     """Delete the corpus-level templates an older framework wrote.
 
     Before issue #20 scaffold also wrote a second, section-only skeleton per note
@@ -271,27 +331,46 @@ def remove_legacy_corpus_templates(spec: SpecConfig, vault_dir: Path) -> list[st
     operator's own file — or one they edited — is never touched. The directory
     goes too, but only if that leaves it empty.
 
-    Returns the removed paths, relative to *vault_dir* with ``/`` separators.
+    A skeleton that a note links to (``[[concept]]``, ``related:``) is kept: the
+    link resolved to it, and removing it would leave a dead link. These are
+    reported in ``kept_linked``.
+
+    ``removed`` holds paths relative to *vault_dir* with ``/`` separators.
     """
-    tmpl_dir = vault_dir / spec.vault_corpus_dir / "_templates"
+    result = LegacyCleanup()
+    corpus = vault_dir / spec.vault_corpus_dir
+    tmpl_dir = corpus / "_templates"
     if not tmpl_dir.is_dir():
-        return []
-    removed: list[str] = []
+        return result
+    ours: list[Path] = []
     for nt in spec.note_types:
         path = tmpl_dir / f"{nt.name.replace(' ', '_').lower()}.md"
         try:
             # Bytes, not text: anything unreadable or non-UTF-8 is not ours.
-            if path.read_bytes() != _legacy_corpus_template(nt).encode("utf-8"):
-                continue
+            if path.read_bytes() == _legacy_corpus_template(nt).encode("utf-8"):
+                ours.append(path)
+        except OSError:
+            continue
+    links = (
+        _linking_notes(corpus, {p.stem.lower() for p in ours}, set(ours))
+        if ours
+        else {}
+    )
+    for path in ours:
+        rel = path.relative_to(vault_dir).as_posix()
+        if count := links.get(path.stem.lower(), 0):
+            result.kept_linked[rel] = count
+            continue
+        try:
             path.unlink()
         except OSError:
             continue
-        removed.append(path.relative_to(vault_dir).as_posix())
+        result.removed.append(rel)
     try:
         tmpl_dir.rmdir()
     except OSError:
         pass  # not empty: the operator has files there
-    return removed
+    return result
 
 
 def _env(templates_dir: Path) -> Environment:
