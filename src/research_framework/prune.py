@@ -211,11 +211,20 @@ def prune_vault(
 
     if not yes:
         try:
-            answer = input("Proceed? [y/N] ").strip().lower()
+            answer: str | None = input("Proceed? [y/N] ").strip().lower()
         except EOFError:
-            answer = ""
+            answer = None
         if answer not in ("y", "yes"):
             print("[prune] aborted")
+            reason = (
+                "no answer (stdin is not a terminal)"
+                if answer is None
+                else "not confirmed"
+            )
+            print(
+                f"[prune] aborted: {reason}. Answer y at the prompt, or pass --yes.",
+                file=sys.stderr,
+            )
             # Spec 077 D4/T003: "the operator said no" is a distinct outcome
             # from "there was nothing to prune", and a caller that cannot tell
             # them apart will report a prune that never happened. It is the
