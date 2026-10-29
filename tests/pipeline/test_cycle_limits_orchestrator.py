@@ -201,7 +201,9 @@ def test_unlimited_ceiling_logs_unlimited_not_zero(
     with caplog.at_level(logging.INFO):
         orch.run_cycles(_spec(vault), vault, budget=_budget(max_usd=1.0))
 
-    starts = [r.getMessage() for r in caplog.records if "starting cycle" in r.getMessage()]
+    starts = [
+        r.getMessage() for r in caplog.records if "starting cycle" in r.getMessage()
+    ]
     assert starts == ["[orchestrator] starting cycle 1/unlimited"]
 
 

@@ -154,9 +154,7 @@ def render_active(
 
     if budgeted is not None:
         # `0` is no lifetime ceiling (issue #33): "of unlimited", never "of 0".
-        headline = (
-            f"CYCLE {cycle} of {format_cycle_ceiling(budgeted)} — stage: {stage}"
-        )
+        headline = f"CYCLE {cycle} of {format_cycle_ceiling(budgeted)} — stage: {stage}"
     else:
         headline = f"CYCLE {cycle} — stage: {stage}"
 
