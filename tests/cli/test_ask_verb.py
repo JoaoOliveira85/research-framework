@@ -224,6 +224,53 @@ def test_an_escalation_that_would_be_refused_dispatches_nothing(
     assert names in capsys.readouterr().err
 
 
+def _vault_with_cycles(tmp_path: Path, completed: int, **pipeline: Any) -> Path:
+    """A vault whose cycles 1..*completed* finished, under *pipeline* settings."""
+    vault = _vault(tmp_path)
+    _edit_settings(vault, lambda s: s["pipeline"].update(pipeline))
+    cycles_dir = vault / "_pipeline" / "cycles"
+    cycles_dir.mkdir(parents=True, exist_ok=True)
+    for n in range(1, completed + 1):
+        (cycles_dir / f"cycle-{n:03d}-quality-report.json").write_text("{}")
+    return vault
+
+
+@pytest.mark.parametrize(
+    "pipeline",
+    [
+        # Issue #33: `max_cycles: 0` is no lifetime ceiling. An escalation is
+        # ONE cycle, so it needs no per-run or dollar cap to be bounded — the
+        # single-cycle exemption `require_bounded_run` gives the `cycle` verb.
+        pytest.param({"max_cycles": 0, "budget_usd": 0}, id="unlimited-uncapped"),
+        pytest.param({"max_cycles": 0, "cycles_per_run": 2}, id="unlimited-per-run"),
+    ],
+)
+def test_an_unlimited_ceiling_lets_the_escalation_run_one_cycle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pipeline: dict[str, Any]
+) -> None:
+    vault = _vault_with_cycles(tmp_path, completed=7, **pipeline)
+    cycles = _record_cycles(monkeypatch)
+
+    rc = _ask(vault, "--escalate")
+
+    assert rc == 0
+    assert [c["cycle_num"] for c in cycles] == [8]
+
+
+def test_cycles_per_run_does_not_lift_a_finite_ceiling_for_an_escalation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """Issue #33: the lower of the per-run cap and the lifetime ceiling wins."""
+    vault = _vault_with_cycles(tmp_path, completed=3, max_cycles=3, cycles_per_run=5)
+    cycles = _record_cycles(monkeypatch)
+
+    rc = _ask(vault, "--escalate")
+
+    assert rc == 2
+    assert cycles == [] and _answers(vault) == []
+    assert "pipeline.max_cycles" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize(("setup", "names"), _REFUSALS)
 def test_a_plain_ask_is_not_affected_by_the_escalation_refusals(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, setup: Any, names: str
