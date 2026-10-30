@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 
 from ..spec.schema import SpecConfig
 from . import plan_narrator, quality_report, research_plan, vault_commit, vault_git
+from .abort_diagnosis import diagnose_cycle_abort
 from .archived import (  # noqa: F401 - is_archived re-exported (spec 071)
     ARCHIVED_EXIT,
     archived_refusal_message,
@@ -792,6 +793,16 @@ def run_single_cycle(
         exit_reason=abort_reason if aborted else None,
     )
     _LOG.info(f"[cycle {cycle_num}] summary: {summary_path}")
+    if returncode == 2:
+        # Issue #44 / spec 070 FR6: the steps that return 2 narrate at INFO or
+        # not at all, and every caller above this line turns the code into the
+        # process exit status. Without an ERROR here `cli.main` reports a
+        # framework bug instead of what ended the cycle.
+        _LOG.error(
+            "[orchestrator] cycle %d aborted (exit 2): %s",
+            cycle_num,
+            diagnose_cycle_abort(vault_dir, cycle_num, abort_reason=abort_reason),
+        )
     return returncode
 
 
