@@ -8,6 +8,8 @@ created: 2026-08-27
 
 **Status:** shipped(2026-08-27, PR #195) — SHIPPED v1.0.0 (PR #195, squash `6785400`) — applied to `codebase-vault`.
 
+**Amended 2026-10-28 (issue #26), SHIPPED v2.0.0**: § Amendment extends the refused-verb list (`cycle`, `pipeline` run verbs, `ask --escalate`, ...) and adds the `ARCHIVED` status line and agent-facing notice. The contract above is otherwise as shipped in 1.0.0.
+
 # Feature Specification: archived vaults
 
 ## Why

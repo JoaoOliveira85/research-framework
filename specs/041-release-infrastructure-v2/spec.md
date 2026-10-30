@@ -3,7 +3,7 @@
 **Feature Branch**: `041-release-infrastructure-v2`
 **Created**: 2026-05-27 (promoted from `docs/ROADMAP.md` queue item #8 + Horizon 2 "Release & distribution" during post-Wave-1 doc restructure).
 **Status**: planned — DRAFT, and **its premise is superseded**. Deferred to
-v2.0.0 candidates (`docs/ROADMAP.md`), issue #57.
+the next-major candidates (`docs/ROADMAP.md`), issue #57.
 
 > **Re-scope before planning (2026-09-10).** Two of this spec's three pillars
 > describe a world that ended with v1.2.0. **US1 / FR-001…FR-007 (per-PR CI)**
