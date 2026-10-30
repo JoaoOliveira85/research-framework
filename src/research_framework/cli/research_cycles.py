@@ -10,6 +10,7 @@ from ..spec.schema import SpecValidationError
 from ..spec.simple import load as load_spec
 from ..spec.validator import validate
 from ._budget_resolve import BudgetError, resolve_cycle_budget_from_path
+from ._common import refuse_if_archived
 
 #: The two pause markers, in the precedence the resume path resolves them
 #: (budget-marker.contract.md §4: budget first, approval second).
@@ -65,6 +66,12 @@ def _cmd_cycle(args: argparse.Namespace) -> int:
     except ImportError:
         print("pipeline not available in this build", file=sys.stderr)
         return 2
+
+    # Issue #26 / spec 071: an archived vault takes no research cycle, so say
+    # so before anything else can object — config nits, a standing pause, or a
+    # cost preflight for a cycle that will never run.
+    if (archived_rc := refuse_if_archived(args.vault)) is not None:
+        return archived_rc
 
     # A standing pause outranks every other complaint this verb could make:
     # it is the one fact that explains why the vault is where it is, and a
@@ -376,6 +383,12 @@ def _cmd_pipeline(args: argparse.Namespace) -> int:
 
     sub = args.pipeline_cmd
     quiet: bool = getattr(args, "quiet", False)
+
+    # Issue #26 / spec 071: every run verb writes research content; `status`
+    # and `prune-runs` only read or tidy run records and stay open.
+    if sub in {"full", "collect", "extract", "scout", "resume", "finish"}:
+        if (archived_rc := refuse_if_archived(vault)) is not None:
+            return archived_rc
 
     # Issue #232: `--budget-cap` was accepted here, threaded into `run_full`,
     # documented as "passed to agent invocations" — and read by nothing in

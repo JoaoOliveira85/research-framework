@@ -142,6 +142,16 @@ def _cmd_regenerate_agents(args: argparse.Namespace) -> int:
         print(f"error: not a directory: {vault_root}", file=sys.stderr)
         return 2
 
+    if getattr(args, "notice_only", False):
+        # Issue #26: bring ONLY the archived notice in line. No spec, no prompt:
+        # nothing outside the marked blocks is read back or rewritten, so a
+        # customised command survives.
+        from ..pipeline.archived import sync_archived_notice
+
+        for path in sync_archived_notice(vault_root):
+            print(f"[regenerate-agents] updated archived notice in {path.name}")
+        return 0
+
     try:
         spec_dict = load_parsed_spec(vault_root, write_cache=True, strict=True)
     except ParsedSpecError as exc:
@@ -204,6 +214,14 @@ def _cmd_regenerate_agents(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+
+    # Issue #26: CLAUDE.md / AGENTS.md are not templates-of-record here (they
+    # grow hand edits and the topic index), so only the archived notice is
+    # brought in line — added when the vault is archived, removed when not.
+    from ..pipeline.archived import sync_archived_notice
+
+    for path in sync_archived_notice(vault_root):
+        print(f"[regenerate-agents] updated archived notice in {path.name}")
 
     print(f"wrote {len(written)} files")
     return 0

@@ -16,7 +16,7 @@ from ..spec.schema import SpecValidationError
 from ..spec.simple import load as load_spec
 from ..spec.validator import validate
 from ._budget_resolve import BudgetError, resolve_cycle_budget_from_path
-from ._common import _run_phase1_gate
+from ._common import _run_phase1_gate, refuse_if_archived
 from .research_cycles import _regenerate_plan_only
 from .research_phase3 import _prepopulate_pipeline, _run_phase3
 from .research_resume import _resume
@@ -29,7 +29,6 @@ def _estimate_only_for_generate(args: argparse.Namespace) -> int:
     number ``--resume`` would resolve — so the estimate belongs to the run the
     operator is actually about to start, not to cycle 1 of a hypothetical one.
     """
-    from ..pipeline.orchestrator import is_archived
     from .research_cycles import _estimate_only
     from .research_resume import _resolve_resume_cycle, _resume_vault_dir
 
@@ -40,21 +39,22 @@ def _estimate_only_for_generate(args: argparse.Namespace) -> int:
     # Spec 071, same single rule called earlier: an archived vault will never
     # run another cycle, so pricing one and reporting it "safe to leave
     # unattended" would answer a question the operator cannot act on.
-    if is_archived(vault_dir):
-        print(
-            f"error: {vault_dir} is archived — no research cycle may run "
-            "against it, so there is no next cycle to price.\n"
-            f"Set `archived: false` in {vault_dir / 'settings.yaml'} to resume "
-            "research.",
-            file=sys.stderr,
-        )
-        return 2
+    if (archived_rc := refuse_if_archived(vault_dir)) is not None:
+        return archived_rc
     cycle = args.cycle if getattr(args, "cycle", None) else _resolve_resume_cycle(args)
     return _estimate_only(vault_dir, cycle)
 
 
 def _cmd_generate(args: argparse.Namespace) -> int:
     if args.regenerate_plan_only:
+        # Issue #26: it rewrites `_pipeline/research-plan.md`, which an archived
+        # vault must not gain.
+        _plan_target = args.vault_dir or args.output
+        if (
+            _plan_target is not None
+            and (rc := refuse_if_archived(Path(_plan_target).expanduser())) is not None
+        ):
+            return rc
         return _regenerate_plan_only(args)
 
     # Issue #286: --approve/--approve-all/--reject only mean anything on a
@@ -138,18 +138,9 @@ def _cmd_generate(args: argparse.Namespace) -> int:
     # unrelated config error happens to be hit first — an archived vault is
     # precisely the one whose spec and settings nobody has kept current.
     # Same single rule, called earlier.
-    from ..pipeline.orchestrator import is_archived
-
     _target = args.output or getattr(args, "vault_dir", None)
-    if _target is not None and is_archived(Path(_target)):
-        print(
-            f"error: {_target} is archived — no research cycle may write to it.\n"
-            "It stays fully queryable (`./vault ask`, `status`, `digest`, "
-            "`re-grade`) and still takes framework upgrades (`./vault update`).\n"
-            f"To resume research, set `archived: false` in {_target}/settings.yaml.",
-            file=sys.stderr,
-        )
-        return 2
+    if _target is not None and (rc := refuse_if_archived(Path(_target))) is not None:
+        return rc
 
     # --resume skips Phase 0/1; handled below by invoking pipeline modules.
     if args.resume:
@@ -201,6 +192,12 @@ def _cmd_generate(args: argparse.Namespace) -> int:
     # is still the last-word override; `output_from_settings` beats the spec
     # default; spec location is the floor.
     vault_dir = args.output or output_from_settings or spec.location
+
+    # Spec 071 / issue #26: the guard above only sees `--output`. A vault named
+    # by `output_dir:` in the settings profile or by the spec's own location is
+    # known only now, and everything below scaffolds into it.
+    if (archived_rc := refuse_if_archived(Path(vault_dir))) is not None:
+        return archived_rc
 
     # Validate with the vault context so spec 069 FR1 declared-source backing
     # runs (every source must trigger-match a module or be a strategy_hint).

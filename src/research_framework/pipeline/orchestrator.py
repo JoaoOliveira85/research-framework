@@ -25,6 +25,11 @@ if TYPE_CHECKING:
 
 from ..spec.schema import SpecConfig
 from . import plan_narrator, quality_report, research_plan, vault_commit, vault_git
+from .archived import (  # noqa: F401 - is_archived re-exported (spec 071)
+    ARCHIVED_EXIT,
+    archived_refusal_message,
+    is_archived,
+)
 from .atomic_write import write_json, write_text
 from .correction import build_directive
 from .coverage import (
@@ -659,6 +664,14 @@ def run_single_cycle(
     runner uses, in place of monkeypatching the module global (issue #86).
     ``None`` (production) resolves ``run_cycle_steps`` at call time.
     """
+    # Issue #26 / spec 071 FR2: the `cycle` verb and every direct caller reach
+    # a cycle through here, not through `run_cycles`, so the same refusal sits
+    # above every side effect (budget resolution included — an archived vault
+    # is the one whose settings nobody has kept current).
+    if (refusal := archived_refusal_message(vault_dir)) is not None:
+        _LOG.error("[orchestrator] refusing to run: %s", refusal)
+        return ARCHIVED_EXIT
+
     budget_cap, max_cycles = _fill_budget(vault_dir, budget_cap, max_cycles)
     pre_run_qr_retry = _snapshot_existing_cycle_quality_retry_count(
         vault_dir, cycle_num, resume=resume
@@ -807,35 +820,6 @@ def clear_cycle_aborted(vault_dir: Path, cycle: int) -> None:
         _LOG.warning("[orchestrator] could not clear abort marker: %s", exc)
 
 
-def is_archived(vault_dir: Path) -> bool:
-    """True when ``settings.yaml::archived`` is set (spec 071).
-
-    Reads the key directly rather than through ``load_vault_settings``. The
-    typed loader validates the WHOLE file, so a vault with, say, no
-    ``pipeline.max_cycles`` raises before ``archived`` is ever reached — and an
-    archived vault is exactly the one whose pipeline config nobody has kept
-    current. The real codebase-vault is in that state: settings predating spec
-    061, where routing this through the typed loader made the flag silently
-    inert. ``archived`` must hold under every circumstance, including a
-    settings file that is otherwise invalid.
-
-    Only a literal YAML ``true`` archives. A missing file, unreadable file,
-    unparseable YAML or a typo all read as NOT archived — those are different
-    failures, surfaced on their own terms; defaulting to "archived" would
-    strand a working vault. The typed loader still rejects a non-boolean value
-    outright (``_parse_archived``), so a typo is not silently tolerated
-    wherever settings do load.
-    """
-    settings_path = vault_dir / "settings.yaml"
-    try:
-        import yaml
-
-        raw = yaml.safe_load(settings_path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
-        return False
-    return isinstance(raw, dict) and raw.get("archived") is True
-
-
 def run_cycles(
     spec: SpecConfig,
     vault_dir: Path,
@@ -906,17 +890,9 @@ def run_cycles(
     # run report follows, and an archived vault must come away with neither.
     # The guard lives here rather than only in the CLI so every caller is
     # covered — a stale shim, a cron entry, a script, a test harness.
-    if is_archived(vault_dir):
-        _LOG.error(
-            "[orchestrator] refusing to run: %s is archived. No research cycle "
-            "may write to an archived vault. It stays fully queryable "
-            "(`./vault ask`, `status`, `digest`, `re-grade`) and still takes "
-            "framework upgrades (`./vault update`). To resume research, set "
-            "`archived: false` in %s.",
-            vault_dir,
-            vault_dir / "settings.yaml",
-        )
-        return 2
+    if (refusal := archived_refusal_message(vault_dir)) is not None:
+        _LOG.error("[orchestrator] refusing to run: %s", refusal)
+        return ARCHIVED_EXIT
 
     # Issue #8: `strict_settings: true` refuses a run while settings.yaml
     # carries a key nothing recognises (a typo that otherwise looks applied).
@@ -1033,6 +1009,14 @@ def run_cycles(
         )
 
     for cycle in range(start_cycle, max_cycles + 1):
+        # The flag can flip while this loop runs (an operator archiving the
+        # vault mid-run). Stop before the next cycle starts: it is a requested
+        # stop, not a structural abort, so no aborted marker is written and the
+        # cycle that already finished keeps its own commit.
+        if (refusal := archived_refusal_message(vault_dir)) is not None:
+            _LOG.error("[orchestrator] stopping before cycle %d: %s", cycle, refusal)
+            _finalise(ARCHIVED_EXIT, f"vault archived before cycle {cycle}")
+            return ARCHIVED_EXIT
         _LOG.info(f"[orchestrator] starting cycle {cycle}/{max_cycles}")
         try:
             rc = run_single_cycle(

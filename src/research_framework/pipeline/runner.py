@@ -37,6 +37,7 @@ from ..spec.parsed import (
 )
 from ..vault.corpus import existing_corpus_dir
 from . import run_receipt
+from .archived import ARCHIVED_EXIT, archived_refusal_message
 from .process_tree import popen_session, terminate_process_tree
 
 _LOG = logging.getLogger(__name__)
@@ -1582,8 +1583,25 @@ def _agent_phase_errors(stage: str, outcome: AgentCallOutcome) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+def _refused_as_archived(vault: Path) -> bool:
+    """Log the spec-071 refusal and return True when ``vault`` is archived.
+
+    Issue #26: the run verbs below write research content (collected items,
+    extracted context, scout reports, researched notes), so each one asks this
+    before it allocates a run directory or touches state. Library callers are
+    covered the same way the CLI is.
+    """
+    refusal = archived_refusal_message(vault)
+    if refusal is None:
+        return False
+    _LOG.error("[pipeline] refusing to run: %s", refusal)
+    return True
+
+
 def run_collect(vault: Path, *, quiet: bool = False) -> int:
     """Run the collect phase only."""
+    if _refused_as_archived(vault):
+        return ARCHIVED_EXIT
     state = _load_state(vault)
     _run_dir(vault, state, verb="collect")
     if not quiet:
@@ -1593,6 +1611,8 @@ def run_collect(vault: Path, *, quiet: bool = False) -> int:
 
 def run_extract(vault: Path, *, quiet: bool = False) -> int:
     """Run the extract phase only."""
+    if _refused_as_archived(vault):
+        return ARCHIVED_EXIT
     state = _load_state(vault)
     _run_dir(vault, state, verb="extract")
     if not quiet:
@@ -1602,6 +1622,8 @@ def run_extract(vault: Path, *, quiet: bool = False) -> int:
 
 def run_scout(vault: Path, *, quiet: bool = False) -> int:
     """Run the scout phase only."""
+    if _refused_as_archived(vault):
+        return ARCHIVED_EXIT
     state = _load_state(vault)
     _run_dir(vault, state, verb="scout")
     if not quiet:
@@ -1625,6 +1647,8 @@ def run_full(
     CLI now refuses the flag outright; when the phases start emitting
     sidecars, wire it here rather than re-adding a parameter nothing reads.
     """
+    if _refused_as_archived(vault):
+        return ARCHIVED_EXIT
     now = _now_utc()
     # FR-002: ``_make_run_id`` is minute-granular. Two ``full`` runs inside one
     # minute used to share an id, and the second silently overwrote the first's
@@ -1738,6 +1762,8 @@ def run_resume(vault: Path, *, quiet: bool = False) -> int:
 
     Marks triage as done, then runs the research phase.
     """
+    if _refused_as_archived(vault):
+        return ARCHIVED_EXIT
     state = _load_state(vault)
     _run_dir(vault, state, verb="resume")
 
@@ -1777,6 +1803,8 @@ def run_finish(vault: Path, *, quiet: bool = False) -> int:
     """Run verify + report. Never runs research (issue #245: it does not
     "skip research if the queue is empty" — it does not run research at
     all, empty queue or not)."""
+    if _refused_as_archived(vault):
+        return ARCHIVED_EXIT
     state = _load_state(vault)
     _run_dir(vault, state, verb="finish")
 
