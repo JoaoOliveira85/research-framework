@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-30
+
 ### Fixed
 
 - Notes whose frontmatter carries a plain scalar with an unquoted `: ` (`summary: HTTP Strict Transport Security: a response header ...`) are no longer left as invalid YAML (#45). Right after each note-writer batch, `repair_frontmatter_text` (`vault/frontmatter.py`) single-quotes such single-line `key: value` scalars when the whole block then parses; frontmatter that already parses is never touched, multi-line plain scalars and block-scalar content are left alone, and a second pass is a no-op. When a block still cannot be parsed, SG-005 now FAILs the note in that cycle with the YAML error in its correction hint (it used to say only that the keys were missing), so the note-writer is asked to fix it instead of every later reader skipping it. The acronym redirect stubs are now written with the YAML dumper, so a stem containing `: ` cannot produce invalid frontmatter, and `source_ledger` logs the "skipping unparseable note" warning once per note per process. (test: `tests/pipeline/test_repair_note_frontmatter.py::test_repair_makes_note_pass_sg005`)
@@ -14,7 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Migration notes
 
-- Notes already written with unquoted `: ` scalars before this release are not rewritten: the repair runs on notes a batch has just written. Quote those `summary:` values by hand (or re-run the topic) in existing vaults.
+- Notes already written with unquoted `: ` scalars before this release are not rewritten: the repair runs on notes a batch has just written. To repair an existing vault's notes in place, run from the vault root (it only touches notes whose frontmatter does not parse, and changes nothing else), then commit:
+
+  ```bash
+  .venv/bin/python -c "from pathlib import Path; from research_framework.vault.frontmatter import repair_frontmatter_text as fix; [p.write_text(t, encoding='utf-8') for p in Path('data_vault').rglob('*.md') if '_templates' not in p.parts and (t := fix(p.read_text(encoding='utf-8')))]"
+  ```
 
 ## [2.0.0] - 2026-10-30
 
