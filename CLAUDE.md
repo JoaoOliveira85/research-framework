@@ -1,7 +1,7 @@
 # research-framework Development Guidelines
 
-Auto-generated from all feature plans; hand-corrected 2026-10-12 to the
-**v1.0.1** patch release of the public line. `CHANGELOG.md` is the record of what
+Auto-generated from all feature plans; hand-corrected 2026-10-30 to the
+**v2.0.0** release of the public line. `CHANGELOG.md` is the record of what
 shipped and `docs/ROADMAP.md` the record of what comes next; the "Active
 Technologies" bullets below are the spec-kit agent-context digest of each
 shipped plan and read as a ledger, oldest first. Where this file and a
@@ -415,7 +415,8 @@ catch stale references.
   the Deferred table. **Source of truth for "what comes next".**
 - `docs/TODO.md` — scratchpad. Often empty. Triage to ROADMAP.
 - `CHANGELOG.md` — every user-visible change. Read [1.0.0] for the public
-  release's scope and [1.0.1] for the latest fixes. `[Unreleased]` is where in-flight work lands.
+  release's scope, [1.0.1] for the first patch and [2.0.0] for the breaking
+  release and its migration notes. `[Unreleased]` is where in-flight work lands.
 - `docs/RELEASE.md` — release process (version tags and `workflow_dispatch`
   only; heading date = tag date; the Migration-notes rule;
   what `./vault update` does and does not rewrite).
@@ -431,6 +432,20 @@ catch stale references.
 ## Recent Changes
 
 Every shipped change is recorded in `CHANGELOG.md`.
+
+### 2.0.0 (2026-10-30)
+
+- **Breaking**: `check-skills` and `--force-budget` / `RF_FORCE_BUDGET_ACK` are gone;
+  `stages.<name>.tier` is a model tier resolved through `tiers:` on every stage
+  (the old complexity-label reading warns for one release, then is refused).
+  Stage prompts are self-contained and rendered from the package. Upgrading a
+  1.x vault is a six-step sequence: `CHANGELOG.md` § [2.0.0] Migration notes.
+- Added: `./vault ask --escalate`, unknown-`settings.yaml`-key report +
+  `strict_settings`, `pipeline.max_cycles: 0` + `cycles_per_run`; archived
+  vaults are enforced on every research-writing verb.
+- Amended specs: 071, 076, 077, 078 (headers carry the note). The
+  `--force-budget` tripwire in `cli/__init__.py` is deleted after the *next*
+  release (`docs/TODO.md`).
 
 <!-- MANUAL ADDITIONS START -->
 ### CI budget (2026-09-07)

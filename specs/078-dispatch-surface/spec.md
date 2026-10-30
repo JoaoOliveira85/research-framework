@@ -4,6 +4,10 @@
 LLM dispatch seam as it is, written from the code at that commit. It adds no
 scope. Divergences are filed under § Known divergences.
 
+**Amended for v2.0.0 (issue #13)**: FR-012 to FR-014 and D3/D4 describe the
+single model-tier vocabulary that replaced the two the record found.
+Everything else is still a record.
+
 **Spec**: `078-dispatch-surface` · **Supersedes as the owning document**:
 `specs/_archive/034-runtime-consolidation/` (SUBSUMED by ADR-0009) ·
 **Epic**: #217 · **Issue**: #275, #259, #262

@@ -51,16 +51,16 @@ pytest -m "not e2e"           # the fast local loop (count: docs/testing-strateg
 
 ### Install (end users)
 
-There is no PyPI publication (spec 041 is a v2.0.0 candidate on the
+There is no PyPI publication (spec 041 is a next-major candidate on the
 roadmap). Install from GitHub Releases — the bundle tarball carries
 `install.sh`, scripts, templates, every settings profile and the example
 spec:
 
 ```bash
-# Current stable is v1.0.1 (2026-10-12); check the Releases page for newer
-curl -L https://github.com/JoaoOliveira85/research-framework/releases/download/v1.0.1/research-framework-1.0.1.tar.gz \
+# Current stable is v2.0.0 (2026-10-30); check the Releases page for newer
+curl -L https://github.com/JoaoOliveira85/research-framework/releases/download/v2.0.0/research-framework-2.0.0.tar.gz \
   | tar -xzf - -C /tmp
-cd /tmp/research-framework-1.0.1
+cd /tmp/research-framework-2.0.0
 ./install.sh ~/vaults/my-vault          # scaffolds + installs the framework
 ```
 
@@ -466,7 +466,7 @@ After that, you're current.
 - [`docs/testing-strategy.md`](./docs/testing-strategy.md) — the seven-tier test pyramid (ADR-0008) + tier decision flow
 - [`dist-templates/README.md`](./dist-templates/README.md) — end-user bundle documentation
 - [`.specify/memory/constitution.md`](./.specify/memory/constitution.md) — immutable project constraints (v1.6.0)
-- [`CHANGELOG.md`](./CHANGELOG.md) — release-by-release notes (current stable: **1.0.1**)
+- [`CHANGELOG.md`](./CHANGELOG.md) — release-by-release notes (current stable: **2.0.0**)
 - Example spec: [`examples/research.spec.md`](./examples/research.spec.md) (+ [`examples/settings.yml`](./examples/settings.yml)); [`examples/detailed-vault-spec.md`](./examples/detailed-vault-spec.md) is a detailed-format example
 
 ---

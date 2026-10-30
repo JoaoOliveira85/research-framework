@@ -5,9 +5,13 @@ configuration contract as it is, written from the code at that commit. It
 adds no scope. Divergences it found are filed under § Known divergences, not
 fixed here.
 
-**Amended 2026-10-28 (issue #8)**: unlike the rest of this spec, FR-022 to
-FR-025 describe behaviour added after the record was taken — the unknown-key
-report and `strict_settings`. Everything else is still a record.
+**Amended 2026-10-28 (issue #8), SHIPPED v2.0.0**: unlike the rest of this
+spec, FR-022 to FR-025 describe behaviour added after the record was taken —
+the unknown-key report and `strict_settings`. Everything else is still a
+record, except the 2.0.0 changes marked in place: one `stages.<name>.tier`
+vocabulary (issue #13), `pipeline.max_cycles: 0` and `pipeline.cycles_per_run`
+(FR-010a, issue #33) and the `stages.ask` keys `inherit_args` / `env`
+(issue #15).
 
 **Spec**: `076-settings-schema` · **Epic**: #217 · **Issue**: #275, #230
 

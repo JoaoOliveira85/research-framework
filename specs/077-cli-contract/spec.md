@@ -4,6 +4,10 @@
 surface as it is, written from the parser and the implementations at that
 commit. It adds no scope. Divergences are filed under § Known divergences.
 
+**Amended for v2.0.0**: `check-skills` is removed (issue #12), `--force-budget` is
+removed from `generate` (issue #14), and the `ask` verb (`--escalate`, issue
+#15) is added. Everything else is still a record.
+
 **Spec**: `077-cli-contract` · **Owns as of this spec**: the `./vault` verb
 list ARCHITECTURE.md § 14 only partially carries · **Epic**: #217 ·
 **Issue**: #275, #248, #244
