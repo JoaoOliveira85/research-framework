@@ -141,6 +141,22 @@ class TestWikilinkClassification:
         assert len(issues) == 1
         assert issues[0].classification == "orphan"
 
+    @pytest.mark.parametrize("known", [["crdt", "kcrd"], ["kcrd", "crdt"]])
+    def test_tied_best_match_is_never_moved(self, vh, known: list[str]) -> None:
+        # "CRD" is one edit from both stems (ratio 0.857 each); the answer
+        # must not depend on iteration order, and a tie is never a rename.
+        assert vh._classify_wikilink("CRD", known) == ("stub", "")
+
+    def test_tied_best_match_falls_through_in_a_scan(self, tmp_path: Path, vh) -> None:
+        vault = _build_minimal_vault(tmp_path)
+        _write_note(vault, "crdt.md", body="## Overview\n")
+        _write_note(vault, "kcrd.md", body="## Overview\n")
+        _write_note(vault, "A.md", related=["CRD"])
+        issues = vh.scan_wikilinks(vault)
+        assert [(i.target, i.classification, i.suggestion) for i in issues] == [
+            ("CRD", "stub", "")
+        ]
+
     def test_resolved_wikilinks_emit_no_issues(self, tmp_path: Path, vh) -> None:
         vault = _build_minimal_vault(tmp_path)
         _write_note(vault, "A.md", body="## Overview\n")
