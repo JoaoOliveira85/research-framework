@@ -206,9 +206,10 @@ for the content that used to live here.
 
 *(surfaced 2026-10-28)* `cli/__init__.py::_retired_force_budget`,
 `_FORCE_BUDGET_RETIRED` and the early return in `main()` reject the removed flag
-with a pointer to the `limits.*` settings. They are meant to last one release;
-once the release after 2.0.0 (which removed the flag) is tagged, delete them, their tests in
-`tests/cli/test_force_budget_retired.py`, and this entry.
+with a pointer to the `limits.*` settings. They were meant to last one release:
+2.0.0 removed the flag and 2.0.1 is the release after it, so delete them, their tests in
+`tests/cli/test_force_budget_retired.py`, and this entry in the first change
+after the 2.0.1 cool-down (a MINOR or PATCH, whichever comes first).
 
 ---
 

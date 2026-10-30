@@ -12,7 +12,7 @@ Three parts, in reading order:
 
 1. **Shipped registry** — one row per version, so a reader can place any spec
    number in time without opening the changelog.
-2. **The next two releases as tiers** — `v1.1.0` and `v1.2.0`, each an ordered
+2. **The next two releases as tiers** — `v2.1.0` and `v2.2.0`, each an ordered
    list with the dependency that fixes the order. A tier names *who the work
    serves*, not how big it is.
 3. **Deferred** — one row per parked spec, carrying its substance and the
@@ -27,6 +27,11 @@ Specs own design depth (`specs/NNN-*/spec.md`; the index is
 *truthfulness* is a review-time obligation (CLAUDE.md § Documentation
 discipline).
 
+**Paused after 2.0.1 (2026-10-30).** Nothing is in flight: no tier row below
+is `[~]`, and the open issues are the four on-hold rows at the end of
+§ Deferred (#7, #10, #11, #18). Pick up at the first `[ ]` row of the v2.1.0
+tier, or at the trigger of a Deferred row.
+
 **Status convention**: `[ ]` planned · `[~]` in progress · `[x]` shipped ·
 `[?]` blocked on a named decision.
 
@@ -37,8 +42,8 @@ discipline).
 Settled 2026-09-08; they constrain every tier below.
 
 **The weekly pipeline must run unattended before anything is built on top
-of it.** That is the whole of the v1.1.0 operator tier and the reason the
-contracts tier (v1.2.0) waits: a consumer building against a vault that a
+of it.** That is the whole of the v2.1.0 operator tier and the reason the
+contracts tier (v2.2.0) waits: a consumer building against a vault that a
 human still has to babysit through `full` → `resume` → `finish` is building
 against an unfinished surface.
 
@@ -99,7 +104,7 @@ CHANGELOG heading convention too (D14).
 | **2.0.0** | 2026-10-30 | **Breaking.** `check-skills` removed; every stage prompt self-contained and rendered from the package (#12); `--force-budget` / `RF_FORCE_BUDGET_ACK` removed (#14); one stage tier vocabulary resolved through `tiers:` (#13, the old reading warns for one release); unknown `settings.yaml` keys reported + opt-in `strict_settings` (#8); `ask` role labels from declared source roles (#17) and `./vault ask --escalate` (#15); `pipeline.max_cycles: 0` + `pipeline.cycles_per_run` (#33); archived-vault enforcement on every research-writing verb (#26); content-keyed `spec-parse.json` (#9); note templates rendered once at the vault root (#20); stem-linked Layer-1 indexes (#16); scaffold manifest in the wheel (#34); `vault_health` never rewrites a tied wikilink (#37); declined `regenerate-agents`/`prune` says why (#38); cron/launchd scheduling docs, timerless systemd unit dropped (#19). Upgrade steps: `CHANGELOG.md` § [2.0.0] Migration notes. |
 ---
 
-## v1.1.0 — the weekly pipeline runs unattended (operator)
+## v2.1.0 — the weekly pipeline runs unattended (operator)
 
 Two groups. The first is the truth patch (shipped in 1.0.0); the
 second is the operator surface, in dependency order — each item is a
@@ -155,12 +160,12 @@ precondition of the one after it, and #249 composes all of them.
 
 ---
 
-## v1.2.0 — contracts a consumer can build against (sibling repos, clean-room)
+## v2.2.0 — contracts a consumer can build against (sibling repos, clean-room)
 
 | # | Item | Spec | Depends on | Status |
 | --- | --- | --- | --- | --- |
 | 1 | `tests/contracts/vault-ask-1.0.schema.json` — the `./vault ask` envelope as a schema, which constitution Principle XI marks "Not met" | 036 (Q1–Q3 answered 2026-09-08, D5) | ADR-0013 | `[ ]` |
-| 2 | First consumer of `--claims`: `consumer_pipeline/pipeline/vault_import.py` reads the versioned envelope | 036 / #189 | 1.1.0 item 5 | `[ ]` |
+| 2 | First consumer of `--claims`: `consumer_pipeline/pipeline/vault_import.py` reads the versioned envelope | 036 / #189 | 2.1.0 item 5 | `[ ]` |
 | 3 | **#43** — spec 023 Phase 2: `VaultHandle`, `active-sources.json`, `.local.md`, FR-009/010/011/012/016/017 | 023 | 1, 2 — the contract must exist before the engine serves N vaults through it | `[ ]` |
 | 4 | **#274** remainder — the ~16-folder absorption, recorded as a clean-room authoring task | — | D6 | `[ ]` — the index + archive shipped in private 1.2.0; #274 closes with a ledger |
 | 5 | Clean-room reader gaps: the two runtimes (075 D1), generator/scaffold + `research.spec.md` contract, standalone source-module contract, verifier/gate rule catalogue (IX-*, SG/CG/GA), budget/cost operator doc, `_pipeline/` artifact + schema index, weekly-run operator runbook, quality-harness `unmeasured` semantics, cross-repo contracts (XI), a CI/CD doc | — | — | `[ ]` — each a doc, not a feature |
@@ -201,6 +206,10 @@ it back (the archive rule in `specs/_archive/README.md` needs both banners).
 | spec 059 | Movable `data_vault/` | `data_vault/` outside the vault root via symlink. Clarified 2026-06-03 (non-gating tensions), analysed, parked. | Principle X: relocated data must remain under append-only git history, and a symlink target outside the repo is not. Spec 044's use case ("a copy elsewhere") is covered by `./vault sync`. | A concrete reason the data must *primarily* live outside the root — storage tier, encryption, sharing — plus the Principle X resolution written as an ADR. |
 | spec 054 | MCP-managed source access | Per-module `managed: true` routing a fetch to an MCP-capable subagent (Principle IV); three open questions (transport, agent-emits-what, declaration granularity). No tracking issue. | The 2026-06-08 MCP-free pivot: `github` and `atlassian` became REST modules and every live vault's sources are reachable without MCP. | A declared source reachable **only** through MCP. |
 | spec 060 tiers | Source-module Tier 2-later / 3 / 4 | Tier 2-later: `newsletters`, `hackernews`, `wikipedia`, `blog_posts`, `conference_talks`, `github_extras`. Tier 3: `pdfs`, `podcasts`, `epub`, `twitter`, `mastodon`/`bluesky`. Tier 4: `social_bookmarklet` (CSV import). Parked: slack/discord exports, email, notion, goodreads. Governed by 060's prioritisation criteria, the per-module acceptance bar (020 five-file template, hermetic contract tests, 022 non-regression, mandatory 051 `preflight()`, zero new deps) and the 020 contract-amendment gate. | Demand-driven: the two batches that shipped (`youtube`/`reddit`/`rss`/`oreilly`; `github`/`atlassian`) were what live vaults declared. | A live vault declaring a source of that kind. One green ship before parallel ports (060's kickoff rule). |
+| **#7** / spec 085 (draft) | Shared vault infrastructure | Serve many vaults from one set of scripts instead of a copy per vault. A full spec-kit draft (spec, plan, tasks) exists on the local branch `085-shared-vault-infrastructure`; it is not on `main`. Overlaps v2.2.0 row 3 (spec 023 Phase 2, `VaultHandle`). | On hold by owner decision (2026-10-28), before the 2.0.0 batch. | The owner un-holds it; reconcile with v2.2.0 row 3 first. |
+| **#10** / spec 083 (draft) | Durable state layout | Keep durable vault state in a tracked directory, apart from regenerable scratch in `_pipeline/`. Draft spec on the local branch `083-durable-state-layout`, not on `main`. | On hold by owner decision (2026-10-28). | The owner un-holds it. |
+| **#11** / spec 086 (draft) | Source-information surface | Explore other ways to serve source information, especially to agents. Draft spec on the local branch `086-source-information-surface`, not on `main`. | On hold by owner decision (2026-10-28). | The owner un-holds it. |
+| **#18** / spec 084 (draft) | Structured research backlog | Keep the research backlog as structured JSON with a rendered Markdown view. Draft spec on the local branch `084-structured-research-backlog`, not on `main`. | On hold by owner decision (2026-10-28). | The owner un-holds it. |
 
 ---
 

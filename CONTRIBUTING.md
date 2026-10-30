@@ -275,7 +275,7 @@ worked examples.
   per the constitution's Script Exit Code Model.
 - **All vault paths derived from `vault_root` parameter**, never
   hardcoded. Serving N vaults through one engine is spec 023 Phase 2
-  (`docs/ROADMAP.md` v1.2.0); respect the invariant now.
+  (`docs/ROADMAP.md` v2.2.0); respect the invariant now.
 
 ---
 
@@ -552,7 +552,7 @@ bash build.sh
 |----------|---------------|
 | "How does X work?" | `ARCHITECTURE.md` |
 | "Why is X this way?" | `docs/adr/` (search) or `specs/NNN/research.md` |
-| "What's the next thing to ship?" | `docs/ROADMAP.md` — the first `[ ]` row in the v1.1.0 tier |
+| "What's the next thing to ship?" | `docs/ROADMAP.md` — the first `[ ]` row in the v2.1.0 tier |
 | "Is X allowed?" | `.specify/memory/constitution.md` — read its Enforcement Register table first; it is the index |
 | "How do I test this?" | `docs/testing-strategy.md` |
 | "What was decided about Y in spec-020?" | `specs/020-code-bridge/research.md` |
