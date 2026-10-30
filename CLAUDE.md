@@ -1,6 +1,6 @@
 # research-framework Development Guidelines
 
-Auto-generated from all feature plans; hand-corrected 2026-10-31 to the
+Auto-generated from all feature plans; hand-corrected 2026-10-30 to the
 **v2.0.1** release of the public line. `CHANGELOG.md` is the record of what
 shipped and `docs/ROADMAP.md` the record of what comes next; the "Active
 Technologies" bullets below are the spec-kit agent-context digest of each
@@ -433,7 +433,7 @@ catch stale references.
 
 Every shipped change is recorded in `CHANGELOG.md`.
 
-### 2.0.1 (2026-10-31)
+### 2.0.1 (2026-10-30)
 
 - Fixed: an aborted cycle names its cause at ERROR (`pipeline/abort_diagnosis.py`, called from
   `orchestrator.run_single_cycle`), quota/rate limits included (#44); unquoted-colon

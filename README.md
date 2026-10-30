@@ -57,7 +57,7 @@ roadmap). Install from GitHub Releases — the bundle tarball carries
 spec:
 
 ```bash
-# Current stable is v2.0.1 (2026-10-31); check the Releases page for newer
+# Current stable is v2.0.1 (2026-10-30); check the Releases page for newer
 curl -L https://github.com/JoaoOliveira85/research-framework/releases/download/v2.0.1/research-framework-2.0.1.tar.gz \
   | tar -xzf - -C /tmp
 cd /tmp/research-framework-2.0.1
