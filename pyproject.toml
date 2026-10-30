@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "research-framework"
-version = "1.0.1"
+version = "2.0.0"
 description = "Knowledge vault generator — produces populated, validated, git-initialized Obsidian-compatible vaults from a spec file"
 readme = "README.md"
 requires-python = ">=3.11"
