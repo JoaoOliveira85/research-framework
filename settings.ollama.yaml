@@ -121,6 +121,18 @@ pipeline:
 # everything else inherits the `gemma3:27b` default.
 # ---------------------------------------------------------------------------
 stages:
+  # --- ask (issue #15) ---------------------------------------------------
+  # `./vault ask --escalate` answers ONE question headlessly from the vault.
+  # It must read and never run or write: research is the framework's call,
+  # made after the answer. `inherit_args: false` drops default_executor.args
+  # (args are otherwise additive, and cannot take a permission away). No
+  # retry: a failed ask is reported, not paid for twice.
+  ask:
+    # An HTTP runtime: the model gets the prompt and returns text, with no
+    # tools at all, so there is nothing to run and nothing to restrict.
+    timeout_s: 1800
+    retry: 0
+
   # --- 1.x install / pre-flight ------------------------------------------
   install_wizard:
     model: gemma3:27b

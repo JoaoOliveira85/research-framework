@@ -698,7 +698,32 @@ def _resolve_executor(settings: dict[str, Any], stage: str) -> dict[str, Any]:
         "default_executor", default.get("args") if isinstance(default, dict) else None
     )
     stage_args = _coerce_args(f"stages.{stage}", stage_cfg.get("args"))
-    merged["args"] = default_args + stage_args
+    # ``inherit_args: false`` makes the stage's args the whole list. Additive
+    # args cannot take a permission away: a read-only stage (``ask``, issue
+    # #15) cannot drop ``bypassPermissions`` or ``--force`` by appending, and
+    # codex refuses a second ``--sandbox`` outright.
+    inherit = stage_cfg.get("inherit_args", True)
+    if not isinstance(inherit, bool):
+        raise ValueError(
+            f"stage '{stage}': stages.{stage}.inherit_args must be true or false, "
+            f"got {inherit!r}"
+        )
+    merged.pop("inherit_args", None)
+    merged["args"] = (default_args if inherit else []) + stage_args
+
+    # ``env``: extra variables for the runtime process, the only channel some
+    # runtimes read a permission policy from (opencode's OPENCODE_PERMISSION,
+    # used by the read-only ``ask`` stage). Scalar precedence: the stage's
+    # mapping replaces the default's.
+    env = merged.get("env")
+    if env is not None and not (
+        isinstance(env, dict)
+        and all(isinstance(k, str) and isinstance(v, str) for k, v in env.items())
+    ):
+        raise ValueError(
+            f"stage '{stage}': env must map variable names to string values, "
+            f"got {env!r}"
+        )
     return merged
 
 
@@ -2755,6 +2780,9 @@ def run(
     _set_call_context(vault_dir, stage)
     settings = _load_settings(vault_dir)
     executor = _resolve_executor(settings, stage)
+    # Published through the call context, so every spawn below — whichever
+    # runtime branch it takes — carries it (``_popen_session``).
+    _CALL_CONTEXT.update(executor.get("env") or {})
     runtime = str(executor.get("runtime") or "")
     prompt = _read_prompt(prompt_file)
     tier = _stage_tier(settings, stage)

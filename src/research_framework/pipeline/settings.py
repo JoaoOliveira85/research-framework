@@ -1377,6 +1377,7 @@ _EXECUTOR_KEYS = (
     "script_path",  # type: script
     "variant",  # opencode
     "agent",  # opencode
+    "env",  # extra runtime-process variables, e.g. OPENCODE_PERMISSION (#15)
 )
 
 # Stage-specific blocks, each read by the stage named. Keys that ship but are
@@ -1399,7 +1400,9 @@ _STAGE_SPECIFIC: dict[str, dict[str, Any]] = {
 
 def _build_schema() -> dict[str, Any]:
     executor = dict.fromkeys(_EXECUTOR_KEYS)
-    stage_common = {**executor, "enabled": None, "tier": None}
+    # ``inherit_args`` is read from the stage only (``false`` drops
+    # ``default_executor.args`` for that stage, #15).
+    stage_common = {**executor, "enabled": None, "tier": None, "inherit_args": None}
 
     hints = get_type_hints(VaultSettings)
     schema: dict[str, Any] = {}
@@ -1490,6 +1493,7 @@ _INERT_PATHS: tuple[tuple[str, ...], ...] = tuple(
         "default_executor.on_fail",
         "default_executor.retry",
         "stages.*.skill",
+        "stages.*.retry",  # the ask stage declares `retry: 0` (#15)
         "stages.source_manager.auto_promote_discovered",
         "stages.verifier.on_timeout",
         "stages.verifier.output_filename",
@@ -1603,8 +1607,8 @@ def strict_settings_refusal(vault_dir: Path) -> str | None:
 
     The ONE check behind every refusal: ``orchestrator.run_cycles`` and the CLI
     entry points of the verbs that dispatch cycles or LLM work (``cycle``,
-    ``generate --resume``, ``pipeline full|collect|extract|scout|resume|finish``)
-    all call it, before they have any side effect, and exit 2.
+    ``generate --resume``, ``pipeline full|collect|extract|scout|resume|finish``,
+    ``ask``) all call it, before they have any side effect, and exit 2.
     """
     unknown = strict_settings_violations(vault_dir)
     if not unknown:

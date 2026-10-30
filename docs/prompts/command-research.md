@@ -7,7 +7,7 @@
 | **Source** | `templates/commands/research.md.j2` |
 | **Role** | Operator-facing research entry point. |
 | **Dispatched by** | `/research` inside a vault |
-| **Source sha256** | `237c6ec535bdedb9` |
+| **Source sha256** | `50313370f15ee70e` |
 
 Reproduced verbatim, including its placeholders. A vault gets this text with the placeholders filled at scaffold or dispatch time.
 
@@ -95,8 +95,8 @@ your new note, fix it before the next cycle — the Phase 3 gate blocks on these
 ## This is the interactive entry point
 
 You research **one named topic**, now, because a human asked for it. The
-pipeline has a second research entry point that is not this one: `/pipeline
-resume` runs a headless `research` stage that takes its queue from
+pipeline has a second research entry point that is not this one: the
+operator-started headless `research` stage, which takes its queue from
 `_pipeline/scout-report.json` and writes a whole cycle's notes without asking
 anything. See `ARCHITECTURE.md` § "The two research entry points". If you were
 invoked with no topic, ask for one — do not start a cycle.

@@ -146,6 +146,20 @@ pipeline:
 # Everything else inherits the `claude-4.6-sonnet-medium-thinking` default.
 # ---------------------------------------------------------------------------
 stages:
+  # --- ask (issue #15) ---------------------------------------------------
+  # `./vault ask --escalate` answers ONE question headlessly from the vault.
+  # It must read and never run or write: research is the framework's call,
+  # made after the answer. `inherit_args: false` drops default_executor.args
+  # (args are otherwise additive, and cannot take a permission away). No
+  # retry: a failed ask is reported, not paid for twice.
+  ask:
+    inherit_args: false
+    args:             # cursor's read-only Q&A mode; no --force, no MCP approval
+      - --mode
+      - ask
+    timeout_s: 600
+    retry: 0
+
   # --- 1.x install / pre-flight ------------------------------------------
   install_wizard:
     model: claude-4.6-sonnet-medium-thinking

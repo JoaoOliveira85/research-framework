@@ -7,7 +7,7 @@
 | **Source** | `templates/commands/ask.md.j2` |
 | **Role** | Vault-grounded answering, with the Principle IX two-tier citation block. |
 | **Dispatched by** | `./vault ask` (interactive) |
-| **Source sha256** | `3e564b8e95d252fd` |
+| **Source sha256** | `8aa5a0be24de15a1` |
 
 Reproduced verbatim, including its placeholders. A vault gets this text with the placeholders filled at scaffold or dispatch time.
 
@@ -15,7 +15,7 @@ Reproduced verbatim, including its placeholders. A vault gets this text with the
 ---
 description: "Query the {{ spec.name }} vault. Vault-first answer with two-tier citations."
 argument-hint: "<question>"
-_template_version: 1
+_template_version: 2
 ---
 
 # /{{ spec.settings.commands.ask }} — Query the vault
@@ -86,25 +86,32 @@ Order Tier 2 entries to follow the order of the Tier 1 notes they come from.
 
 ## Research Escalation
 
-If the vault does not contain enough grounded information to answer a
-question and the topic is within the vault's declared scope:
+You never start research yourself, and you run no command to do it. Whether a
+gap is worth a research run is the operator's decision; the framework reads
+your answer after the session and starts any run itself.
 
-1. Check the vault scope in `CLAUDE.md` — confirm the topic is in scope.
-2. If in scope, run a focused research cycle before answering:
-   ```bash
-   research-framework cycle --vault . --cycle 1 --target-topics "<topic>" --budget-cap 2.0
-   ```
-3. After the cycle completes, re-read the relevant vault notes and answer.
-4. If the research finds no suitable sources, say so explicitly rather than
-   answering from memory or fabricating citations.
+If the vault does not contain enough grounded information to answer, say so
+("the vault does not cover this") rather than answering from memory, check the
+vault scope in `CLAUDE.md`, and end your reply with exactly one gap line:
 
-Do NOT escalate for topics explicitly out of scope — state the boundary instead.
+```
+VAULT-GAP: {"topic": "<the uncovered topic, one short line>", "in_scope": true}
+```
+
+- The line starts with `VAULT-GAP:` and carries a JSON object with exactly two
+  keys: `topic` (what the vault would need a note on — not the whole question)
+  and `in_scope` (`true` or `false`).
+- Set `in_scope` to `false` for a topic `CLAUDE.md` puts out of scope, and
+  state the boundary in the answer.
+- Write the line only when there is a gap, and never more than once. A fully
+  answered question has no gap line.
 
 ## What you do NOT do
 
 - Do NOT form opinions or recommend a course of action — surface what the
   vault contains and where it is silent.
 - Do NOT fetch from external systems. Answer from the vault only; flag gaps.
+- Do NOT run framework or pipeline commands. Report a gap; never research it.
 - Do NOT bury Tier 2 citations inside Tier 1 prose. Render them as distinct
   sections.
 ````

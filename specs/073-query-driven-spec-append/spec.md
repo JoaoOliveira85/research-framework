@@ -184,6 +184,9 @@ lives. **Spec 074 was a prerequisite**: until it was fixed, that command
 discarded `--target-topics` entirely, so a query-driven cycle did not even
 research the right thing, let alone record it.
 
+*Forward pointer (issue #15): `ask.md` no longer runs this command;
+`./vault ask --escalate` (`cli/ask.py`) calls `_cmd_cycle` instead.*
+
 ## Deviation from the §1 example
 
 The illustrative entry in §1 shows a source recorded `— primary —`. §4 is the

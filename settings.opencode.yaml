@@ -168,6 +168,24 @@ pipeline:
 # everything else inherits the `ollama/qwen3.6:27b` default.
 # ---------------------------------------------------------------------------
 stages:
+  # --- ask (issue #15) ---------------------------------------------------
+  # `./vault ask --escalate` answers ONE question headlessly from the vault.
+  # It must read and never run or write: research is the framework's call,
+  # made after the answer. `inherit_args: false` drops default_executor.args
+  # (args are otherwise additive, and cannot take a permission away). No
+  # retry: a failed ask is reported, not paid for twice.
+  ask:
+    inherit_args: false     # drops --dangerously-skip-permissions
+    # opencode has no read-only CLI flag, and its built-in `plan` agent only
+    # denies edits (bash, webfetch and task stay allowed). The deny list is
+    # passed in OPENCODE_PERMISSION, which opencode merges over every agent's
+    # rules; `opencode agent list` shows the effective result.
+    agent: plan
+    env:
+      OPENCODE_PERMISSION: '{"bash": "deny", "edit": "deny", "webfetch": "deny", "websearch": "deny", "codesearch": "deny", "task": "deny"}'
+    timeout_s: 600
+    retry: 0
+
   install_wizard:
     model: ollama/qwen3.6:27b
     skill: install-wizard

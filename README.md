@@ -306,6 +306,7 @@ Every generated vault ships with a uniform `./vault` script (this is what
 ./vault health                # deterministic health check (fast, no LLM); warns on untracked control files (spec 058)
 ./vault audit                 # deterministic audit -> _pipeline/audit-report.md (--full's LLM half is an unwired placeholder: SKIP)
 ./vault ask                   # open Claude in the vault dir; /ask <question> answers with two-tier citations
+./vault ask --escalate "q"    # answer once; if the vault reports an in-scope gap, research it under the budget ladder and re-ask
 ./vault write "topic"         # LISTED, NOT RUNNABLE — its backing script does not ship (spec 077 D2 / T001)
 ./vault update                # pip upgrade + re-run install.sh; refreshes vault-local scripts (spec 027)
 ./vault coverage              # coverage target status

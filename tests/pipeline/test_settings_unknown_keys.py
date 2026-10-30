@@ -204,6 +204,29 @@ def test_inert_but_shipped_keys_are_not_reported(tmp_path: Path):
     assert _unknown_warnings(vault) == []
 
 
+def test_executor_keys_the_dispatcher_reads_are_not_reported(tmp_path: Path):
+    """`inherit_args` and `env` are read by `agent_call._resolve_executor` (#15)."""
+    vault = _vault(
+        tmp_path,
+        "default_executor:\n  env:\n    SOME_VAR: value\n"
+        "stages:\n  ask:\n    inherit_args: false\n"
+        "    env:\n      OPENCODE_PERMISSION: '{}'\n",
+    )
+    assert _unknown_warnings(vault) == []
+
+
+def test_inherit_args_outside_a_stage_is_reported():
+    """The dispatcher reads `inherit_args` from the stage only."""
+    unknown = find_unknown_keys({"default_executor": {"inherit_args": False}})
+    assert [u.path for u in unknown] == ["default_executor.inherit_args"]
+
+
+def test_retry_under_a_stage_is_inert_like_under_default_executor():
+    """Spec 076 D1: `retry` is an ExecutorConfig field the vault dispatcher never
+    reads; the `ask` block declares `retry: 0` in every shipped profile."""
+    assert find_unknown_keys({"stages": {"ask": {"retry": 0}}}) == []
+
+
 def test_find_unknown_keys_is_pure_and_returns_paths():
     unknown = find_unknown_keys(
         {"pipeline": {"max_cycles": 1, "max_cylces": 2}, "bugdet": {}}

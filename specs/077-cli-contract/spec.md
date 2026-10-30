@@ -101,7 +101,8 @@ spec. `pipeline` is specified in `075-pipeline-runner`.
   `inventory`, `onboard`, `regenerate-agents`, `prune`, `parse-spec`,
   `pipeline`, `quality-baseline-update`, `quality-fixture-init`,
   `refresh-sources`, `regenerate-shim`, `status`, `digest`, `acceptance`,
-  `wikilinks`, `re-grade`.
+  `wikilinks`, `re-grade`, and — appended after the registry (issue #15) —
+  `ask`.
 - **FR-005**: A global `--log-level {debug,info,warning,error}` MUST be
   registered before the subparsers so every verb inherits it. Its default
   MUST resolve as: explicit flag, else the verb's own declared default, else
@@ -183,6 +184,7 @@ spec. `pipeline` is specified in `075-pipeline-runner`.
 | `acceptance` | Acceptance gates | `--vault`, `--json`, `--strict` | 0; 1 any FAIL (or WARN under `--strict`); 2 bad vault |
 | `wikilinks` | Wikilink sweep | `--vault`, `--fix`, `--json` | 2 bad vault; otherwise always 0 |
 | `re-grade` | Re-grade quarantined notes | `--vault`, `--dry-run`, `--note` (repeatable), `--json` | 2 bad vault; otherwise always 0 |
+| `ask` | One-shot vault question; with `--escalate`, research a reported in-scope gap once and re-ask (issue #15) | `--vault` (required), `--escalate`, positional question | 0 answered (with or without a gap); 1 malformed gap line, or the research paused or failed; the ask dispatch's own code if it failed; 2 usage, vault not found, missing or pre-#15 `/ask` command, escalation refused (standing pause, `pipeline.max_cycles` or `pipeline.budget_usd` reached) |
 
 **`./vault <verb>`**
 
@@ -190,7 +192,7 @@ spec. `pipeline` is specified in `075-pipeline-runner`.
 | --- | --- | --- |
 | `research` | `generate --resume` | always forces `--resume` |
 | `health`, `audit` | vault-local scripts | |
-| `ask` | interactive `claude` in the vault, then auto-commit | exits 1 if `claude` is absent |
+| `ask` | interactive `claude` in the vault, then auto-commit; with `--escalate`, the `ask` verb, then auto-commit | exits 1 if `claude` is absent (interactive only); 2 for `--escalate` with no question |
 | `write "<topic>"` | a document generator | **not shipped** — see D2 |
 | `refresh-sources`, `regenerate-shim`, `status`, `digest`, `acceptance`, `wikilinks`, `re-grade`/`regrade`, `coverage`, `reindex` | the identically-named argparse verb | `--vault` injected |
 | `update` | a bespoke upgrade flow | exit code is the installer's or the health check's — outside the model (D1) |

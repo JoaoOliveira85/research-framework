@@ -149,6 +149,21 @@ pipeline:
 # Per-stage executor overrides.
 # ---------------------------------------------------------------------------
 stages:
+  # --- ask (issue #15) ---------------------------------------------------
+  # `./vault ask --escalate` answers ONE question headlessly from the vault.
+  # It must read and never run or write: research is the framework's call,
+  # made after the answer. `inherit_args: false` drops default_executor.args
+  # (args are otherwise additive, and cannot take a permission away). No
+  # retry: a failed ask is reported, not paid for twice.
+  ask:
+    inherit_args: false
+    args:             # read-only sandbox; codex refuses a second --sandbox
+      - --skip-git-repo-check
+      - --sandbox
+      - read-only
+    timeout_s: 600
+    retry: 0
+
   # --- 1.x install / pre-flight ------------------------------------------
   install_wizard:
     model: gpt-5.4

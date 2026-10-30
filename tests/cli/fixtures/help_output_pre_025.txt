@@ -1,11 +1,11 @@
 usage: research-framework [-h] [--log-level {debug,info,warning,error}]
-                          {generate,coverage,validate,reindex,cycle,inventory,onboard,regenerate-agents,prune,parse-spec,pipeline,quality-baseline-update,quality-fixture-init,refresh-sources,regenerate-shim,status,digest,acceptance,wikilinks,re-grade,pause,export}
+                          {generate,coverage,validate,reindex,cycle,inventory,onboard,regenerate-agents,prune,parse-spec,pipeline,quality-baseline-update,quality-fixture-init,refresh-sources,regenerate-shim,status,digest,acceptance,wikilinks,re-grade,pause,export,ask}
                           ...
 
 Knowledge vault generator.
 
 positional arguments:
-  {generate,coverage,validate,reindex,cycle,inventory,onboard,regenerate-agents,prune,parse-spec,pipeline,quality-baseline-update,quality-fixture-init,refresh-sources,regenerate-shim,status,digest,acceptance,wikilinks,re-grade,pause,export}
+  {generate,coverage,validate,reindex,cycle,inventory,onboard,regenerate-agents,prune,parse-spec,pipeline,quality-baseline-update,quality-fixture-init,refresh-sources,regenerate-shim,status,digest,acceptance,wikilinks,re-grade,pause,export,ask}
     generate            Generate a vault from a spec file
     coverage            Show coverage target status
     validate            Run full validation suite on a vault
@@ -49,6 +49,8 @@ positional arguments:
                         (budget-marker.contract.md §5; issue #237)
     export              Export the vault as a versioned, consumer-facing
                         envelope (claims-export 1.0; ADR-0013; issue #189)
+    ask                 Ask the vault one question; with --escalate, research
+                        a gap it reports and ask again (issue #15)
 
 options:
   -h, --help            show this help message and exit

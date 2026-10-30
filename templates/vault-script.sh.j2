@@ -89,18 +89,48 @@ case "${CMD}" in
     exec "${VENV_PYTHON}" "${SCRIPTS_DIR}/vault_audit.py" "${VAULT_DIR}" "$@"
     ;;
   ask)
+    # Issue #15: a research run is the operator's explicit opt-in. Without
+    # --escalate this arm opens the interactive session and nothing in it
+    # starts a run. With it, the framework's own `ask` verb answers the
+    # question one-shot, reads the VAULT-GAP line, researches an in-scope gap
+    # under the vault's budget ladder and asks again — the shim only forwards.
+    ASK_ESCALATE=0
+    ASK_ARGS=()
+    # A count, not the array-length expansion: that spelling opens a Jinja
+    # comment in this template.
+    ASK_ARGC=0
+    for arg in "$@"; do
+        case "${arg}" in
+            --escalate) ASK_ESCALATE=1 ;;
+            *) ASK_ARGS+=("${arg}"); ASK_ARGC=$((ASK_ARGC + 1)) ;;
+        esac
+    done
+    # Capture the user's question for the auto-commit message (spec 050).
+    # bash-3.2-safe empty-array expansion under `set -u` (see `update`).
+    ASK_TOPIC="${ASK_ARGS[*]+"${ASK_ARGS[*]}"}"
+    ASK_TOPIC="${ASK_TOPIC:-interactive session}"
+    if [[ ${ASK_ESCALATE} -eq 1 ]]; then
+        if [[ ${ASK_ARGC} -eq 0 ]]; then
+            echo "Usage: ./vault ask --escalate \"<question>\"" >&2
+            exit 2
+        fi
+        set +e
+        "${RV[@]}" ask --vault "${VAULT_DIR}" --escalate -- "${ASK_ARGS[@]}"
+        ASK_RC=$?
+        set -e
+        _vault_autocommit vault-output "ask ${ASK_TOPIC}" "./vault ask --escalate"
+        exit ${ASK_RC}
+    fi
     if ! command -v claude &>/dev/null; then
         echo "ERROR: claude CLI not found."
         echo "Install Claude Code: https://claude.ai/code"
         exit 1
     fi
     cd "${VAULT_DIR}"
-    # Capture the user's question for the auto-commit message (spec 050).
     # The session itself runs interactively; we trap its exit so the
     # invariant fires whether the user typed /exit or hit Ctrl-D.
-    ASK_TOPIC="${*:-interactive session}"
     set +e
-    claude "$@"
+    claude "${ASK_ARGS[@]+"${ASK_ARGS[@]}"}"
     ASK_RC=$?
     set -e
     _vault_autocommit vault-output "ask ${ASK_TOPIC}" "Interactive Claude session"
@@ -452,6 +482,7 @@ Commands:
   health     Deterministic vault health check (fast, no LLM)
   audit      Full audit (add --full for Haiku quality checks)
   ask        Open interactive chat session (requires claude CLI; use /ask inside)
+             --escalate "q": answer once; research a reported gap, then re-ask
   write      Non-interactive document generation — ./vault write "topic"
   refresh-sources  Run legacy collector scripts under scripts/
   regenerate-shim  Re-render this vault entry script from framework template
