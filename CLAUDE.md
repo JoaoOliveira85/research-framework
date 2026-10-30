@@ -1,7 +1,7 @@
 # research-framework Development Guidelines
 
-Auto-generated from all feature plans; hand-corrected 2026-10-30 to the
-**v2.0.0** release of the public line. `CHANGELOG.md` is the record of what
+Auto-generated from all feature plans; hand-corrected 2026-10-31 to the
+**v2.0.1** release of the public line. `CHANGELOG.md` is the record of what
 shipped and `docs/ROADMAP.md` the record of what comes next; the "Active
 Technologies" bullets below are the spec-kit agent-context digest of each
 shipped plan and read as a ledger, oldest first. Where this file and a
@@ -416,7 +416,7 @@ catch stale references.
 - `docs/TODO.md` — scratchpad. Often empty. Triage to ROADMAP.
 - `CHANGELOG.md` — every user-visible change. Read [1.0.0] for the public
   release's scope, [1.0.1] for the first patch and [2.0.0] for the breaking
-  release and its migration notes. `[Unreleased]` is where in-flight work lands.
+  release and its migration notes; [2.0.1] is the latest patch. `[Unreleased]` is where in-flight work lands.
 - `docs/RELEASE.md` — release process (version tags and `workflow_dispatch`
   only; heading date = tag date; the Migration-notes rule;
   what `./vault update` does and does not rewrite).
@@ -432,6 +432,14 @@ catch stale references.
 ## Recent Changes
 
 Every shipped change is recorded in `CHANGELOG.md`.
+
+### 2.0.1 (2026-10-31)
+
+- Fixed: an aborted cycle names its cause at ERROR (`pipeline/abort_diagnosis.py`, called from
+  `orchestrator.run_single_cycle`), quota/rate limits included (#44); unquoted-colon
+  frontmatter in agent-written notes is repaired per batch (`vault/frontmatter.py::repair_frontmatter_text`)
+  and SG-005 FAILs what it cannot repair (#45). The project is paused after this release
+  (`docs/ROADMAP.md`).
 
 ### 2.0.0 (2026-10-30)
 
