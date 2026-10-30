@@ -278,3 +278,75 @@ def test_append_returns_none_when_a_line_cannot_simply_be_added(
     content: str, additions: dict
 ) -> None:
     assert append_frontmatter_keys(content, additions) is None
+
+
+# --- issue #45: repair unquoted ``: `` scalars ------------------------------
+
+_HSTS = (
+    "---\n"
+    "title: HSTS\n"
+    "summary: HTTP Strict Transport Security: a response header telling "
+    "browsers to use only HTTPS for a host.\n"
+    "source_urls:\n"
+    "  - https://example.com/a\n"
+    "---\n"
+    "Body: keeps its colons.\n"
+)
+
+
+def test_repair_quotes_unquoted_colon_scalar_and_round_trips() -> None:
+    from research_framework.vault.frontmatter import repair_frontmatter_text
+
+    with pytest.raises(FrontmatterParseError):
+        parse_frontmatter_str(_HSTS)
+    fixed = repair_frontmatter_text(_HSTS)
+    assert fixed is not None
+    fm, body = parse_frontmatter_str(fixed)
+    assert fm["summary"].startswith("HTTP Strict Transport Security: a response")
+    assert fm["title"] == "HSTS"
+    assert fm["source_urls"] == ["https://example.com/a"]
+    assert body == "Body: keeps its colons.\n"
+
+
+def test_repair_is_idempotent_and_leaves_valid_frontmatter_alone() -> None:
+    from research_framework.vault.frontmatter import repair_frontmatter_text
+
+    fixed = repair_frontmatter_text(_HSTS)
+    assert fixed is not None
+    assert repair_frontmatter_text(fixed) is None
+    valid = "---\ntitle: 'A: b'\nsummary: plain text\n---\nx\n"
+    assert repair_frontmatter_text(valid) is None
+
+
+def test_repair_escapes_single_quotes() -> None:
+    from research_framework.vault.frontmatter import repair_frontmatter_text
+
+    text = "---\nsummary: It's Foo: a thing\n---\nx\n"
+    fixed = repair_frontmatter_text(text)
+    assert fixed is not None
+    assert parse_frontmatter_str(fixed)[0]["summary"] == "It's Foo: a thing"
+
+
+def test_repair_refuses_ambiguous_multiline_plain_scalar() -> None:
+    from research_framework.vault.frontmatter import repair_frontmatter_text
+
+    text = "---\nsummary: Foo: bar\n  continues here\n---\nx\n"
+    assert repair_frontmatter_text(text) is None
+
+
+def test_repair_returns_none_when_other_breakage_remains() -> None:
+    from research_framework.vault.frontmatter import repair_frontmatter_text
+
+    text = "---\nsummary: A: b\ntags: [unclosed\n---\nx\n"
+    assert repair_frontmatter_text(text) is None
+
+
+def test_repair_does_not_touch_block_scalar_content() -> None:
+    from research_framework.vault.frontmatter import repair_frontmatter_text
+
+    text = "---\nnotes: |\n  a: b: c\nsummary: X: y\n---\nx\n"
+    fixed = repair_frontmatter_text(text)
+    assert fixed is not None
+    fm = parse_frontmatter_str(fixed)[0]
+    assert fm["notes"] == "a: b: c\n"
+    assert fm["summary"] == "X: y"

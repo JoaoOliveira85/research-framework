@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -118,6 +119,86 @@ def dump_frontmatter(
         default_flow_style=False,
     ).rstrip()
     return f"---\n{fm_text}\n---\n{body}"
+
+
+# ``key: value`` where the value is a plain (unquoted, single-line) scalar.
+_PLAIN_KV = re.compile(
+    r"^(?P<lead>\s*(?:-\s+)?)(?P<key>[A-Za-z_][\w.-]*):[ \t]+(?P<val>\S.*?)\s*$"
+)
+_BLOCK_SCALAR = re.compile(r"[|>][+-]?\d*\s*(#.*)?$")
+
+
+def _line_is_invalid_yaml(line: str) -> bool:
+    try:
+        yaml.safe_load(line)
+    except yaml.YAMLError:
+        return True
+    return False
+
+
+def repair_frontmatter_text(content: str) -> str | None:
+    """Quote plain scalars whose unquoted ``: `` makes the frontmatter invalid.
+
+    Agent-written notes carry lines such as
+    ``summary: HTTP Strict Transport Security: a response header ...`` — a
+    second ``: `` inside a plain scalar, which YAML rejects, so every reader
+    skips the note. A line is repaired only when it is a single-line
+    ``key: value`` whose value is a plain scalar, is invalid YAML on its own,
+    and is not the start of a multi-line value. The value is wrapped in single
+    quotes (``'`` doubled), which keeps its text byte for byte.
+
+    Returns the repaired text, or ``None`` when nothing was changed: the
+    frontmatter already parses (never touched), there is none, or it cannot be
+    repaired unambiguously (the repaired block must parse to a mapping).
+    Idempotent: a repaired block parses, so a second call returns ``None``.
+    """
+    if not content.startswith(_OPENING):
+        return None
+    try:
+        parse_frontmatter_str(content)
+        return None
+    except FrontmatterParseError:
+        pass
+    split = split_frontmatter(content)
+    if split is None:
+        return None
+    yaml_text, _body = split
+    lines = yaml_text.split("\n")
+    in_block = False
+    block_indent = 0
+    changed = False
+    for i, line in enumerate(lines):
+        indent = len(line) - len(line.lstrip())
+        if in_block:
+            if not line.strip() or indent > block_indent:
+                continue
+            in_block = False
+        match = _PLAIN_KV.match(line)
+        if match is None:
+            continue
+        val = match.group("val")
+        if _BLOCK_SCALAR.match(val):
+            in_block = True
+            block_indent = len(match.group("lead")) - len(match.group("lead").lstrip())
+            continue
+        if val[0] in "\"'[{&*!|>%@`#" or not _line_is_invalid_yaml(line.strip()):
+            continue
+        # An indented next line continues a multi-line plain scalar: ambiguous.
+        nxt = lines[i + 1] if i + 1 < len(lines) else ""
+        if nxt.strip() and len(nxt) - len(nxt.lstrip()) > indent:
+            continue
+        quoted = "'" + val.replace("'", "''") + "'"
+        lines[i] = f"{match.group('lead')}{match.group('key')}: {quoted}"
+        changed = True
+    if not changed:
+        return None
+    head_len = len(_OPENING) + len(yaml_text)
+    repaired = content[: len(_OPENING)] + "\n".join(lines) + content[head_len:]
+    try:
+        parse_frontmatter_str(repaired)
+    except FrontmatterParseError:
+        return None
+    return repaired
 
 
 def append_frontmatter_keys(content: str, additions: dict[str, Any]) -> str | None:

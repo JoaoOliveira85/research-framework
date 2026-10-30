@@ -536,14 +536,19 @@ def _sg005_frontmatter_dict(note_path: Path) -> dict | None:
     # Holdout from spec 025 B4 canonical parser migration.
     # Reason: SG-005 records missing/malformed frontmatter as gate failures
     # without raising; the canonical parser raises on malformed YAML.
+    return _sg005_parse(note_path)[0]
+
+
+def _sg005_parse(note_path: Path) -> tuple[dict | None, str | None]:
+    """Return ``(frontmatter, yaml_error)``; the error is set only for bad YAML."""
     split = split_frontmatter(note_path.read_text(encoding="utf-8"))
     if split is None:
-        return None
+        return None, None
     try:
         fm = yaml.safe_load(split[0]) or {}
-    except yaml.YAMLError:
-        return None
-    return fm if isinstance(fm, dict) else None
+    except yaml.YAMLError as exc:
+        return None, " ".join(str(exc).split())
+    return (fm if isinstance(fm, dict) else None), None
 
 
 def _sg005_missing_keys(fm: dict | None) -> list[str]:
@@ -585,10 +590,12 @@ def SG005_frontmatter_completeness(note_paths: list[Path]) -> GateResult:
     complete = 0
     problems: list[tuple[str, list[str]]] = []
     for p in note_paths:
-        fm = _sg005_frontmatter_dict(p)
+        fm, yaml_error = _sg005_parse(p)
         miss = _sg005_missing_keys(fm)
         if not miss:
             complete += 1
+        elif yaml_error is not None:
+            problems.append((p.name, [f"valid YAML frontmatter ({yaml_error})"]))
         else:
             problems.append((p.name, miss))
     ratio = complete / len(note_paths)

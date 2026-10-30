@@ -107,6 +107,31 @@ def _merge_research_notes(research_path: Path, new_names: list[str]) -> None:
     _write_json(research_path, doc)
 
 
+def _repair_note_frontmatter(note_paths: list[Path]) -> list[Path]:
+    """Quote unquoted ``: `` scalars in freshly-written notes (issue #45).
+
+    Runs right after the note_writer batch returns, so a note the agent wrote
+    with invalid YAML frontmatter is fixed in the cycle that wrote it instead
+    of being skipped by every later reader. Notes that already parse, and
+    notes that cannot be repaired unambiguously, are left alone (the latter
+    then FAIL SG-005 with the YAML error). Returns the repaired paths.
+    """
+    from research_framework.vault.frontmatter import repair_frontmatter_text
+
+    repaired: list[Path] = []
+    for path in note_paths:
+        try:
+            text = path.read_text(encoding="utf-8")
+            fixed = repair_frontmatter_text(text)
+            if fixed is None:
+                continue
+            path.write_text(fixed, encoding="utf-8")
+        except OSError:
+            continue
+        repaired.append(path)
+    return repaired
+
+
 def _stamp_lifecycle_cycle(note_paths: list[Path], cycle_num: int) -> int:
     """Stamp ``lifecycle.created_at_cycle`` on every freshly-written note.
 

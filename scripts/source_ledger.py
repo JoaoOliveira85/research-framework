@@ -33,6 +33,7 @@ from research_framework.vault.frontmatter import (
 )
 
 _LOG = logging.getLogger(__name__)
+_WARNED_UNPARSEABLE: set[Path] = set()
 
 # Bumped 1.0 → 1.1 on 2026-06-03 (FR-022/FR-023/FR-024): additive ``read_via``
 # / ``disagreement_was`` fields + the ``LEDGER_DISAGREEMENT`` terminal
@@ -315,7 +316,9 @@ def _note_citation_hosts(vault: Path) -> dict[str, int]:
         try:
             fm, _body = parse_frontmatter(note)
         except FrontmatterParseError as exc:
-            _LOG.warning("skipping unparseable note %s: %s", note, exc)
+            if note not in _WARNED_UNPARSEABLE:
+                _WARNED_UNPARSEABLE.add(note)
+                _LOG.warning("skipping unparseable note %s: %s", note, exc)
             continue
         entries = fm.get("source_urls")
         if not isinstance(entries, list):
