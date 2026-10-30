@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-30
+
 ### Added
 
 - `research-framework generate --help` and the README now show a cron one-liner and a launchd setup for an unattended weekly run (`generate --spec <spec> --output <vault> --resume --max-usd <X>`, which `./vault research` expands to). They will move to `pipeline <vault> run` when ROADMAP v1.1.0 row 7 ships (issue #19).
@@ -60,6 +62,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A declined `regenerate-agents` or `prune` now says why** instead of printing "This is a framework bug (spec 070 FR6)". Both verbs ask before writing; with no terminal on stdin the prompt reads end-of-file and declines, and the only output was `aborted` on stdout, which `cli.main`'s silent-exit backstop reports as a bug. They now also print the reason on stderr — "no answer (stdin is not a terminal)" or "not confirmed" — and the way out (`--force` / `--yes`). The exit code is unchanged (1). (test: `tests/cli/test_regenerate_agents.py::test_declining_says_why_instead_of_reporting_a_framework_bug`, `tests/cli/test_prune.py::test_declining_without_a_terminal_says_why`)
 
 ### Migration notes
+
+**Upgrading a 1.x vault, in order** (rehearsed on copies of ten real vaults). Back the vault up first (`tar czf ../<vault>-pre-2.0.0.tgz .`): `_pipeline/` and `_templates/` are not in git.
+
+1. `./vault update` — the vault's existing shim installs 2.0.0. It does not yet run 2.0.0's update steps, which live in the new shim. If the health check at the end fails (unreachable source URLs, orphan links), the update exits 1 and makes no commit; the package is still upgraded.
+2. `./vault regenerate-shim`, adding `--force` if it reports the shim `customized` or `unverified` — that is every vault generated before 2.0.0. `--force` keeps no copy of the old shim: if you hand-edited it, save it first (`cp vault vault.pre-2.0.0`) and carry your edits across.
+3. `./vault update --force` — the new shim now runs 2.0.0's steps: template re-render (`_templates/.previous/` keeps what it replaced), stage-prompt refresh (`_pipeline/prompts/.previous/`), legacy corpus-template cleanup (a template a note links to is kept), and the archived-notice sync. Without `--force` it stops at "Already at v2.0.0, nothing to do", and refuses the working tree left dirty by step 1.
+4. `research-framework regenerate-agents <vault> --agent ask --agent research`, in a terminal: it asks before overwriting and, with no terminal on stdin, declines and says so (#38). Do not add `--force`, which overwrites every selected `.claude/commands/*.md` without asking.
+5. Edit `settings.yaml`, which no update rewrites:
+   - copy the `stages.ask` block from the matching shipped profile — without it `ask` refuses (exit 2);
+   - delete `tier: standard` from `plan_narrator` and `probe_retrieval` (it never selected a model, and now warns);
+   - delete any top-level `budget:` key (never read; now warns as unknown);
+   - for an open-ended vault, `pipeline.max_cycles: 0` plus `pipeline.cycles_per_run: N` — only after step 3, whose `validate_cycle.py` reads `0` as "no ceiling".
+6. Check: `./vault status`, `research-framework validate --vault .`, `./vault health --offline`, then `./vault reindex` to rewrite the Layer-1 index files in the new link form. Commit.
+
+The notes below give the detail behind each step, change by change.
 
 - Existing vaults: `./vault update` leaves a `_pipeline/systemd/` directory you already have untouched (nothing is deleted or re-rendered). Delete it, or keep it if you wired it to your own timer.
 - Scripts passing `--force-budget` (with or without `RF_FORCE_BUDGET_ACK=1`) must instead raise the capped limit in the vault's `settings.yaml` and then run `generate --resume`. `--approve` / `--approve-all` / `--reject` are unchanged.
