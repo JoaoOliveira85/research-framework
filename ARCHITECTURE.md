@@ -700,7 +700,7 @@ source modules shipped by 0.6.0 — the "Features" step ran without waiting on
 spec 021, which is still a draft blocked on six `[PROPOSED]` decisions and is
 now deferred (`docs/ROADMAP.md` § Deferred). This section is a record of the
 sequencing rationale at the time, not a live status — `docs/ROADMAP.md`'s
-v1.1.0 and v1.2.0 tiers are what is in flight today.
+v2.1.0 and v2.2.0 tiers are what comes next.
 
 ---
 
@@ -712,7 +712,7 @@ In order:
 2. Read this file, `ARCHITECTURE.md` (you're here).
 3. Read `CONTRIBUTING.md` for the spec-kit workflow.
 4. Read `docs/testing-strategy.md` for the test pyramid.
-5. Read `docs/ROADMAP.md`'s v1.1.0 tier for what comes next.
+5. Read `docs/ROADMAP.md`'s v2.1.0 tier for what comes next.
 6. Skim `docs/adr/README.md` for the durable decisions index.
 7. For any specific spec you're working on, read its `spec.md` →
    `plan.md` → `research.md` → `contracts/` → `tasks.md` in that

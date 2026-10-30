@@ -260,8 +260,8 @@ explicit in `settings.yaml`, not buried in the prompt code.
 
 The quality measurement harness (spec 022) shipped before the feature waves
 so every release could be checked against it. The current ordering — make
-the weekly pipeline run unattended (v1.1.0) before giving sibling repos a
-contract to build against (v1.2.0) — is in `docs/ROADMAP.md`
+the weekly pipeline run unattended (v2.1.0) before giving sibling repos a
+contract to build against (v2.2.0) — is in `docs/ROADMAP.md`
 § Sequencing decisions. A local / self-hosted model path is always
 supported: `settings.ollama.yaml` and `settings.opencode.yaml` ship in every
 release, and what a local model can *complete* is tracked in spec 065.
@@ -285,14 +285,14 @@ become deployment-time separable services that compose.
 The contract surface between the three is **flat files** (the vault is the
 contract) plus the stable `./vault` subprocess interface. No in-process
 coupling. Specs 023 and 036 carry the architectural detail; the
-sequencing is `docs/ROADMAP.md` v1.2.0.
+sequencing is `docs/ROADMAP.md` v2.2.0.
 
 This shapes decisions we make NOW (no premature `VaultHandle` abstraction;
 no daemon mode; vault state always under vault root) — even though the
 formal split is still ahead: spec 023 shipped Phase 1
 (`refresh-sources`, `regenerate-shim`, atomic writes); Phase 2
 (`VaultHandle`, multi-vault — #43) and the contract spec 036 (#52) are
-roadmap v1.2.0.
+roadmap v2.2.0.
 
 ---
 
@@ -367,7 +367,7 @@ PATH=/abs/dir/of/claude:/usr/bin:/bin
 </dict></plist>
 ```
 
-These examples will move to `pipeline <vault> run` when ROADMAP v1.1.0 row 7 ships.
+These examples will move to `pipeline <vault> run` when ROADMAP v2.1.0 row 7 ships.
 The same cron and launchd lines are in `research-framework generate --help`.
 
 Schedule a weekly digest with cron or launchd (explicit opt-in — the verb never auto-runs):

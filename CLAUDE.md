@@ -411,7 +411,7 @@ catch stale references.
 
 - `ARCHITECTURE.md` — system design source of truth (read first).
 - `CONTRIBUTING.md` — spec-kit flow, TDD discipline, doc taxonomy.
-- `docs/ROADMAP.md` — shipped registry, the v1.3.0 / v1.4.0 tiers and
+- `docs/ROADMAP.md` — shipped registry, the v2.1.0 / v2.2.0 tiers and
   the Deferred table. **Source of truth for "what comes next".**
 - `docs/TODO.md` — scratchpad. Often empty. Triage to ROADMAP.
 - `CHANGELOG.md` — every user-visible change. Read [1.0.0] for the public
