@@ -64,8 +64,7 @@ def _cmd_prune(args: argparse.Namespace) -> int:
         # 1 for the identical interaction — the operator answering "no" to a
         # confirmation. They agree on 1 now: nothing was done, so a caller that
         # reads 0 as "pruned" would be wrong, and 1 is the model's "this unit of
-        # work is over, move on" (FR-012). It is not an error and nothing is
-        # written to stderr.
+        # work is over, move on" (FR-012). prune_vault says why on stderr.
         return 1 if getattr(result, "declined", False) else 0
     except (ValueError, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -177,11 +176,23 @@ def _cmd_regenerate_agents(args: argparse.Namespace) -> int:
 
     if not args.force:
         try:
-            answer = input("Continue? [y/N] ").strip().lower()
+            answer: str | None = input("Continue? [y/N] ").strip().lower()
         except EOFError:
-            answer = ""
+            answer = None
         if answer not in ("y", "yes"):
             print("[regenerate-agents] aborted")
+            # Said on stderr too: a non-interactive caller only ever sees the
+            # EOF branch, and cli.main reports a silent non-zero exit as a bug.
+            reason = (
+                "no answer (stdin is not a terminal)"
+                if answer is None
+                else "not confirmed"
+            )
+            print(
+                f"[regenerate-agents] aborted: {reason}. Answer y at the prompt, "
+                "or pass --force to overwrite the files without asking.",
+                file=sys.stderr,
+            )
             return 1
 
     # Load spec as a SimpleNamespace-compatible object by using the real loader.

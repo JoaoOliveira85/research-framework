@@ -45,15 +45,8 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "_cmd_prune",
     ): (
         "Returns 1 when the operator declines the confirmation prompt (077 "
-        "D4/T003). Nothing failed and nothing was done; the message belongs on "
-        "stdout with the rest of the interaction."
-    ),
-    (
-        "vault.py",
-        "_cmd_regenerate_agents",
-    ): (
-        "Same as _cmd_prune: 1 for a declined confirmation, message on stdout. "
-        "The two verbs disagreed (0 vs 1) until 077 T003 made them agree."
+        "D4/T003). Nothing failed and nothing was done; prune_vault, not the "
+        "verb, writes the decline reason to stderr."
     ),
 }
 

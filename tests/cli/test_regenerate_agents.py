@@ -126,6 +126,28 @@ def test_regenerate_without_force_declines_on_eof(tmp_path: Path) -> None:
     assert result.returncode != 0
 
 
+def test_declining_says_why_instead_of_reporting_a_framework_bug(
+    tmp_path: Path,
+) -> None:
+    """With no terminal on stdin the prompt reads EOF. The decline must name
+    that and the way out, not trip cli.main's silent-exit backstop."""
+    vault = _make_minimal_vault(tmp_path)
+    result = _run_regenerate([str(vault), "--agent", "ask"], input="")
+    assert result.returncode == 1
+    assert "framework bug" not in result.stderr
+    assert "not a terminal" in result.stderr
+    assert "--force" in result.stderr
+    assert not (vault / ".claude" / "commands" / "ask.md").exists()
+
+
+def test_answering_no_says_it_was_not_confirmed(tmp_path: Path) -> None:
+    vault = _make_minimal_vault(tmp_path)
+    result = _run_regenerate([str(vault), "--agent", "ask"], input="n\n")
+    assert result.returncode == 1
+    assert "framework bug" not in result.stderr
+    assert "not confirmed" in result.stderr
+
+
 def test_regenerate_unknown_agent_exits_2(tmp_path: Path) -> None:
     """Passing an unknown agent name exits with code 2."""
     vault = _make_minimal_vault(tmp_path)
