@@ -45,6 +45,7 @@ import yaml
 from research_framework.vault.corpus import corpus_dir
 from research_framework.vault.frontmatter import (
     FrontmatterParseError,
+    dump_frontmatter,
     parse_frontmatter_str,
 )
 
@@ -575,14 +576,16 @@ def _write_redirect_stub(
             "acronym %r is not a plain file name; no redirect stub written", acronym
         )
         return False
-    content = (
-        "---\n"
-        f"title: {acronym}\n"
-        "note_type: alias\n"
-        f"redirect_to: {stem}\n"
-        "verifier_status: exempt\n"
-        "---\n"
-        f"See [[{stem}]].\n"
+    # A YAML dumper, not an f-string: a stem containing ``: `` must not break
+    # the stub's frontmatter (issue #45).
+    content = dump_frontmatter(
+        {
+            "title": acronym,
+            "note_type": "alias",
+            "redirect_to": stem,
+            "verifier_status": "exempt",
+        },
+        f"See [[{stem}]].\n",
     )
     try:
         if stub_path.exists():

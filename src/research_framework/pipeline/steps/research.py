@@ -221,6 +221,7 @@ def _phase(ctx: CycleContext) -> int:
             # `lifecycle.created_at_cycle` field so orchestrator's
             # "what did this cycle produce?" queries work. Idempotent;
             # see ``_stamp_lifecycle_cycle`` docstring for rationale.
+            st._repair_note_frontmatter(note_paths)
             st._stamp_lifecycle_cycle(note_paths, int(cycle_3))
 
             sg4 = run_gate(SG004_validate_vault_wrapper, vault_dir)
