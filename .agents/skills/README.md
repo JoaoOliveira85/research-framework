@@ -5,6 +5,25 @@ orchestrator (or a slash command, or a maintainer's subagent) invokes against
 an LLM. Skill files keep prompts out of Python source and make every agent
 interaction reproducible and auditable.
 
+These files ship in the wheel and the bundle only; a generated vault holds no
+copy, and a `SKILL.md` planted in a vault changes no prompt (#12). Exactly
+these are read at run time:
+
+| Stage | Skill | How |
+|-------|-------|-----|
+| `verifier` (cycle) | `verifier` | inlined from the installed package by `research_framework._assets.skill_instructions` (frontmatter and stub `Examples` dropped, headings nested), with the note's source policy and URL patterns as inputs |
+| `topic_propose` (cycle) | `topic-propose` | inlined the same way |
+| research-plan narrator (cycle) | `research-plan-narrator` | inlined the same way |
+| vault-spec chat (`install.sh`) | `vault-spec` | inlined by `install.sh` from the unpacked bundle |
+
+The `scout` and `note-writer` skills are not read at run time: their rules
+(research plan as the to-do list, focus-category share, binding exclusions,
+batch-only work, the `skipped_topics` contract) are adapted into
+`templates/prompts/scout-prompt.md.j2` and `dfs-prompt.md.j2`. The framework
+reads no other skill here at run time. Because the inlined text reaches a vault
+verbatim, a skill that is inlined must not cite repo-only paths
+(`docs/`, `specs/`, `contracts/`, source files).
+
 Two guards keep this directory honest: `docs/prompts/README.md` (generated
 by `scripts/render_prompt_corpus.py`) records every skill file's sha256 in
 its "Recorded, not copied" table, so a prompt cannot change without the

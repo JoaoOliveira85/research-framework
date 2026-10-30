@@ -171,6 +171,19 @@ class TestSG003TopicAbstractionCheck:
         ok, why = _matches_schema(r.to_dict(), _gate_result_schema())
         assert ok, why
 
+    def test_correction_hint_points_at_no_skill_file(self, tmp_path: Path) -> None:
+        """The hint is injected into the scout's re-prompt, which carries no
+        skill file (#12); it used to send the agent to "scout SKILL Step 0"."""
+        from research_framework.pipeline.gates_step import SG003_topic_abstraction_check
+
+        _write_settings(tmp_path)
+        spec = _minimal_spec(forbidden=["oms_"])
+        report = _titles_scout(["oms_a", "oms_b", "oms_c", "oms_d"], ["ok-topic"])
+        r = SG003_topic_abstraction_check(report, spec, tmp_path)
+        assert r.status == "FAIL"
+        assert "skill" not in r.correction_hint.lower()
+        assert "forbidden prefix" in r.correction_hint
+
     def test_never_uses_hardcoded_prefix_list_from_spec_only(
         self, tmp_path: Path
     ) -> None:

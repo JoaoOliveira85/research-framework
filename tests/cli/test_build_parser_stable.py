@@ -45,7 +45,8 @@ _EXPECTED_SUBCOMMANDS: tuple[str, ...] = (
     "coverage",
     "validate",
     "reindex",
-    "check-skills",
+    # `check-skills` sat here until #12: a vault holds no skill files, so
+    # there is nothing for it to repair (see test_check_skills_is_gone).
     "cycle",
     "inventory",
     "onboard",
@@ -173,6 +174,21 @@ def test_argparse_topology_unchanged() -> None:
     assert names == list(_EXPECTED_SUBCOMMANDS)
     # spec 048: added global --log-level. Top-level actions = help + log_level + subparsers.
     assert len(parser._actions) == 3
+
+
+def test_check_skills_is_gone() -> None:
+    """``check-skills`` and the skill preflight module it wrapped are removed.
+
+    Stage prompts carry their instructions from the package and a vault holds
+    no skill files (#12), so the verb that validated and restored vault
+    ``SKILL.md`` files has nothing to do.
+    """
+    import importlib.util
+
+    with pytest.raises(SystemExit) as excinfo:
+        build_parser().parse_args(["check-skills", "--vault", "."])
+    assert excinfo.value.code == 2
+    assert importlib.util.find_spec("research_framework.pipeline.skill_check") is None
 
 
 def test_external_import_path() -> None:

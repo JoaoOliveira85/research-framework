@@ -96,32 +96,3 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     if failed:
         print(f"validate: failing checks: {', '.join(failed)}", file=sys.stderr)
     return worst
-
-
-def _cmd_check_skills(args: argparse.Namespace) -> int:
-    """``research-framework check-skills`` — validate (and auto-restore) SKILL.md files.
-
-    Convenience wrapper around :func:`pipeline.skill_check.validate_and_repair_skills`
-    so users can run the preflight manually after a suspected external-tool
-    rewrite, without having to start a cycle. Mirrors the cycle-runner's
-    preflight: exit 0 when every skill parses (possibly after auto-restore),
-    exit 2 when any file is unrecoverable.
-    """
-    from ..pipeline.skill_check import validate_and_repair_skills
-
-    result = validate_and_repair_skills(args.vault)
-    if result.repaired:
-        print(
-            f"auto-restored {len(result.repaired)} SKILL.md file(s) "
-            f"from the bundled copies:"
-        )
-        for issue in result.repaired:
-            print(f"  - {issue.path}: was {issue.error!r}")
-    if result.unrecoverable:
-        print("UNRECOVERABLE SKILL.md files:", file=sys.stderr)
-        for issue in result.unrecoverable:
-            print(f"  - {issue.path}: {issue.error}", file=sys.stderr)
-        return 2
-    if not result.repaired:
-        print(f"OK: {result.scanned} skill file(s) parsed cleanly")
-    return 0

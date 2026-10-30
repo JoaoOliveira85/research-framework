@@ -94,10 +94,10 @@ spec. `pipeline` is specified in `075-pipeline-runner`.
 - **FR-003**: The shim MUST refuse to overwrite a shim a user has customised
   unless `--force` is given.
 
-**The argparse surface — 21 verbs**
+**The argparse surface — 20 verbs** (`check-skills` was removed in #12)
 
 - **FR-004**: The parser MUST register exactly these subcommands:
-  `generate`, `coverage`, `validate`, `reindex`, `check-skills`, `cycle`,
+  `generate`, `coverage`, `validate`, `reindex`, `cycle`,
   `inventory`, `onboard`, `regenerate-agents`, `prune`, `parse-spec`,
   `pipeline`, `quality-baseline-update`, `quality-fixture-init`,
   `refresh-sources`, `regenerate-shim`, `status`, `digest`, `acceptance`,
@@ -167,7 +167,6 @@ spec. `pipeline` is specified in `075-pipeline-runner`.
 | `coverage` | Coverage-target status | `--vault` (required) | 0 met; 1 unmet; 2 bad vault |
 | `validate` | Run the validator suite | `--vault` | max() of five sub-scripts, each 0/1/2 |
 | `reindex` | Rebuild index files | `--vault` | 0; 2 import failure |
-| `check-skills` | Repair vault SKILL.md files | `--vault` | 0 clean or restored; 2 unrecoverable |
 | `cycle` | One research cycle | `--vault`, `--cycle` (both required), `--budget-cap` (default 10.0), `--target-topics` | passthrough 0/1/2; 2 unloadable spec with `--target-topics` |
 | `inventory` | Describe a vault | positional path, `--format`, `--out` | 0; 2 not a vault |
 | `onboard` | Four-step vault onboarding | positional path, `--draft-only`, `--no-git` | 0 complete; 1 stopped awaiting spec review (normal); 2 aborted |

@@ -15,7 +15,7 @@ import pytest
 
 from research_framework.pipeline.cycle_runner import run_cycle_steps
 from tests._helpers import fake_cli_binary
-from tests._helpers.vault_factory import build_minimal_vault, install_bundled_skill
+from tests._helpers.vault_factory import build_minimal_vault
 
 pytestmark = pytest.mark.e2e
 
@@ -31,7 +31,6 @@ def test_a_cycle_runs_with_only_the_leaf_binary_faked(
         max_cycles=1,
         install_fake_agent=False,
     )
-    install_bundled_skill(vault, "scout")
     fake_cli_binary.activate(monkeypatch, tmp_path / "bin")
 
     rc = run_cycle_steps(vault, cycle_num=1, budget_cap=50.0, max_cycles=1)

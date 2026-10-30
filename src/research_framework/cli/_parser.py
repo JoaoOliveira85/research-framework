@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ._log_level import add_log_level_arg
 from .acceptance import _cmd_acceptance
-from .audit import _cmd_check_skills, _cmd_coverage, _cmd_validate
+from .audit import _cmd_coverage, _cmd_validate
 from .digest import cmd_digest
 from .export import _cmd_export
 from .pause import _cmd_pause
@@ -227,16 +227,6 @@ def build_parser() -> argparse.ArgumentParser:
     r = sub.add_parser("reindex", help="Rebuild Layer 1 index files")
     r.add_argument("--vault", type=Path, required=True, help="Vault directory")
     r.set_defaults(func=_cmd_reindex)
-
-    cs = sub.add_parser(
-        "check-skills",
-        help=(
-            "Validate .agents/skills/*/SKILL.md and auto-restore broken ones "
-            "from the bundled wheel copies."
-        ),
-    )
-    cs.add_argument("--vault", type=Path, required=True, help="Vault directory")
-    cs.set_defaults(func=_cmd_check_skills)
 
     cy = sub.add_parser("cycle", help="Run a single research cycle")
     cy.add_argument("--vault", type=Path, required=True, help="Vault directory")

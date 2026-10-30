@@ -405,8 +405,9 @@ def test_scout_prompt_instructs_generalize_step_and_topics_found(
     assert "SG-003" in prompt
 
     # Template version must be bumped so the migrator knows to re-render vaults
-    # that were scaffolded against the v1 template (which omitted topics_found).
-    assert "_template_version: 2" in prompt
+    # scaffolded against an older template: v1 omitted topics_found, v2 the
+    # research-plan rules (#12).
+    assert "_template_version: 3" in prompt
 
 
 def test_scout_prompt_renders_target_topics_when_supplied(tmp_path: Path) -> None:

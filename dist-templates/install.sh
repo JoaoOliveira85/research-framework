@@ -554,29 +554,8 @@ chmod +x "${TARGET}/rv"
 echo ""
 echo "[install] runtime ready."
 
-# ---------------------------------------------------------------------------
-# 4b. Skill-file preflight.
-# External agent CLIs (Cursor, Codex, the Superpowers plugin) auto-discover
-# .agents/skills/*/SKILL.md files when they open the bundle and have, in
-# earlier releases, rewritten them in-place — flattening multi-line strings
-# and breaking the YAML frontmatter so the cycle's own skill loader silently
-# drops them. We run the same preflight the cycle runner uses, with
-# auto-restore enabled, so the bundle leaves install.sh in a known-good state.
-# ---------------------------------------------------------------------------
-if [[ -d "${ROOT_DIR}/.agents/skills" ]]; then
-    if python -m research_framework.cli check-skills --vault "${TARGET}"; then
-        :
-    else
-        echo "" >&2
-        echo "ERROR: one or more .agents/skills/*/SKILL.md files are broken and" >&2
-        echo "could not be auto-restored. The bundle is incomplete — re-download" >&2
-        echo "the release tarball or run \`./rv check-skills --vault .\` after fixing" >&2
-        echo "the listed files by hand." >&2
-        INSTALL_FAILED=1
-        _write_install_summary "${FRAMEWORK_VERSION}"
-        exit 2
-    fi
-fi
+# Stage prompts carry their instructions from the installed package, so a vault
+# needs no skill files and the installer neither checks nor writes any (#12).
 
 # ---------------------------------------------------------------------------
 # 5. Interactive onboarding — skip cleanly in non-TTY / CI / --non-interactive.

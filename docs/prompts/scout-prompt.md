@@ -7,7 +7,7 @@
 | **Source** | `templates/prompts/scout-prompt.md.j2` |
 | **Role** | Topic discovery — produces `_pipeline/scout-report.json`. |
 | **Dispatched by** | `pipeline scout` / the cycle runner's scout step |
-| **Source sha256** | `18adc1d7a327ef11` |
+| **Source sha256** | `d115efe522cc8f40` |
 
 Reproduced verbatim, including its placeholders. A vault gets this text with the placeholders filled at scaffold or dispatch time.
 
@@ -16,7 +16,7 @@ Reproduced verbatim, including its placeholders. A vault gets this text with the
 {%- set code_first = primary and primary[0].repos -%}
 {%- set coverage_cats = (spec.coverage_targets.categories if spec.coverage_targets is defined and spec.coverage_targets else []) -%}
 ---
-_template_version: 2
+_template_version: 3
 ---
 You are running BFS scout cycle {CYCLE_NUM} of a recursive research pass on the
 {{ spec.name }} vault.
@@ -42,6 +42,15 @@ Organization: {{ spec.scope.organization }}
      but flagged as `scope_check: warn` — review them and only include
      the ones that clearly fit scope. If you're over budget or already
      have a full cycle's worth of work, skip this block entirely.
+
+## Research plan (binding for this cycle)
+
+This cycle's research plan is reproduced at the end of this prompt under
+`## Research Plan` (it is also on disk at `_pipeline/research-plan.md`).
+
+- Treat its priority queue as the canonical to-do list for this cycle.
+- If it lists cycle focus categories (`## Cycle focus`), then
+  at least 70% of your `topics_found.new` entries MUST belong to them.
 
 {% if code_first %}
 ## Source-of-Truth Rule (CODE-FIRST)

@@ -290,26 +290,47 @@ def render_prompt(
     max_proposals: int,
     max_degree: int,
 ) -> str:
+    # The instructions travel with the prompt, read from the package (#12): a
+    # vault holds no skill files and not every runtime would load one.
+    from research_framework._assets import skill_instructions
+
     lines: list[str] = []
-    lines.append(f"You are running the 'topic-propose' skill on the {spec_name} vault.")
+    lines.append(f"You are the topic proposer for the {spec_name} vault.")
     lines.append("")
-    lines.append(f"Domain: {domain or '(unset)'}")
+    lines.append("## Instructions")
+    lines.append("")
+    lines.append(skill_instructions("topic-propose", heading_offset=2))
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    lines.append(
+        "The sections below are your inputs for this cycle; each names the "
+        "input the instructions refer to."
+    )
+    lines.append("")
+    lines.append(f"Domain (`spec_scope.domain`): {domain or '(unset)'}")
     lines.append("")
     if out_of_scope:
-        lines.append("## Out of scope (HARD fence — reject anything matching these)")
+        lines.append(
+            "## Out of scope — `spec_scope.out_of_scope` "
+            "(HARD fence — reject anything matching these)"
+        )
         for t in out_of_scope:
             lines.append(f"- {t}")
         lines.append("")
-    lines.append("## Relation types (closed enum — use exactly one per proposal)")
+    lines.append(
+        "## Relation types — `relation_types` "
+        "(closed enum — use exactly one per proposal)"
+    )
     for rt in relation_types:
         lines.append(f"- `{rt}`")
     lines.append("")
-    lines.append("## This cycle's touched notes (degree-1 anchors)")
+    lines.append("## This cycle's touched notes — `touched_notes` (degree-1 anchors)")
     for n in touched_notes:
         lines.append(f"### [[{n['title']}]] — `{n['path']}`")
         lines.append(n["excerpt"])
         lines.append("")
-    lines.append("## Already covered (do NOT re-propose)")
+    lines.append("## Already covered — `covered_titles` (do NOT re-propose)")
     if covered_titles:
         for t in covered_titles[:40]:
             lines.append(f"- {t}")
@@ -319,21 +340,21 @@ def render_prompt(
     else:
         lines.append("(none)")
     lines.append("")
-    lines.append("## Already queued in backlog")
+    lines.append("## Already queued in backlog — `backlog_titles`")
     if backlog_titles:
         for t in backlog_titles[:40]:
             lines.append(f"- {t}")
     else:
         lines.append("(none)")
     lines.append("")
-    lines.append("## Already flagged by Phase 1 (topic_harvest)")
+    lines.append("## Already flagged by Phase 1 — `phase1_titles` (topic_harvest)")
     if phase1_titles:
         for t in phase1_titles[:40]:
             lines.append(f"- {t}")
     else:
         lines.append("(none)")
     lines.append("")
-    lines.append("## Unmet coverage categories (priority signal)")
+    lines.append("## Unmet coverage categories — `coverage_gaps` (priority signal)")
     if coverage_gaps:
         for g in coverage_gaps:
             req = " (required)" if g.get("required") else ""
@@ -344,7 +365,7 @@ def render_prompt(
     else:
         lines.append("(none)")
     lines.append("")
-    lines.append("## Caps")
+    lines.append("## Caps — `max_proposals`, `max_degree`")
     lines.append(
         f"- Emit **at most {max_proposals}** proposals. "
         "Overflow → `rejected[]` with `cap_exceeded`."

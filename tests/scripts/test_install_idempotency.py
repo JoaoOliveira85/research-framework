@@ -94,8 +94,8 @@ class TestIdempotentRerun:
         """A summary recording ``exit_status: failed`` is not "already installed".
 
         The fast path keyed only on ``.venv`` + ``install_summary.json``
-        existing, and every failure exit after venv creation (version-mismatch
-        sanity check, check-skills preflight) writes that summary. A plain
+        existing, and every failure exit after venv creation (e.g. the
+        version-mismatch sanity check) writes that summary. A plain
         re-run then printed "already installed", exited 0 and rewrote the
         record as ``ok`` without re-running the step that failed.
         """

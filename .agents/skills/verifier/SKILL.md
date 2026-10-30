@@ -29,10 +29,12 @@ point is to be independent of the writer.
 Check, in order:
 
 1. **Tier 1 citations present** (Principle IX): every paragraph with a
-   factual claim cites a vault note. Answers / documents only.
+   factual claim cites a vault note. Applies only when the artifact type is
+   `answer` or `document`; skip it for a `note`.
 2. **Tier 2 available**: every cited vault note has ≥1 `source_urls` entry.
-3. **Source policy**: for `hard`-type notes, ≥1 `source_urls` entry matches
-   `spec.code_source_url_patterns` (or defaults).
+3. **Source policy**: when the note's source policy is `hard`, ≥1
+   `source_urls` entry matches one of the code source URL patterns you are
+   given. A `soft` policy places no requirement on the URLs.
 4. **Template compliance**: required sections present, filled, non-placeholder.
 5. **Drift flagging**: when stated intent disagrees with code, the note has
    `intent_implementation_drift: true` and a non-empty `drift_notes`.
@@ -40,14 +42,13 @@ Check, in order:
    a level (explicit `credibility` or source `default_credibility`). Reject with
    `IX-credibility-unresolved` / `IX-credibility-malformed` for missing, invalid
    enum, or non-boolean `coi`. **Never re-judge whether the level is correct** —
-   shape only. See `docs/source-credibility.md`.
+   shape only.
 7. **Wikilink title corruption** (spec 067): a note's **first** body `[[TOKEN]]`
    must not rename its own title. Reject with `IX-wikilink-title-corruption` when
    the first wikilink is the note's own title-acronym pointing at a *different*
    note's stem (e.g. a `CAP Theorem` note whose first link is `[[cache-aside
-   pattern]]`). The deterministic twin
-   (`pipeline/verifier.py::deterministic_wikilink_violations`) is authoritative;
-   this is a redundant LLM check.
+   pattern]]`). The framework runs a deterministic version of this check that
+   is authoritative; yours is a redundant second look.
 
 # Constraints
 

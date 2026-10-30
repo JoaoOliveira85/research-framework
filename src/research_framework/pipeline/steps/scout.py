@@ -152,14 +152,14 @@ def _phase(ctx: CycleContext) -> int:
             "Re-run 'research-framework generate' to re-render prompts from the spec."
         )
         return 2
-    # Render scout prompt (replace placeholders)
+    # Render scout prompt (replace placeholders, append the research plan)
     scout_prompt_rendered = cycles_dir / f"cycle-{cycle_3}-scout-prompt.rendered.md"
-    sc._render_prompt(
+    sc._render_cycle_scout_prompt(
         scout_prompt_src,
         scout_prompt_rendered,
-        {"{CYCLE_NUM}": str(cycle_num), "{SCOUT_REPORT}": str(scout_report)},
         vault_dir=vault_dir,
         cycle_num=cycle_num,
+        scout_report=scout_report,
     )
     _inject_source_signals_into_prompt(
         vault_dir, cycle_num, scout_prompt_rendered, ctx.settings

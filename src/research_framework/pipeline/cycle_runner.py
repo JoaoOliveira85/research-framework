@@ -26,7 +26,6 @@ from pathlib import Path
 from research_framework.observability import BridgeLogWriter, publish_bridge_writer
 from research_framework.observability.cycle_log import cycle_log_handler
 
-from . import atomic_write as _atomic_write
 from . import cycle_state as _live_state
 from ._helpers import cosmetic_correction as _cosmetic_correction
 from ._helpers import quality_report_guard as _quality_report_guard_mod
@@ -41,7 +40,6 @@ from .budget_guard import (
     resolve_max_tokens,
 )
 from .settings import SettingsError, load_vault_settings
-from .skill_check import validate_and_repair_skills
 from .steps import (
     CycleContext,
     research_result_from_disk,
@@ -487,46 +485,8 @@ def run_cycle_steps(
         report_state.vault_dir = vault_dir
         report_state.cycle_num = cycle_num
 
-        # --- Step -1: skill-file preflight ---
-        # External agent CLIs (Cursor, Codex, Superpowers plugin) have rewritten
-        # .agents/skills/*/SKILL.md frontmatter in earlier bundles, silently
-        # disabling the corresponding skills mid-cycle. Restore from the wheel's
-        # bundled copies when possible; refuse to start a cycle if any skill is
-        # unrecoverable — running with a half-loaded skill registry is exactly
-        # how v0.2.19 produced the "verifier never ran" failure mode.
-        timer.lap("Preflight - validating .agents/skills/*/SKILL.md")
-        _publish_live_state(
-            vault_dir,
-            cycle_num=cycle_num,
-            max_cycles=max_cycles,
-            stage="preflight",
-            timer=timer,
-            budget_session=None,
-        )
-        skill_result = validate_and_repair_skills(vault_dir)
-        sidecar = pipeline_dir / f"cycle-{cycle_3}-skill-check.json"
-        _atomic_write.write_text(
-            sidecar,
-            json.dumps(skill_result.to_dict(), indent=2, ensure_ascii=False) + "\n",
-        )
-        if skill_result.repaired:
-            _LOG.info(
-                f"  WARNING: auto-restored {len(skill_result.repaired)} SKILL.md "
-                f"file(s) from the bundled copies — an external tool is likely "
-                f"rewriting them. See {sidecar} for details."
-            )
-        if not skill_result.ok:
-            _LOG.error("ERROR: one or more SKILL.md files are unrecoverable:")
-            for issue in skill_result.unrecoverable:
-                _LOG.info(f"  - {issue.path}: {issue.error}")
-            _LOG.info(
-                "Fix the listed files (or restore them from the source bundle) "
-                "before retrying the cycle."
-            )
-            report_state.exit_status = "failure"
-            report_state.exit_code = 2
-            return 2
-        _LOG.info(f"  OK ({skill_result.scanned} skill file(s) parsed cleanly)")
+        # There is no skill-file preflight: stage prompts carry their
+        # instructions from the package and a vault holds no skill files (#12).
 
         # --- Step 0: pre-cycle metrics ---
         timer.lap("Step 0 - capturing pre-cycle vault metrics")

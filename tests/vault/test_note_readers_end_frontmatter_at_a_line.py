@@ -9,7 +9,7 @@ this; these are the holdouts that cannot use it — they must not raise on
 malformed YAML, or they ship into vaults as standalone scripts.
 
 The readers that feed a writer have their own regression tests next to that
-writer (`vault_health.py`, `fix_acronym_links.py`, the SKILL.md preflight).
+writer (`vault_health.py`, `fix_acronym_links.py`).
 """
 
 from __future__ import annotations

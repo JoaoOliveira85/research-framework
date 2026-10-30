@@ -159,6 +159,7 @@ def _phase(ctx: CycleContext) -> int:
                 research_report=research_report,
                 batch_topics=assignment.topics,
                 correction_directive=prompt_correction,
+                exclusions=plan.exclusions,
             )
 
             seen_before: set[str] = set()

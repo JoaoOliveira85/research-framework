@@ -120,3 +120,24 @@ def test_opt_out_is_off_by_default(tmp_path: Path, monkeypatch) -> None:
     src = _pkg(tmp_path, {"a.py": "NEW\n"})
 
     assert sync_vault_scripts(v, source=src) == ["a.py"]
+
+
+def test_update_leaves_existing_vault_skill_files_alone(tmp_path: Path) -> None:
+    """``./vault update`` neither rewrites nor deletes a vault's skill files (#12).
+
+    Nothing reads them any more, and the framework cannot tell a copy it wrote
+    from one an operator wrote or edited, so the safe step is to leave them.
+    Both things the update runs are pinned: the script sync, and the installer
+    it re-runs, which restored them from the bundle via ``check-skills``.
+    """
+    v = _vault(tmp_path)
+    skill = v / ".agents" / "skills" / "scout" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("operator-edited\n", encoding="utf-8")
+    src = _pkg(tmp_path, {"a.py": "NEW\n"})
+
+    sync_vault_scripts(v, source=src)
+
+    assert skill.read_text(encoding="utf-8") == "operator-edited\n"
+    installer = Path(__file__).resolve().parents[2] / "dist-templates" / "install.sh"
+    assert "check-skills" not in installer.read_text(encoding="utf-8")

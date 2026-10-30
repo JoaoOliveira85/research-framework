@@ -28,8 +28,10 @@ __all__ = (
     "compare_versions",
     "decide",
     "is_user_owned",
+    "refresh_vault_prompts",
     "resolve_local_version",
     "resolve_target_version",
+    "shipped_prompt_version",
     "snapshot_title",
 )
 
@@ -272,7 +274,19 @@ def sync_vault_scripts(vault: Path, *, source: Path | None = None) -> list[str]:
     Only overwrites basenames the package ships; operator-added scripts are left
     alone, and nothing is ever deleted. Best-effort by design: scripts are a
     regenerable artifact and must never fail an upgrade.
+
+    It then runs :func:`refresh_vault_prompts`, whose vault-relative paths are
+    appended to the returned list (#12). This is the one post-upgrade hook
+    every existing vault's ``./vault update`` already calls, so it is where a
+    refresh has to live to reach vaults scaffolded before it existed — a new
+    hook in the shim template would reach only vaults whose shim is
+    regenerated. ``RV_SKIP_SCRIPT_SYNC`` skips the scripts, not the prompts.
     """
+    return _sync_scripts(vault, source) + refresh_vault_prompts(vault)
+
+
+def _sync_scripts(vault: Path, source: Path | None) -> list[str]:
+    """The ``scripts/`` half of :func:`sync_vault_scripts`."""
     if os.environ.get("RV_SKIP_SCRIPT_SYNC"):
         # Escape hatch for an operator who deliberately maintains a customised
         # vault-local script. Off by default: leaving a stale copy in place is
@@ -373,8 +387,92 @@ def _load_vault_spec(vault: Path) -> Any | None:
     try:
         return SpecConfig.from_dict(load_parsed_spec(vault))
     except Exception as exc:  # noqa: BLE001 - ParsedSpecError or a bad cache: skip
-        _LOG.warning("could not load the vault spec for template refresh: %s", exc)
+        _LOG.warning("could not load the vault spec; nothing re-rendered: %s", exc)
     return None
+
+
+_PROMPTS_RELDIR = Path("_pipeline") / "prompts"
+_PREVIOUS_DIR = ".previous"
+_TEMPLATE_VERSION_RE = re.compile(r"^_template_version:\s*(\d+)\s*$", re.MULTILINE)
+
+
+def shipped_prompt_version(name: str) -> int:
+    """The ``_template_version`` of the packaged ``templates/prompts/<name>.j2``."""
+    from research_framework._assets import asset_path
+
+    path = asset_path("templates") / "prompts" / f"{name}.j2"
+    match = _TEMPLATE_VERSION_RE.search(path.read_text(encoding="utf-8"))
+    if match is None:
+        raise ValueError(f"{path}: no _template_version in its frontmatter")
+    return int(match.group(1))
+
+
+def refresh_vault_prompts(vault: Path) -> list[str]:
+    """Re-render outdated ``_pipeline/prompts/`` stage prompts (#12).
+
+    A prompt is re-rendered from the installed package and the vault's spec
+    (:func:`_load_vault_spec`, so a stale ``spec-parse.json`` is re-parsed)
+    only when its recorded ``_template_version`` is older than the shipped
+    template's. A missing file is not created, a file without a recorded
+    version is not a framework render and is left alone, and a newer one is
+    left alone too. Before a prompt is replaced its old bytes go to
+    ``_pipeline/prompts/.previous/<name>`` — ``_pipeline/`` is git-ignored, so
+    that copy is the only way back for an operator who edited it. Returns the
+    vault-relative paths re-rendered; never raises, because a regenerable
+    artifact must not fail an upgrade.
+    """
+    from research_framework.generator.templates import (
+        STAGE_PROMPTS,
+        render_stage_prompt,
+    )
+    from research_framework.pipeline.template_drift import read_template_version
+
+    outdated: list[tuple[str, int, int]] = []
+    for name in STAGE_PROMPTS:
+        path = vault / _PROMPTS_RELDIR / name
+        if not path.is_file():
+            continue
+        recorded = read_template_version(path)
+        if recorded is None:
+            _LOG.info("%s records no template version; left as it is", path)
+            continue
+        try:
+            shipped = shipped_prompt_version(name)
+        except (OSError, ValueError) as exc:
+            _LOG.warning("cannot read the shipped %s template: %s", name, exc)
+            continue
+        if recorded < shipped:
+            outdated.append((name, recorded, shipped))
+    if not outdated:
+        return []
+    spec = _load_vault_spec(vault)
+    if spec is None:
+        return []
+
+    changed: list[str] = []
+    for name, recorded, shipped in outdated:
+        path = vault / _PROMPTS_RELDIR / name
+        saved = path.parent / _PREVIOUS_DIR / name
+        try:
+            new = render_stage_prompt(spec, vault, name).encode("utf-8")
+            saved.parent.mkdir(exist_ok=True)
+            saved.write_bytes(path.read_bytes())
+            path.write_bytes(new)
+        except Exception as exc:  # noqa: BLE001 - must not fail an upgrade
+            _LOG.warning("could not re-render %s: %s", path, exc)
+            continue
+        rel = path.relative_to(vault).as_posix()
+        # WARNING so the shim, which configures no logging, still prints it:
+        # the saved copy is the operator's only way back to an edited prompt.
+        _LOG.warning(
+            "re-rendered %s (template v%d -> v%d); previous content saved to %s",
+            rel,
+            recorded,
+            shipped,
+            saved.relative_to(vault).as_posix(),
+        )
+        changed.append(rel)
+    return changed
 
 
 def resolve_local_version(vault: Path) -> str:

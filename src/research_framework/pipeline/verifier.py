@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,6 +16,7 @@ from typing import Any
 
 import yaml
 
+from research_framework._assets import skill_instructions
 from research_framework.pipeline.process_tree import (
     popen_session,
     terminate_process_tree,
@@ -453,24 +455,77 @@ def _extract_json_blob(text: str) -> dict | None:
     return None
 
 
-def _build_verifier_prompt(note_content: str) -> str:
-    """Wrap the note in explicit verifier instructions.
+def _verifier_inputs(vault_dir: Path, note_text: str) -> dict[str, Any]:
+    """The inputs the verifier rules need for one note, read from the vault.
 
-    On Claude Code, agents auto-load ``.agents/skills/verifier/SKILL.md``
-    and produce JSON-compliant output naturally. Codex (and other
-    runtimes that don't auto-load skills) need the contract baked into
-    the prompt or they default to narrative responses that the framework
-    can't parse \u2014 the 0.2.30 silent-fail mode.
-
-    The wrapper is intentionally short and POINTS to the skill file
-    rather than restating its rules, so the source of truth stays in
-    ``SKILL.md``. The one thing we DO restate inline is the output
-    schema, because that's the contract the framework parses on.
+    The source-policy rule needs the note type's policy and the code source
+    URL patterns. They come from the cycle's parsed spec, read through
+    :func:`~research_framework.spec.parsed.load_parsed_spec` (#9); a type the
+    spec does not declare, or a vault without a readable spec, falls back to
+    the framework defaults — the hard note types and
+    :data:`~research_framework.spec.validator.DEFAULT_REPO_URL_PATTERNS`.
     """
+    from research_framework.spec.parsed import ParsedSpecError, load_parsed_spec
+    from research_framework.spec.schema import HARD_NOTE_TYPES
+    from research_framework.spec.validator import DEFAULT_REPO_URL_PATTERNS
+
+    try:
+        note_type = str(parse_frontmatter_str(note_text)[0].get("type") or "")
+    except FrontmatterParseError:
+        note_type = ""
+    spec: dict[str, Any] = {}
+    try:
+        spec = load_parsed_spec(vault_dir)
+    except ParsedSpecError as exc:
+        _LOG.warning("verifier: no readable parsed spec (%s); using defaults", exc)
+    declared = {
+        str(nt.get("name")): str(nt.get("source_policy") or "")
+        for nt in spec.get("note_types") or []
+        if isinstance(nt, dict)
+    }
+    policy = declared.get(note_type) or (
+        "hard" if note_type in HARD_NOTE_TYPES else "soft"
+    )
+    patterns = [str(p) for p in spec.get("code_source_url_patterns") or []]
+    return {
+        "note_type": note_type,
+        "source_policy": policy,
+        "code_url_patterns": patterns or list(DEFAULT_REPO_URL_PATTERNS),
+    }
+
+
+def _build_verifier_prompt(
+    note_content: str,
+    *,
+    note_type: str,
+    source_policy: str,
+    code_url_patterns: Sequence[str],
+) -> str:
+    """Wrap the note in the verifier's full instructions and their inputs.
+
+    The prompt is self-contained (#12): it carries the verifier skill's
+    rules, read from the package by
+    :func:`research_framework._assets.skill_instructions`, instead of
+    pointing the agent at a skill file, and the inputs those rules need —
+    the artifact type, the note's source policy and the code source URL
+    patterns. Without the inputs, "default to reject when uncertain" turned
+    the source-policy rule into a rejection of every hard-type note. The
+    output schema is restated after the rules because it is the contract
+    the framework parses on.
+    """
+    patterns = "\n".join(f"  - `{p}`" for p in code_url_patterns) or "  - (none)"
     return (
         "# Verifier task\n\n"
-        "You are the verifier. Apply the rules in "
-        "`.agents/skills/verifier/SKILL.md` to the note below.\n\n"
+        "You are the verifier. Apply the rules below to the note under "
+        "review.\n\n"
+        "## Inputs\n\n"
+        "- Artifact type: `note`\n"
+        f"- Note type: `{note_type or '(not declared)'}`\n"
+        f"- Source policy: `{source_policy}`\n"
+        f"- Code source URL patterns (regular expressions):\n{patterns}\n\n"
+        "## Verifier rules\n\n"
+        f"{skill_instructions('verifier', heading_offset=2)}\n\n"
+        "---\n\n"
         "Your response MUST be a single JSON object matching this schema, "
         "with no surrounding narrative:\n\n"
         "```json\n"
@@ -523,10 +578,12 @@ def _call_verifier(
 ) -> VerifierVerdict:
     """Invoke agent_call.py for a single note and return a VerifierVerdict.
 
-    The prompt is built via :func:`_build_verifier_prompt` so runtimes that
-    don't auto-load ``SKILL.md`` (codex) still see the JSON-output contract
-    inline. The agent's response is parsed via :func:`_extract_json_blob`,
-    which tolerates code-fenced and narrative-wrapped JSON.
+    The prompt is built via :func:`_build_verifier_prompt`, so every runtime
+    sees the verifier rules, their inputs and the JSON-output contract inline.
+    It is built before any temp file is opened: a missing packaged skill
+    raises there and leaves nothing behind. The agent's response is parsed
+    via :func:`_extract_json_blob`, which tolerates code-fenced and
+    narrative-wrapped JSON.
 
     ``--cost-sidecar`` is not optional (issue #234). Without it this stage —
     one LLM call per note written in the cycle, so the highest-count dispatch
@@ -534,10 +591,12 @@ def _call_verifier(
     cap could be blown past by verifier calls alone and the run report showed
     none of it. The fake agent hides this in tests because it costs $0.
     """
+    note_text = note_file.read_text(encoding="utf-8")
+    prompt = _build_verifier_prompt(note_text, **_verifier_inputs(vault_dir, note_text))
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".md", delete=False, encoding="utf-8"
     ) as prompt_f:
-        prompt_f.write(_build_verifier_prompt(note_file.read_text(encoding="utf-8")))
+        prompt_f.write(prompt)
         prompt_path = Path(prompt_f.name)
 
     with tempfile.NamedTemporaryFile(

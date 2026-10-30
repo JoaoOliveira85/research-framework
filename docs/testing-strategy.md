@@ -58,12 +58,12 @@ pytest -m e2e              # tier-5/6 e2e only
 ruff check .               # lint baseline (must be zero)
 ```
 
-<!-- test-count: not_e2e=4570 total=4600 e2e_only=30 refreshed=2026-10-29 -->
+<!-- test-count: not_e2e=4610 total=4641 e2e_only=31 refreshed=2026-10-29 -->
 **This is the one place in the repo a test count is committed** — every
 other doc that mentions a count (README, CLAUDE.md, CONTRIBUTING.md,
 ARCHITECTURE.md, `docs/RELEASE.md`) points here instead of quoting its
-own copy. Today that's **4570** fast-loop tests (`pytest -m "not e2e"`),
-**4600** total (`pytest --collect-only -q`), **30** deselected as `e2e`.
+own copy. Today that's **4610** fast-loop tests (`pytest -m "not e2e"`),
+**4641** total (`pytest --collect-only -q`), **31** deselected as `e2e`.
 `tests/docs/test_one_source_per_fact.py` re-collects the suite and
 fails if the comment above no longer matches — when it fails, update
 the comment **and** the three bolded numbers in this paragraph
@@ -806,7 +806,7 @@ CHANGELOG-regression-link guards green with no allowlist entries.
 | Empty scout abort | `…::test_empty_scout_queue_aborts_via_sg001` | 5 |
 | SG-005 / frontmatter | `…::test_sg005_failure_triggers_correction_batch` | 5 |
 | Asymmetric batch tail | `…::test_asymmetric_tail_batch_serializes` | 5 |
-| SKILL preflight repair | `…::test_corrupted_skill_file_self_repairs_in_preflight` | 5 |
+| Vault skill file ignored | `…::test_a_vault_skill_file_is_neither_read_nor_repaired_by_a_cycle` | 5 |
 | Multi-cycle coverage | `test_multi_cycle_e2e.py::test_three_cycles_progress_coverage` | 6 |
 | Cycle handoff | `…::test_cycle_two_picks_up_where_cycle_one_left_off` | 6 |
 | Cross-cycle corrections | `…::test_correction_loop_across_cycles` | 6 |
