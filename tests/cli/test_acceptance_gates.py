@@ -159,6 +159,27 @@ def test_ga004_warns_on_constrained_below_configured_unit(clean_vault):
     assert "tripped early" in g.message or "did not use its full" in g.message
 
 
+def test_ga004_constrained_without_a_cycle_ceiling_names_no_ceiling(clean_vault):
+    """Issue #33: ``configured: 0`` is no cycle ceiling, so a constrained exit
+    was another cap — WARN, without claiming ``actual < configured 0``."""
+    import json
+
+    rr = clean_vault / "_pipeline" / "run-report.json"
+    payload = json.loads(rr.read_text(encoding="utf-8"))
+    payload["cycle_budget"] = {
+        "configured": 0,
+        "source": "settings",
+        "actual": 30,
+        "exit_status": "constrained",
+    }
+    rr.write_text(json.dumps(payload), encoding="utf-8")
+    g = acceptance.gate_run_completion(clean_vault)
+    assert g.status == "WARN"
+    assert g.metric_value == "30/unlimited"
+    assert "no cycle ceiling" in g.message
+    assert "configured 0" not in g.message
+
+
 def test_ga004_fails_on_aborted_status(clean_vault):
     """An 'aborted' exit_status (structural error) remains FAIL."""
     import json

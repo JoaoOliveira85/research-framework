@@ -73,6 +73,20 @@ def _cap_is_enforceable(budget_cap: float) -> bool:
     return budget_cap > 0
 
 
+def _ceiling_reached(cycle: int, max_cycles: int) -> bool:
+    """Condition A's derived comparison; ``max_cycles == 0`` is no ceiling.
+
+    Issue #33: ``pipeline.max_cycles: 0`` means no lifetime ceiling, the same
+    reading of zero as ``_cap_is_enforceable`` gives a dollar cap. A bare
+    ``cycle >= max_cycles`` would TERMINATE every research pass at zero.
+    """
+    return max_cycles > 0 and cycle >= max_cycles
+
+
+def _ceiling_label(max_cycles: int) -> str:
+    return "unlimited" if max_cycles == 0 else str(max_cycles)
+
+
 REQUIRED_REPORT_FIELDS = [
     "cycle",
     "phase",
@@ -668,10 +682,13 @@ def check_termination(
         }
 
     # Condition A: max cycles — research phase only (see module docstring).
-    if phase == "research" and cycle >= max_cycles:
+    if phase == "research" and _ceiling_reached(cycle, max_cycles):
         return ValidationResult(
             status="TERMINATE",
-            reason=f"Condition A: reached max cycles ({cycle}/{max_cycles})",
+            reason=(
+                f"Condition A: reached max cycles "
+                f"({cycle}/{_ceiling_label(max_cycles)})"
+            ),
             warnings=warnings,
             errors=[],
             metrics_delta=metrics_delta,
@@ -735,7 +752,7 @@ def check_termination(
     return ValidationResult(
         status="CONTINUE",
         reason=(
-            f"Cycle {cycle}/{max_cycles}: "
+            f"Cycle {cycle}/{_ceiling_label(max_cycles)}: "
             f"{len(new_topics)} new topic(s), "
             f"{len(notes_created)} note(s) created, "
             f"${cumulative_cost:.2f} / ${budget_cap:.2f} budget"
@@ -1046,10 +1063,17 @@ def check_termination_v2(
     termination = _resolve_termination_v2(report)
 
     # Condition A: max cycles — research phase only (scout precedes DFS in the cycle runner).
-    if phase == "research" and (termination == "A" or cycle >= max_cycles):
+    # An explicit `termination: "A"` is the agent's own testimony and stands,
+    # as Condition C's does below; only the derived comparison needs a ceiling.
+    if phase == "research" and (
+        termination == "A" or _ceiling_reached(cycle, max_cycles)
+    ):
         return ValidationResult(
             status="TERMINATE",
-            reason=f"Condition A: reached max cycles ({cycle}/{max_cycles})",
+            reason=(
+                f"Condition A: reached max cycles "
+                f"({cycle}/{_ceiling_label(max_cycles)})"
+            ),
             warnings=warnings,
             errors=[],
             metrics_delta={},
@@ -1083,7 +1107,7 @@ def check_termination_v2(
     return ValidationResult(
         status="CONTINUE",
         reason=(
-            f"v2 cycle {cycle}/{max_cycles}: "
+            f"v2 cycle {cycle}/{_ceiling_label(max_cycles)}: "
             f"{len(topics_from_code)} code topic(s), "
             f"{len(report.get('intent_from_confluence') or [])} intent(s), "
             f"${cumulative_cost:.2f} / ${budget_cap:.2f} budget"
@@ -1124,7 +1148,12 @@ def main() -> int:
         default=None,
         help="Vault root (default: inferred from report_path parent chain)",
     )
-    parser.add_argument("--max-cycles", type=int, default=5)
+    parser.add_argument(
+        "--max-cycles",
+        type=int,
+        default=5,
+        help="Lifetime cycle ceiling; 0 means none (issue #33)",
+    )
     parser.add_argument("--budget-cap", type=float, default=250.0)
     args = parser.parse_args()
 
@@ -1135,6 +1164,13 @@ def main() -> int:
     if math.isnan(args.budget_cap) or args.budget_cap < 0:
         print(
             f"ERROR: --budget-cap must be a number >= 0 (got {args.budget_cap!r})",
+            file=sys.stderr,
+        )
+        return 2
+
+    if args.max_cycles < 0:
+        print(
+            f"ERROR: --max-cycles must be an integer >= 0 (got {args.max_cycles!r})",
             file=sys.stderr,
         )
         return 2

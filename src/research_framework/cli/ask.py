@@ -23,7 +23,7 @@ from ..pipeline.ask_escalation import (
     render_ask_prompt,
     run_ask,
 )
-from ..pipeline.settings import strict_settings_refusal
+from ..pipeline.settings import UNLIMITED_MAX_CYCLES, strict_settings_refusal
 from ._budget_resolve import BudgetError, resolve_cycle_budget_from_path
 from ._common import refuse_if_archived
 from .research_cycles import _cmd_cycle, _standing_pause
@@ -66,10 +66,14 @@ def _next_cycle(vault: Path) -> int:
 def _past_cycle_ceiling(cycle: int, max_cycles: int) -> bool:
     """True when ``cycle`` is past the lifetime ``pipeline.max_cycles`` ceiling.
 
-    The one place an escalation reads that ceiling, so a change to what the
-    value means (issue #33: ``0`` as unlimited) is a change here only.
+    The one place an escalation reads that ceiling. ``0``
+    (:data:`UNLIMITED_MAX_CYCLES`, issue #33) is no ceiling, so nothing is past
+    it; ``pipeline.cycles_per_run`` needs no reading here because the resolver
+    has already folded it into ``max_cycles``. An escalation runs ONE cycle, so
+    it is bounded without a per-run or dollar cap — the exemption
+    ``require_bounded_run`` gives the single-cycle ``cycle`` verb it calls.
     """
-    return cycle > max_cycles
+    return max_cycles != UNLIMITED_MAX_CYCLES and cycle > max_cycles
 
 
 def _escalation_refusal(vault: Path) -> tuple[int, str | None]:

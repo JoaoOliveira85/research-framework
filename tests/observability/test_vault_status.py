@@ -80,6 +80,17 @@ def test_active(tmp_path: Path) -> None:
     assert "AlphaEvolve" in text
 
 
+def test_active_with_no_lifetime_ceiling_says_unlimited(tmp_path: Path) -> None:
+    """Issue #33: ``cycles_budgeted: 0`` is no ceiling, never "of 0"."""
+    _write_active_state(tmp_path, cycle=42, budgeted=0)
+    from research_framework.pipeline.cycle_state import read
+
+    state = read(tmp_path)
+    assert state is not None
+    text = render_active(state, None, elapsed_s=10)
+    assert "CYCLE 42 of unlimited — stage: research" in text
+
+
 def test_active_starting_when_no_state(tmp_path: Path) -> None:
     text = render_active(None, None, elapsed_s=12, cycle_num=1, cycles_budgeted=5)
     assert "CYCLE 1 — (starting)" in text

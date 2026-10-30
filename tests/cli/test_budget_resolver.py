@@ -129,8 +129,10 @@ def test_max_cycles_zero_or_negative_raises_usage_error() -> None:
                 flag_max_cycles=bad,
                 flag_max_usd=None,
             )
-    # via settings canonical key (present-but-invalid must raise, not fall through)
-    for bad in (0, -1):
+    # via settings canonical key (present-but-invalid must raise, not fall through).
+    # `0` is NOT invalid in settings: it means no lifetime ceiling (issue #33,
+    # tests/cli/test_cycle_limits_settings.py).
+    for bad in (-1, 1.5):
         with pytest.raises(BudgetError):
             resolve_cycle_budget(
                 {"pipeline": {"max_cycles": bad}},

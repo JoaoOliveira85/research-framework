@@ -39,7 +39,7 @@ from .budget_guard import (
     resolve_dispatch_agent,
     resolve_max_tokens,
 )
-from .settings import SettingsError, load_vault_settings
+from .settings import SettingsError, format_cycle_ceiling, load_vault_settings
 from .steps import (
     CycleContext,
     research_result_from_disk,
@@ -272,12 +272,22 @@ def _prompt_text_from_argv(vault_dir: Path, args: tuple[object, ...]) -> str:
 
 
 def _resolved_budget(
-    vault_dir: Path, budget_cap: float | None, max_cycles: int | None
+    vault_dir: Path,
+    budget_cap: float | None,
+    max_cycles: int | None,
+    *,
+    cycle_num: int = 1,
 ) -> tuple[float, int]:
-    """Backfill omitted budget arguments from the spec-061 ladder (issue #233)."""
+    """Backfill omitted budget arguments from the spec-061 ladder (issue #233).
+
+    ``cycle_num`` anchors ``pipeline.cycles_per_run`` at the cycle being run
+    (issue #33).
+    """
     from ..cli._budget_resolve import fill_missing_run_budget
 
-    return fill_missing_run_budget(vault_dir, budget_cap, max_cycles)
+    return fill_missing_run_budget(
+        vault_dir, budget_cap, max_cycles, start_cycle=cycle_num
+    )
 
 
 def _resolve_dispatch_agent(session: CycleBudgetSession, stage: str) -> str:
@@ -422,7 +432,9 @@ def run_cycle_steps(
     #233). ``None`` now means "ask the spec-061 ladder", which is the one
     answer every other entry point already gets.
     """
-    budget_cap, max_cycles = _resolved_budget(vault_dir, budget_cap, max_cycles)
+    budget_cap, max_cycles = _resolved_budget(
+        vault_dir, budget_cap, max_cycles, cycle_num=cycle_num
+    )
     runtime_state = CycleRuntimeState()
     _last_cycle_results.pop(cycle_num, None)
     # budget-marker.contract.md §4.5: a resume past a pause starts at the
@@ -459,7 +471,7 @@ def run_cycle_steps(
     env["RV_PYTHON"] = python_bin
 
     _LOG.info("=" * 60)
-    _LOG.info(f"RESEARCH CYCLE {cycle_num}/{max_cycles}")
+    _LOG.info(f"RESEARCH CYCLE {cycle_num}/{format_cycle_ceiling(max_cycles)}")
     _LOG.info(f"Budget cap: ${budget_cap}")
     _LOG.info(f"Vault: {vault_dir}")
     _LOG.info(f"Started: {datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')}")

@@ -16,6 +16,12 @@ the original bug). ``max_usd`` (the dollar cap, reclassified off the spec per
 clarify Q3) resolves on the same ladder against ``pipeline.budget_usd``, where
 **a zero budget means UNLIMITED** — the same as ``None`` or an absent key
 (owner's decision 2026-09-07; spec 061 amendment). See :func:`_resolve_usd`.
+
+The cycle ceiling reads zero the same way (issue #33): ``pipeline.max_cycles: 0``
+resolves to :data:`UNLIMITED_MAX_CYCLES`, no lifetime ceiling. The optional
+``pipeline.cycles_per_run: N`` is the settings spelling of ``--more-cycles N``;
+it is folded into the resolved ceiling (the lower of it and a finite lifetime
+ceiling), and either CLI flag replaces both.
 """
 
 from __future__ import annotations
@@ -26,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ..pipeline.settings import DEFAULT_MAX_CYCLES
+from ..pipeline.settings import DEFAULT_MAX_CYCLES, UNLIMITED_MAX_CYCLES
 
 _LOG = logging.getLogger(__name__)
 
@@ -37,14 +43,17 @@ _LOG = logging.getLogger(__name__)
 #: never silently truncated (the rc1 pain).
 __all__ = [
     "DEFAULT_MAX_CYCLES",
+    "UNLIMITED_MAX_CYCLES",
     "BudgetError",
     "BudgetResolution",
     "fill_missing_run_budget",
+    "require_bounded_run",
     "resolve_cycle_budget",
     "resolve_cycle_budget_from_path",
 ]
 
 _CANONICAL_KEY = "pipeline.max_cycles"
+_PER_RUN_KEY = "pipeline.cycles_per_run"
 _CANONICAL_USD_KEY = "pipeline.budget_usd"
 _DEPRECATED_CYCLE_KEYS = ("initial_max", "update_max")
 
@@ -80,7 +89,12 @@ class BudgetResolution:
     ``max_cycles`` (with ``max_cycles_source == "flag"``), which is the value
     every consumer already reads. A ``more_cycles`` field would be a number
     nobody consulted — the shape issue #235 called "a parameter no caller
-    passes is the defect itself".
+    passes is the defect itself". ``pipeline.cycles_per_run`` is folded in the
+    same way, for the same reason.
+
+    ``max_cycles == 0`` (:data:`UNLIMITED_MAX_CYCLES`) means no ceiling at all
+    (issue #33); it is only ever produced by ``pipeline.max_cycles: 0`` with no
+    per-run cap and no flag.
     """
 
     max_cycles: int
@@ -93,6 +107,15 @@ class BudgetResolution:
     #: means no per-run ceiling; zero resolves to ``None`` for the same reason
     #: every other zero on this ladder does (FR3-Z2).
     max_usd_this_run: float | None = None
+
+
+def _non_negative_int(value: Any) -> int | None:
+    """Return ``value`` iff it is a non-negative (non-bool) int, else ``None``."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and value >= 0:
+        return value
+    return None
 
 
 def _positive_int(value: Any) -> int | None:
@@ -131,6 +154,10 @@ def resolve_cycle_budget(
     9. It sits on the same top rung as ``--max-cycles`` and the two are
     mutually exclusive, because a ladder whose top rung holds two conflicting
     answers is the bug spec 061 exists to remove.
+
+    ``pipeline.max_cycles: 0`` is no lifetime ceiling (issue #33).
+    ``pipeline.cycles_per_run`` caps the run at ``start_cycle + N - 1`` when no
+    flag is given; with a finite lifetime ceiling the lower of the two wins.
     """
     data = settings_data or {}
     pipeline = _section(data, "pipeline")
@@ -143,7 +170,8 @@ def resolve_cycle_budget(
     ]
 
     canonical_present = "max_cycles" in pipeline
-    canonical_int = _positive_int(pipeline.get("max_cycles"))
+    canonical_int = _non_negative_int(pipeline.get("max_cycles"))
+    per_run = _resolve_cycles_per_run(pipeline)
 
     if flag_more_cycles is not None and flag_max_cycles is not None:
         raise BudgetError(
@@ -152,12 +180,12 @@ def resolve_cycle_budget(
             "absolute cycle-number ceiling). Pass one."
         )
 
+    anchor = start_cycle if start_cycle >= 1 else 1
     if flag_more_cycles is not None:
         if _positive_int(flag_more_cycles) is None:
             raise BudgetError(
                 f"--more-cycles must be a positive integer (got {flag_more_cycles!r})"
             )
-        anchor = start_cycle if start_cycle >= 1 else 1
         max_cycles, mc_source = anchor + int(flag_more_cycles) - 1, "flag"
     elif flag_max_cycles is not None:
         if _positive_int(flag_max_cycles) is None:
@@ -168,8 +196,8 @@ def resolve_cycle_budget(
     elif canonical_present:
         if canonical_int is None:
             raise BudgetError(
-                f"{_CANONICAL_KEY} must be an integer >= 1 "
-                f"(got {pipeline.get('max_cycles')!r})"
+                f"{_CANONICAL_KEY} must be an integer >= 0, where 0 means no "
+                f"lifetime ceiling (got {pipeline.get('max_cycles')!r})"
             )
         max_cycles, mc_source = canonical_int, "settings"
     elif deprecated_seen:
@@ -180,6 +208,13 @@ def resolve_cycle_budget(
         max_cycles, mc_source = int(migrated), "settings"
     else:
         max_cycles, mc_source = DEFAULT_MAX_CYCLES, "default"
+
+    if mc_source != "flag" and per_run is not None:
+        # The settings spelling of `--more-cycles`: a run starting at cycle k
+        # stops after k+N-1, or at the lifetime ceiling if that comes first.
+        run_ceiling = anchor + per_run - 1
+        if max_cycles == UNLIMITED_MAX_CYCLES or run_ceiling < max_cycles:
+            max_cycles, mc_source = run_ceiling, "settings"
 
     if deprecated_seen:
         joined = ", ".join(deprecated_seen)
@@ -215,6 +250,47 @@ def resolve_cycle_budget(
         deprecated_keys_seen=deprecated_seen,
         max_usd_this_run=max_usd_this_run,
     )
+
+
+def require_bounded_run(resolution: BudgetResolution) -> None:
+    """Refuse a multi-cycle run that nothing would ever stop (issue #33 review).
+
+    With no lifetime ceiling (``pipeline.max_cycles: 0``), no per-run cap
+    (``pipeline.cycles_per_run``, ``--more-cycles``, ``--max-cycles`` — each is
+    already folded into ``max_cycles``, so a non-zero value means one is set)
+    and no dollar ceiling (``pipeline.budget_usd`` / ``--max-usd`` /
+    ``--max-usd-this-run`` above zero), a run with fuel loops forever:
+    Condition B/C TERMINATE returns rc 1 and the orchestrator carries on, and
+    the ``limits.*`` caps are per cycle. Raised from run resolution rather than
+    ``load_vault_settings`` so ``status`` / ``digest`` still load such a vault;
+    the single-cycle ``cycle`` verb does not call it.
+    """
+    if (
+        resolution.max_cycles != UNLIMITED_MAX_CYCLES
+        or resolution.max_usd is not None
+        or resolution.max_usd_this_run is not None
+    ):
+        return
+    raise BudgetError(
+        f"refusing an unbounded multi-cycle run: {_CANONICAL_KEY} is 0 (no "
+        "lifetime ceiling) and there is neither a per-run cycle cap nor a "
+        "dollar cap, so a run that keeps finding work would never stop. Bound "
+        f"it with one of: {_PER_RUN_KEY}: N or a finite {_CANONICAL_KEY}: N or "
+        f"{_CANONICAL_USD_KEY} > 0 in settings.yaml; or --more-cycles N, "
+        "--max-cycles N, --max-usd N (> 0) or --max-usd-this-run N (> 0) on "
+        "the command line."
+    )
+
+
+def _resolve_cycles_per_run(pipeline: dict[str, Any]) -> int | None:
+    """``pipeline.cycles_per_run``: absent/null ⇒ ``None``, else an int >= 1."""
+    raw = pipeline.get("cycles_per_run")
+    if raw is None:
+        return None
+    value = _positive_int(raw)
+    if value is None:
+        raise BudgetError(f"{_PER_RUN_KEY} must be an integer >= 1 (got {raw!r})")
+    return value
 
 
 def resolve_cycle_budget_from_path(
@@ -254,6 +330,8 @@ def fill_missing_run_budget(
     vault_dir: Path,
     budget_cap: float | None,
     max_cycles: int | None,
+    *,
+    start_cycle: int = 1,
 ) -> tuple[float, int]:
     """Backfill omitted ``(budget_cap, max_cycles)`` from the ladder (issue #233).
 
@@ -267,10 +345,17 @@ def fill_missing_run_budget(
     Returns the orchestrator's wire form: ``budget_cap`` is ``0.0`` for
     uncapped (the ``cumulative >= budget_cap > 0`` guard reads zero as "off"),
     matching what ``run_cycles`` already does with ``max_usd is None``.
+    ``max_cycles`` is ``0`` for no lifetime ceiling (issue #33).
+
+    ``start_cycle`` anchors ``pipeline.cycles_per_run``: the callers pass the
+    cycle they are about to run, so a standalone cycle k under a per-run cap of
+    N sees the ceiling ``k+N-1`` rather than one anchored at cycle 1.
     """
     if budget_cap is not None and max_cycles is not None:
         return float(budget_cap), int(max_cycles)
-    resolution = resolve_cycle_budget_from_path(vault_dir / "settings.yaml")
+    resolution = resolve_cycle_budget_from_path(
+        vault_dir / "settings.yaml", start_cycle=start_cycle
+    )
     if budget_cap is None:
         budget_cap = resolution.max_usd if resolution.max_usd is not None else 0.0
     if max_cycles is None:

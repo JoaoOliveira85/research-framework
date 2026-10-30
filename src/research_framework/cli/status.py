@@ -13,6 +13,7 @@ from pathlib import Path
 from ..pipeline.archived import is_archived
 from ..pipeline.cycle_state import CycleState
 from ..pipeline.cycle_state import read as read_cycle_state
+from ..pipeline.settings import format_cycle_ceiling
 
 _LOG = logging.getLogger(__name__)
 
@@ -152,7 +153,8 @@ def render_active(
     elapsed = _format_duration_short(elapsed_s)
 
     if budgeted is not None:
-        headline = f"CYCLE {cycle} of {budgeted} — stage: {stage}"
+        # `0` is no lifetime ceiling (issue #33): "of unlimited", never "of 0".
+        headline = f"CYCLE {cycle} of {format_cycle_ceiling(budgeted)} — stage: {stage}"
     else:
         headline = f"CYCLE {cycle} — stage: {stage}"
 

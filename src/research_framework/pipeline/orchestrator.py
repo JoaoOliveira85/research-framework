@@ -6,6 +6,7 @@ Constitution: the orchestrator does NOT self-assess. It reads script exit codes 
 from __future__ import annotations
 
 import datetime as dt
+import itertools
 import json
 import logging
 import re
@@ -46,7 +47,11 @@ from .gates import GateResult, run_gate
 from .gates_cycle import CG001_min_cycle_yield
 from .gates_step import SG005_frontmatter_completeness
 from .run_report import write_run_report as _write_run_report
-from .settings import strict_settings_refusal
+from .settings import (
+    UNLIMITED_MAX_CYCLES,
+    format_cycle_ceiling,
+    strict_settings_refusal,
+)
 from .stubs import scan_stubs
 
 _LOG = logging.getLogger(__name__)
@@ -533,12 +538,22 @@ def _restore_cycle_quality_retry_after_report(
 
 
 def _fill_budget(
-    vault_dir: Path, budget_cap: float | None, max_cycles: int | None
+    vault_dir: Path,
+    budget_cap: float | None,
+    max_cycles: int | None,
+    *,
+    cycle_num: int = 1,
 ) -> tuple[float, int]:
-    """Backfill omitted budget arguments from the spec-061 ladder (issue #233)."""
+    """Backfill omitted budget arguments from the spec-061 ladder (issue #233).
+
+    ``cycle_num`` anchors ``pipeline.cycles_per_run`` at the cycle being run
+    (issue #33).
+    """
     from ..cli._budget_resolve import fill_missing_run_budget
 
-    return fill_missing_run_budget(vault_dir, budget_cap, max_cycles)
+    return fill_missing_run_budget(
+        vault_dir, budget_cap, max_cycles, start_cycle=cycle_num
+    )
 
 
 def _cycle_research_report_path(vault_dir: Path, cycle_num: int) -> Path:
@@ -672,7 +687,9 @@ def run_single_cycle(
         _LOG.error("[orchestrator] refusing to run: %s", refusal)
         return ARCHIVED_EXIT
 
-    budget_cap, max_cycles = _fill_budget(vault_dir, budget_cap, max_cycles)
+    budget_cap, max_cycles = _fill_budget(
+        vault_dir, budget_cap, max_cycles, cycle_num=cycle_num
+    )
     pre_run_qr_retry = _snapshot_existing_cycle_quality_retry_count(
         vault_dir, cycle_num, resume=resume
     )
@@ -872,9 +889,18 @@ def run_cycles(
     if budget is None:
         from ..cli._budget_resolve import resolve_cycle_budget_from_path
 
-        budget = resolve_cycle_budget_from_path(vault_dir / "settings.yaml")
+        # `start_cycle` anchors `pipeline.cycles_per_run` (issue #33), the way
+        # the CLI anchors `--more-cycles`.
+        budget = resolve_cycle_budget_from_path(
+            vault_dir / "settings.yaml", start_cycle=start_cycle
+        )
     budget_cap = budget.max_usd if budget.max_usd is not None else 0.0
     max_cycles = budget.max_cycles
+    # Issue #33: `0` is no lifetime ceiling. The loop then runs until coverage,
+    # fuel, or a dollar cap ends the run — the fall-through below is
+    # unreachable, and spec 070 F5's empty-range diagnostic does not apply.
+    unlimited = max_cycles == UNLIMITED_MAX_CYCLES
+    ceiling_label = format_cycle_ceiling(max_cycles)
     # Issue #239: `budget_cap` is a LIFETIME ceiling — it is compared against
     # every cycle the vault has ever run. `--max-usd-this-run` is the per-run
     # reading, and a per-run number needs a zero point: the vault's spend at
@@ -902,6 +928,20 @@ def run_cycles(
     refusal = strict_settings_refusal(vault_dir)
     if refusal:
         _LOG.error("[orchestrator] refusing to run: %s", refusal)
+        return 2
+
+    # Issue #33 review: an unlimited ceiling with no per-run cap and no dollar
+    # cap never stops while there is fuel (Condition B/C TERMINATE is rc 1 and
+    # the loop carries on). Refuse before ANY side effect — no branch, no run
+    # report — for every caller, as the archived guard above does. The CLI run
+    # verbs refuse earlier with exit 2; this covers direct callers and stale
+    # shims.
+    from ..cli._budget_resolve import BudgetError, require_bounded_run
+
+    try:
+        require_bounded_run(budget)
+    except BudgetError as exc:
+        _LOG.error("[orchestrator] %s", exc)
         return 2
 
     # Spec 050 / Principle X: open a research branch (or reuse on
@@ -993,13 +1033,14 @@ def run_cycles(
     # narrates entirely at INFO and is therefore invisible under the non-TTY
     # WARNING default. Exit code and control flow are unchanged; this is the
     # diagnostic that was missing.
-    if start_cycle > max_cycles:
+    if not unlimited and start_cycle > max_cycles:
         _LOG.error(
             "[orchestrator] nothing to do — resume is anchored at cycle %d but the "
             "cycle ceiling is %d (from %s). `max_cycles` is an ABSOLUTE ceiling, "
             "not a count of additional cycles, and cycle %d has already completed. "
             "Raise the ceiling above %d (`--max-cycles %d`, or `pipeline.max_cycles` "
-            "in the vault's settings.yaml) to run another cycle.",
+            "in the vault's settings.yaml, where 0 means no lifetime ceiling) to "
+            "run another cycle.",
             start_cycle,
             max_cycles,
             budget.max_cycles_source,
@@ -1008,7 +1049,12 @@ def run_cycles(
             start_cycle,
         )
 
-    for cycle in range(start_cycle, max_cycles + 1):
+    cycle_numbers = (
+        itertools.count(start_cycle)
+        if unlimited
+        else range(start_cycle, max_cycles + 1)
+    )
+    for cycle in cycle_numbers:
         # The flag can flip while this loop runs (an operator archiving the
         # vault mid-run). Stop before the next cycle starts: it is a requested
         # stop, not a structural abort, so no aborted marker is written and the
@@ -1017,7 +1063,7 @@ def run_cycles(
             _LOG.error("[orchestrator] stopping before cycle %d: %s", cycle, refusal)
             _finalise(ARCHIVED_EXIT, f"vault archived before cycle {cycle}")
             return ARCHIVED_EXIT
-        _LOG.info(f"[orchestrator] starting cycle {cycle}/{max_cycles}")
+        _LOG.info(f"[orchestrator] starting cycle {cycle}/{ceiling_label}")
         try:
             rc = run_single_cycle(
                 vault_dir, cycle, budget_cap, max_cycles, spec=spec, resume=resume
@@ -1358,8 +1404,9 @@ def _constrained_exit(
         for cat in unmet:
             _LOG.warning(f"      · {cat}")
     _LOG.warning(
-        "[orchestrator] raise `pipeline.max_cycles` (or `pipeline.budget_usd`) "
-        "in the vault's settings.yaml — or pass `--max-cycles N` — and re-run "
+        "[orchestrator] raise `pipeline.max_cycles` (0 = no lifetime ceiling) or "
+        "`pipeline.budget_usd` in the vault's settings.yaml — or pass "
+        "`--max-cycles N` / `--more-cycles N` — and re-run "
         "`research-framework generate --resume` to keep going."
     )
     return 1

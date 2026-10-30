@@ -15,7 +15,11 @@ from ..generator.templates import render_all
 from ..spec.schema import SpecValidationError
 from ..spec.simple import load as load_spec
 from ..spec.validator import validate
-from ._budget_resolve import BudgetError, resolve_cycle_budget_from_path
+from ._budget_resolve import (
+    BudgetError,
+    require_bounded_run,
+    resolve_cycle_budget_from_path,
+)
 from ._common import _run_phase1_gate, refuse_if_archived
 from .research_cycles import _regenerate_plan_only
 from .research_phase3 import _prepopulate_pipeline, _run_phase3
@@ -274,6 +278,7 @@ def _cmd_generate(args: argparse.Namespace) -> int:
             flag_max_usd_this_run=getattr(args, "max_usd_this_run", None),
             start_cycle=1,
         )
+        require_bounded_run(budget)
     except BudgetError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

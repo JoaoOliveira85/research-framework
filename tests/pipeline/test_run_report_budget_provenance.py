@@ -94,3 +94,19 @@ def test_run_report_markdown_includes_cycle_budget_headline(tmp_path: Path) -> N
     assert "Cycle budget" in md
     assert "flag" in md  # source echoed
     assert "constrained" in md  # exit_status echoed
+
+
+def test_an_unlimited_cycle_ceiling_reads_as_unlimited(tmp_path: Path) -> None:
+    """Issue #33: ``max_cycles: 0`` is no ceiling. The JSON keeps the
+    configured value; the markdown headline must not say "configured 0"."""
+    _seed_cycles(tmp_path, 3)
+    write_run_report(
+        tmp_path,
+        final_exit_code=1,
+        final_exit_reason="budget cap reached",
+        cycle_budget_configured=0,
+        cycle_budget_source="settings",
+    )
+    assert _read_report_json(tmp_path)["cycle_budget"]["configured"] == 0
+    md = (tmp_path / "_pipeline" / "run-report.md").read_text(encoding="utf-8")
+    assert "configured **unlimited**" in md

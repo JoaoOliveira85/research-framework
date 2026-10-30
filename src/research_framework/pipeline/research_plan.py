@@ -63,7 +63,12 @@ from .. import __version__ as _FRAMEWORK_VERSION
 from ..spec.schema import CoverageTargets, SpecConfig, SpecValidationError
 from .coverage import existing_vault_filenames, grow_targets_if_met, load_targets
 from .gates_step import normalise_topic_row
-from .settings import SettingsError, effective_max_cycles, load_vault_settings
+from .settings import (
+    SettingsError,
+    effective_max_cycles,
+    load_vault_settings,
+    planning_horizon,
+)
 
 _LOG = logging.getLogger(__name__)
 
@@ -484,8 +489,9 @@ def generate_plan(
 
     coverage_state = _build_coverage_state(targets, vault_dir)
     # Spec 061: the cycle horizon comes from the vault settings
-    # (canonical pipeline.max_cycles), not the (now-removed) spec field.
-    max_cycles = effective_max_cycles(vault_dir)
+    # (canonical pipeline.max_cycles), not the (now-removed) spec field. An
+    # unlimited ceiling (0, issue #33) plans over a rolling horizon.
+    max_cycles = planning_horizon(effective_max_cycles(vault_dir), cycle_number)
     cycle_quota = _compute_cycle_quota(targets, cycle_number, max_cycles)
     cycle_focus = _select_cycle_focus(coverage_state)
     exclusions = _build_exclusions(vault_dir, spec)

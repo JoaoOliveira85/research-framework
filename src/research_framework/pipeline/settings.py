@@ -32,7 +32,7 @@ DefaultAgent = Literal["claude", "codex", "cursor-agent", "ollama", "opencode"]
 
 _VALID_AGENTS = frozenset({"claude", "codex", "cursor-agent", "ollama", "opencode"})
 _PIPELINE_TYPED_KEYS = frozenset(
-    {"max_cycles", "budget_usd", "backlog_promotion_threshold"}
+    {"max_cycles", "cycles_per_run", "budget_usd", "backlog_promotion_threshold"}
 )
 # Stages whose source-module manifest may supply a `default_tier` when the
 # stage sets neither `tier` nor `model` (spec 020 FR-014a). `tier` itself is
@@ -69,6 +69,32 @@ _DEFAULT_MODEL_TIERS = {
 # seeds (settings.yaml / settings.codex.yaml) carry this value; the CLI
 # resolver and the cycle-time yield readers fall back to it.
 DEFAULT_MAX_CYCLES = 20
+
+# Issue #33: `pipeline.max_cycles: 0` means NO lifetime ceiling, the same reading
+# of zero `pipeline.budget_usd: 0` has (spec 061 amendment). The resolved
+# ceiling keeps this value end to end — every reader of a cycle ceiling checks
+# for it rather than comparing a cycle number against zero.
+UNLIMITED_MAX_CYCLES = 0
+
+
+def format_cycle_ceiling(max_cycles: int) -> str:
+    """Render a cycle ceiling for an operator: ``"unlimited"`` for ``0``."""
+    return "unlimited" if max_cycles == UNLIMITED_MAX_CYCLES else str(max_cycles)
+
+
+def planning_horizon(max_cycles: int, cycle_number: int) -> int:
+    """The last cycle the deadline-driven planners project to.
+
+    The per-cycle quota (``research_plan``) and the CG-005 trajectory spread
+    the remaining coverage work over the cycles left before the ceiling. An
+    unlimited ceiling has no such end point, so they plan against a rolling
+    :data:`DEFAULT_MAX_CYCLES`-cycle horizon starting at this cycle — the shape
+    a fresh vault on the default ceiling gets at cycle 1 — rather than reading
+    ``0`` as "this is the last cycle" and demanding all remaining work now.
+    """
+    if max_cycles != UNLIMITED_MAX_CYCLES:
+        return max_cycles
+    return max(cycle_number, 1) + DEFAULT_MAX_CYCLES - 1
 
 
 @dataclass(frozen=True)
@@ -196,9 +222,14 @@ class CredibilitySettings:
 class VaultSettings:
     """Typed access to a vault's ``settings.yaml``."""
 
-    max_cycles: int
+    max_cycles: int  # 0 = no lifetime ceiling (UNLIMITED_MAX_CYCLES)
     budget_usd: float
     backlog_promotion_threshold: int = 2
+    # pipeline.cycles_per_run (issue #33): the settings spelling of
+    # `--more-cycles N`. None = no per-run cap. The budget ladder
+    # (`cli._budget_resolve`) folds it into the resolved ceiling; this typed
+    # copy validates it and keeps it out of `extras`.
+    cycles_per_run: int | None = None
     stages: dict[str, StageSettings] = field(default_factory=dict)
     dimensions: list[str] = field(default_factory=list)
     default_agent: DefaultAgent = "claude"
@@ -317,11 +348,22 @@ def load_vault_settings(vault_dir: Path) -> VaultSettings:
         )
 
     try:
-        max_cycles = _require_positive_int(
+        max_cycles = _require_non_negative_int(
             pipeline.get("max_cycles"),
             key="max_cycles",
             vault_dir=vault_dir,
-            label="max_cycles must be an integer >= 1",
+            label="max_cycles must be an integer >= 0 (0 = no lifetime ceiling)",
+        )
+        cycles_per_run_raw = pipeline.get("cycles_per_run")
+        cycles_per_run = (
+            None
+            if cycles_per_run_raw is None
+            else _require_positive_int(
+                cycles_per_run_raw,
+                key="pipeline.cycles_per_run",
+                vault_dir=vault_dir,
+                label="cycles_per_run must be an integer >= 1",
+            )
         )
         budget_usd = _require_non_negative_number(
             pipeline.get("budget_usd"),
@@ -400,6 +442,7 @@ def load_vault_settings(vault_dir: Path) -> VaultSettings:
 
     return VaultSettings(
         max_cycles=max_cycles,
+        cycles_per_run=cycles_per_run,
         budget_usd=budget_usd,
         backlog_promotion_threshold=backlog_promotion_threshold,
         stages=stages,
@@ -432,6 +475,9 @@ def effective_max_cycles(vault_dir: Path, default: int = DEFAULT_MAX_CYCLES) -> 
     missing/unreadable settings file falls back to the generous
     :data:`DEFAULT_MAX_CYCLES` so a vault built before the canonical key existed
     still projects a sane horizon (never the rc1 truncated value).
+
+    ``0`` (:data:`UNLIMITED_MAX_CYCLES`) is returned as is: a vault with no
+    lifetime ceiling. Horizon readers pass it through :func:`planning_horizon`.
     """
     try:
         return load_vault_settings(vault_dir).max_cycles
@@ -1263,6 +1309,22 @@ def _require_positive_int(
     return value
 
 
+def _require_non_negative_int(
+    value: object,
+    *,
+    key: str,
+    vault_dir: Path,
+    label: str,
+) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise SettingsError(
+            f"{label}, got {value!r}",
+            vault_dir=vault_dir,
+            key=key,
+        )
+    return value
+
+
 def _require_non_negative_number(
     value: object,
     *,
@@ -1340,6 +1402,7 @@ class _Keyed:
 _PIPELINE_FIELDS = frozenset(
     {
         "max_cycles",
+        "cycles_per_run",  # issue #33
         "budget_usd",
         "backlog_promotion_threshold",
         "coverage_growth",
