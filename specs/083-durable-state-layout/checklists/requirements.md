@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain — three `[NEEDS DECISION]` markers (D-1, D-2, D-4) await the owner
+- [x] No [NEEDS CLARIFICATION] markers remain — D-1, D-2 and D-4 were decided by the owner on 2026-11-22
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -39,4 +39,4 @@
 - Acceptance uses the flat `## Acceptance` bullet form (ADR-0012), so the
   acceptance-coverage guard does not grade it; test names are fixed in
   `tasks.md`.
-- Blocked on D-1, D-2, D-4 before `/speckit.plan`.
+- D-1, D-2, D-4 decided 2026-11-22; ready for `/speckit.plan`.

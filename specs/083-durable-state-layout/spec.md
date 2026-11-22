@@ -1,8 +1,9 @@
 # Feature Specification: Durable vault state lives in `_pipeline/state/`
 
 **Status**: planned — specified and clarified from code evidence on
-2026-10-28; three owner decisions (D-1, D-2, D-4, § Open decisions) block
-`/speckit.plan`. Lands **before** `084` (D-3, agreed with `084`).
+2026-10-28; un-held and the three owner decisions (D-1, D-2, D-4,
+§ Decisions) taken on 2026-11-22. Lands **before** `084` (D-3, agreed with
+`084`), which lands before `087`.
 
 **Spec**: `083-durable-state-layout` · **Issue**: #10 · **Coordinates
 with**: `084` (#18 — the research backlog becomes
@@ -152,7 +153,7 @@ reports.
   `./vault update` already does, unless `--force` is given.
 - `sources.db` is open in WAL mode → its WAL is checkpointed before the
   database is staged; `sources.db-wal` and `sources.db-shm` are never
-  tracked (if D-2 keeps the database binary).
+  tracked (D-2).
 - A run is paused (`BUDGET_PAUSED` / `APPROVAL_REQUIRED` / a runner
   `pipeline-state.json` mid-triage) when the migration runs → run-control
   files are not state and are not moved; the paused run resumes against
@@ -186,12 +187,12 @@ reports.
   | Research backlog | `research-backlog.json` — **created by `084`, not by this spec** (D-3) | `research-backlog.md` (becomes `084`'s ignored rendered view) |
   | Coverage targets | `coverage-targets.json` | `coverage-targets.json` |
   | Persistent scope rejections | `propose-rejects.md` | `propose-rejects.md` |
-  | Source ledger | `sources.db` (or its text form — D-2) | `sources.db` |
+  | Source ledger | `sources.db` (the SQLite file itself — D-2) | `sources.db` |
   | Quarantined notes | `quarantine/` | `quarantine/` |
   | Module facts schemas | `sources/<module>/facts-schema.json` | `sources/<module>/facts-schema.json` |
   | Archive.org snapshot record | `archive-snapshots.json` | `archive-snapshots.json` |
   | Operator approval decisions | `approval-decisions.json` | `approval-decisions.json` |
-  | Cycle ledger (new — D-1) | per D-1 | — (derived from `cycles/` today) |
+  | Cycle ledger (new — D-1) | `cycle-ledger.json` | — (derived from `cycles/` today) |
 
   Everything else under `_pipeline/` keeps its current path, including
   `research-backlog.md`, which this spec neither moves nor rewrites.
@@ -215,8 +216,9 @@ reports.
 - **FR-006**: The next cycle number, the lifetime spend counted by
   `--max-usd`, and the completion time of the last cycle MUST be readable
   from state alone, so that a vault with an empty `_pipeline/cycles/`
-  resumes with the same values it had before. How they are stored is
-  D-1. Readers that scan `cycles/` today MUST prefer the stored values and
+  resumes with the same values it had before. They are stored in
+  `_pipeline/state/cycle-ledger.json`, one row appended when a cycle closes
+  (`cycle`, `finished_at`, `cost_usd`, `sidecars_missing`) (D-1). Readers that scan `cycles/` today MUST prefer the stored values and
   MAY fall back to the scan only for a vault the migration has not yet
   backfilled.
 - **FR-007**: The migration MUST backfill the FR-006 facts from the
@@ -227,7 +229,9 @@ reports.
 
 - **FR-008**: Every command that writes under `_pipeline/state/` MUST leave
   that write committed by the time it exits, under the spec-050 commit
-  prefixes, or MUST be covered by the run-start rule D-4 decides. A
+  prefixes, or MUST be covered by the run-start rule (D-4): before
+  branching, a research run commits pending `_pipeline/state/` changes on
+  the base branch as their own `vault: pending state` commit. A
   research run MUST NOT silently fold an uncommitted operator edit to state
   into its first cycle commit.
 
@@ -298,7 +302,7 @@ reports.
 | --- | --- | --- |
 | State directory | `_pipeline/state/` | tracked; FR-002 is its complete contents |
 | Layout module | one module under `src/research_framework/` | FR-004; the only place a state path is spelled |
-| Cycle ledger | `_pipeline/state/` (D-1) | FR-006; next cycle, lifetime spend, last completion time |
+| Cycle ledger | `_pipeline/state/cycle-ledger.json` (D-1) | FR-006; next cycle, lifetime spend, last completion time |
 | Migration | `./vault update` step + a standalone command | FR-009…FR-014; one `framework:` commit |
 | `.gitignore` `_pipeline/` stanza | vault root | FR-003; one re-include instead of an allow-list |
 
@@ -396,8 +400,8 @@ Recorded from the code at `bc39eae`, not fixed here unless an FR says so.
 - **D9 — `budget-log.md` is a record that a precondition requires.**
   `preconditions.py` refuses a run when it is missing (precondition 4),
   so a `git clean` blocks the next run until a reinstall re-scaffolds it.
-  If D-1 adopts a ledger, the precondition should require the ledger
-  instead and `budget-log.md` becomes its rendering.
+  D-1 adopted the ledger: the precondition requires the ledger instead,
+  and `budget-log.md` stays an ignored record the next run re-creates.
 
 ---
 
@@ -439,14 +443,29 @@ Recorded from the code at `bc39eae`, not fixed here unless an FR says so.
   scope** (§ Scope). Owner may overrule; it would add one decision about
   the `cycles/` tree and roughly double the change.
 
+### Session 2026-11-22 (owner)
+
+- Q: Is `083` still on hold (ROADMAP § Deferred, 2026-10-28)? → A: No.
+  The owner un-held `083` and `084` so that `087` (#53, updates to existing
+  notes) can put its update entries in `084`'s store from the start. Order:
+  `083`, `084`, `087`.
+- Q: D-1 — how do the record-derived facts become state? → A: (a) a cycle
+  ledger, `_pipeline/state/cycle-ledger.json`.
+- Q: D-2 — how is `sources.db` kept? → A: (a) the SQLite file itself is
+  tracked under `state/`, its WAL checkpointed before staging.
+- Q: D-4 — what happens to uncommitted state edits when a research run
+  starts? → A: (c) the run commits them first, as their own
+  `vault: pending state` commit on the base branch.
+
 ---
 
-## Open decisions
+## Decisions
 
-Each open one is marked `[NEEDS DECISION]`. Recommendations are the spec
-author's, not decided.
+D-1, D-2 and D-4 were taken by the owner on 2026-11-22 (§ Clarifications);
+each entry keeps the options that were on the table. D-3 was resolved with
+`084` on 2026-10-28.
 
-- **D-1 — How the record-derived facts become state.** [NEEDS DECISION]
+- **D-1 — How the record-derived facts become state.** **Decided: (a).**
   (a) A new `_pipeline/state/cycle-ledger.json`, one row appended when a
   cycle closes (`cycle`, `finished_at`, `cost_usd`, `sidecars_missing`);
   resume, the lifetime cap and the yield cadence read it; the migration
@@ -455,7 +474,7 @@ author's, not decided.
   in a 40-cycle vault). (c) Accept the reset and document it.
   **Recommended: (a)** — one small diffable file, and the lifetime cap is a
   spend control (#239) that should not depend on scratch.
-- **D-2 — `sources.db` in git.** [NEEDS DECISION] (a) Track the SQLite
+- **D-2 — `sources.db` in git.** **Decided: (a).** (a) Track the SQLite
   file itself under `state/`, checkpointing its WAL before staging and
   ignoring the `-wal`/`-shm` sidecars (45 kB after 40 cycles; history is
   opaque binary; a research-branch merge conflict on it cannot be
@@ -476,8 +495,8 @@ author's, not decided.
   `083`'s migration leaves the backlog alone (FR-009) and creates the
   ordered step list `084` extends (FR-018). Residual constraint: the
   release window (FR-019).
-- **D-4 — Uncommitted state edits when a research run starts.** [NEEDS
-  DECISION] (a) Status quo: `begin_run` keeps masking `_pipeline/`, and an
+- **D-4 — Uncommitted state edits when a research run starts.**
+  **Decided: (c).** (a) Status quo: `begin_run` keeps masking `_pipeline/`, and an
   operator's uncommitted state edit is folded into the first cycle commit.
   (b) Unmask `state/`: a dirty state file refuses the run (exit 2) like any
   dirty corpus file; every state writer must then commit (FR-008), and any
