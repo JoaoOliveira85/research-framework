@@ -1,9 +1,11 @@
 # Feature Specification: The research backlog as structured state
 
 **Status**: planned — drafted 2026-10-28 from #18; clarified the same day
-(the owner took all four recommendations, § Clarifications). Low priority.
-Lands **after** `083-durable-state-layout` (#10), whose `_pipeline/state/`
-directory it writes into (Q1).
+(the owner took all four recommendations, § Clarifications); un-held on
+2026-11-22 and amended from its plan (FR-012, FR-020, § Clarifications
+Session 2026-11-22). Lands **after** `083-durable-state-layout` (#10), whose
+`_pipeline/state/` directory it writes into (Q1), and **before**
+`087-note-currency-and-updates` (#53), which adds an origin to this store.
 
 **Spec**: `084-structured-research-backlog` · **Depends on**:
 `083-durable-state-layout` (the tracked `_pipeline/state/` directory and the
@@ -104,9 +106,9 @@ recommended (§ Decisions keeps the options and the reasoning).
   `status: resolved`; the store holds one entry per topic, so it grows with
   distinct topics, not with cycles (SC-004). A retention policy can follow
   if a store ever grows uncomfortably.
-- Q: When does migration run? → A: Lazily, on the module's first access to
-  a vault without a store (FR-020). It cannot wait for `./vault update`,
-  because the cycle's vault-local scripts call the module first.
+- Q: When does migration run? → A: ~~Lazily, on the module's first access
+  to a vault without a store.~~ Revised in planning (Session 2026-11-22,
+  `research.md` R3): as the second step of `083`'s ordered migration.
 - Q: Is the original Markdown kept? → A: Yes, verbatim under `state/`
   (FR-022). Vaults scaffolded before 2026-08-27 git-ignored it, so git history
   is not a safe fallback.
@@ -127,6 +129,25 @@ recommended (§ Decisions keeps the options and the reasoning).
   warn, and keep one copy of the overwritten text at
   `_pipeline/research-backlog.md.overwritten` (git-ignored), named in the
   warning (FR-018).
+
+### Session 2026-11-22 (planning; `research.md`)
+
+- Q: Is `084` still on hold (ROADMAP § Deferred, 2026-10-28)? → A: No. The
+  owner un-held `083` and `084` so that `087` (#53) can put its update
+  entries in this store from the start. Order: `083`, `084`, `087`.
+- Q: Can conversion stay lazy now that `083` FR-015 refuses a legacy
+  layout? → A: No. It is a step in `083`'s ordered migration, run by
+  `./vault update` and `./vault migrate-layout`, with `--dry-run`, landing
+  as its own `framework:` commit that also drops the Markdown file from the
+  git index (`research.md` R3). FR-020 is amended.
+- Q: With origin-independent ids (FR-004), what does "queue `harvest` and
+  `operator` entries" mean for a topic a researcher flagged first and a
+  note cited later? → A: The planner queues on evidence, not origin: an
+  open entry that is operator-owned, or that carries `citation_count >= 1`
+  (`research.md` R7). This reproduces today's queue for harvested orphans
+  and adds Q3's operator entries. FR-012 is reworded.
+- Q: Where is the pre-migration archive declared? → A: In `083`'s layout
+  registry, as a second state artefact this spec adds (`research.md` R2).
 
 ---
 
@@ -288,11 +309,14 @@ is kept. Running it again changes nothing.
 
 - **FR-012**: The planner MUST read open entries from the store through the
   module, ordered by `first_seen_cycle` then insertion order, and score an
-  orphan with its **latest** `citation_count` (F9). It MUST queue open
-  `harvest` and `operator` entries, scoring both with the existing orphan
-  formula (an entry with no `citation_count` scores as zero citations), and
-  MUST NOT queue `researcher`, `proposal`, `quarantine` or `migrated`
-  entries (Q3; D4 records the researcher follow-up).
+  orphan with its **latest** `citation_count` (F9). It MUST queue an open
+  entry when the entry is operator-owned (`origin: operator`, or its status
+  was last set by an operator) or carries `citation_count >= 1`, scoring
+  with the existing orphan formula (no `citation_count` scores as zero
+  citations). It MUST NOT queue an entry whose only evidence is a
+  researcher flag or a proposal, nor a `quarantine` or `migrated` entry
+  (Q3 restated on evidence, Session 2026-11-22; D4 records the researcher
+  follow-up).
 - **FR-013**: The propose stage's duplicate check MUST compare against every
   entry's normalised title regardless of status, as it compares against
   every bold title in the file today.
@@ -329,9 +353,16 @@ is kept. Running it again changes nothing.
 
 **Migration**
 
-- **FR-020**: When the store is absent and `_pipeline/research-backlog.md`
-  exists, the module MUST migrate it on first access, before any read or
-  write, and MUST be idempotent.
+- **FR-020**: Conversion of an existing `_pipeline/research-backlog.md`
+  MUST be the second step of `083`'s ordered migration (`083` FR-018),
+  after the layout move: run by `./vault update` and by
+  `./vault migrate-layout`, honouring `--dry-run`, idempotent, and landing
+  as its own `framework:` commit that adds the store and the archive and
+  removes the Markdown file from the git index (the file stays on disk as
+  the view). A vault whose store is absent while a Markdown backlog without
+  the view's footer exists is unconverted: state-writing commands MUST
+  refuse it through `083` FR-015's path, and the module MUST NOT convert
+  lazily.
 - **FR-021**: Migration MUST type every bullet in the grammars of § Evidence
   (harvest orphan, researcher-flagged, proposal, both quarantine pointers —
   inside or outside a block, deduplicated by stem), collapsing whitespace in
@@ -341,7 +372,8 @@ is kept. Running it again changes nothing.
 - **FR-022**: Migration MUST copy the original file byte-for-byte to
   `_pipeline/state/research-backlog.pre-migration.md` (tracked), because on
   vaults scaffolded before 2026-08-27 the Markdown backlog was git-ignored
-  and has no history to fall back on.
+  and has no history to fall back on. The archive path is declared in
+  `083`'s layout registry.
 - **FR-023**: Migration MUST log one `INFO` line with the counts per origin,
   the number of coverage-gap snapshot lines not carried (derivable), and the
   archive path.
