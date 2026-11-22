@@ -12,6 +12,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from .. import __version__ as _FRAMEWORK_VERSION
 from .._assets import asset_path, default_settings_path
+from ..pipeline.state_layout import STATE_DIR
 from ..spec.parsed import stamp_parsed_spec, write_parsed_spec
 from ..spec.schema import SpecConfig
 from .templates import remove_legacy_corpus_templates, render_note_type_templates
@@ -64,9 +65,10 @@ def should_preserve_user_owned_file(vault_dir: Path, rel_path: str) -> bool:
 def _render_vault_gitignore(corpus: str) -> str:
     """Return the scaffold's ``.gitignore`` body.
 
-    Tracks the corpus **and the four spec-058 control files**; everything else
-    (``scripts/``, ``raw_data/``, ``.venv/``, per-cycle ``_pipeline`` artifacts)
-    is regenerable and stays out of version history.
+    Tracks the corpus, the operator's two control files and the state
+    directory (spec 083); everything else (``scripts/``, ``raw_data/``,
+    ``.venv/``, per-cycle ``_pipeline`` artifacts) is regenerable and stays out
+    of version history.
 
     The control-file re-includes were added 2026-08-27. Before that this file
     was ``/*`` plus a corpus re-include, which git-ignored ``research.spec.md``,
@@ -78,7 +80,10 @@ def _render_vault_gitignore(corpus: str) -> str:
 
     ``_pipeline`` needs the three-step dance because git cannot re-include a
     file whose parent directory is excluded: un-ignore the directory, re-exclude
-    its contents, then un-exclude the two files by name.
+    its contents, then un-exclude ``state/``. No file under ``_pipeline/`` is
+    named, so the stanza does not change when a durable file is added (spec 083
+    FR-003) — with one transitional exception, the Markdown backlog, which
+    stays tracked at its old path until spec 084 converts it (FR-019).
     """
     return (
         f"# research-framework: track {corpus}/ + the control files; "
@@ -91,12 +96,20 @@ def _render_vault_gitignore(corpus: str) -> str:
         "# versioned (spec 058 warns when they are not).\n"
         "!research.spec.md\n"
         "!settings.yaml\n"
-        "# `_pipeline/` is regenerable EXCEPT the two control files below. Git\n"
+        "# `_pipeline/` is regenerable EXCEPT `_pipeline/state/`, which holds\n"
+        "# what a later run depends on and cannot recompute (spec 083). Git\n"
         "# cannot re-include a path under an excluded directory, hence the\n"
         "# un-ignore / re-exclude / un-exclude sequence.\n"
         "!_pipeline/\n"
         "_pipeline/*\n"
+        f"!{STATE_DIR}/\n"
+        "# SQLite sidecars of a tracked database are never tracked.\n"
+        f"{STATE_DIR}/*.db-wal\n"
+        f"{STATE_DIR}/*.db-shm\n"
+        "# Transitional until spec 084 converts the backlog; 084 removes this line.\n"
         "!_pipeline/research-backlog.md\n"
+        # Spec 083 T003 moves the coverage targets under state/ and deletes
+        # this re-include with them.
         "!_pipeline/coverage-targets.json\n"
     )
 
