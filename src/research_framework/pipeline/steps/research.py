@@ -102,7 +102,9 @@ def _phase(ctx: CycleContext) -> int:
         # plan was written). No update queue: exactly the pre-087 slicing.
         new_cap: int | None = None
         update_cap = 0
-        if plan.update_queue:
+        from ..currency import updates_supported
+
+        if plan.update_queue and updates_supported(vault_dir)[0]:
             from ..currency import cycle_mode, cycle_split_shares, split_quota
             from ..research_plan import is_placeholder_topic
 

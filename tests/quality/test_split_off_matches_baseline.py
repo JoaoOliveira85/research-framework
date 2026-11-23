@@ -22,6 +22,7 @@ from research_framework.quality.runner import (
 )
 from research_framework.spec.parsed import load_parsed_spec
 from research_framework.spec.schema import SpecConfig
+from tests._helpers.vault_factory import commit_vault
 
 # Everything at the top of tests/quality/ is tier-6 marked (the marker-isolation
 # guard); this one is cheap, but it lives beside the harness it reads.
@@ -114,7 +115,15 @@ def test_update_share_zero_plans_the_same_work_as_before(
     other_spec, other_vault = _spec_and_vault(name, tmp_path / "again")
     assert _plan_text(other_vault, other_spec) == baseline_plan
 
-    # and the split really does something once there is a share and work
+    # and the split really does something once there is a share and work: the
+    # queued notes exist and are committed (update work needs git history)
+    folder = vault / "data_vault" / "01 - Concepts"
+    folder.mkdir(parents=True, exist_ok=True)
+    for i in range(6):
+        (folder / f"note-{i}.md").write_text(
+            "---\ntype: concept\nsummary: s\n---\n\nBody.\n", encoding="utf-8"
+        )
+    commit_vault(vault)
     _set_split(vault, new=0, updates=100, discovery=0)
     with_updates = research_plan.generate_plan(vault, spec, 1)
     assert with_updates.update_quota > 0

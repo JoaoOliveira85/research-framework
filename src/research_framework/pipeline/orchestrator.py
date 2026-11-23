@@ -147,7 +147,9 @@ def _quarantine_orphan_note(vault_dir: Path, note_path: Path) -> None:
     shutil.move(str(note_path), str(dest))
 
 
-def _refresh_before_planning(vault_dir: Path, spec: SpecConfig) -> None:
+def _refresh_before_planning(
+    vault_dir: Path, spec: SpecConfig, cycle_num: int = 0
+) -> None:
     """Recount coverage from disk and queue due reviews, before the plan is made.
 
     The planner reads the persisted coverage counts, so they are recomputed
@@ -163,6 +165,10 @@ def _refresh_before_planning(vault_dir: Path, spec: SpecConfig) -> None:
         currency.queue_due_reviews(vault_dir, spec, dt.datetime.now(dt.UTC).date())
     except Exception as exc:  # noqa: BLE001 - best-effort pre-cycle step
         _LOG.error("[currency] due-review sweep failed: %s", exc)
+    try:
+        currency.warn_if_updates_unsupported(vault_dir, cycle_num)
+    except Exception as exc:  # noqa: BLE001 - a warning must not stop a cycle
+        _LOG.warning("[currency] could not check update support: %s", exc)
 
 
 def _reconcile_orphan_notes_at_cycle_start(vault_dir: Path, cycle_num: int) -> None:
@@ -641,7 +647,7 @@ def run_single_cycle(
     )
 
     if spec is not None:
-        _refresh_before_planning(vault_dir, spec)
+        _refresh_before_planning(vault_dir, spec, cycle_num)
         try:
             plan = research_plan.generate_plan(vault_dir, spec, cycle_num)
             (vault_dir / "_pipeline").mkdir(parents=True, exist_ok=True)

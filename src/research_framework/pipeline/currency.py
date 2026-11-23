@@ -269,6 +269,42 @@ def cycle_mode(vault_dir: Path, spec: SpecConfig | None = None) -> str:
         return "expand"
 
 
+UPDATES_NEED_GIT = (
+    "update batches need the vault's git history: enable vault_commit "
+    "(`vault_commit.enabled: true` in settings.yaml) and initialise the "
+    "repository with at least one commit"
+)
+
+
+def updates_supported(vault_dir: Path) -> tuple[bool, str]:
+    """Whether update batches can run in this vault, and if not, why.
+
+    UG-001 and the verifier's currency rules compare a note with its content at
+    git ``HEAD`` and restore it from there, so a vault that is not a git
+    repository with a first commit, or whose ``vault_commit.enabled`` is false
+    (nothing would keep ``HEAD`` current), cannot have an update judged or
+    undone. The due sweep and the scout still queue entries there: they need no
+    git, and the work is picked up once the vault has history.
+    """
+    from . import vault_commit, vault_git
+
+    if not vault_git.is_git_repo(vault_dir):
+        return False, f"{vault_dir} is not a git repository; {UPDATES_NEED_GIT}"
+    if not vault_commit._load_settings(vault_dir)["enabled"]:
+        return False, f"vault_commit.enabled is false; {UPDATES_NEED_GIT}"
+    if vault_git._run(["git", "rev-parse", "--verify", "HEAD"], vault_dir).returncode:
+        return False, f"the repository has no commits yet; {UPDATES_NEED_GIT}"
+    return True, ""
+
+
+def warn_if_updates_unsupported(vault_dir: Path, cycle: int) -> None:
+    """One WARNING per cycle when open update entries cannot be dispatched."""
+    supported, why = updates_supported(vault_dir)
+    if supported or not backlog.update_topics(vault_dir):
+        return
+    _LOG.warning("[currency] cycle %d: no update work is planned: %s", cycle, why)
+
+
 def plan_updates(
     vault_dir: Path, spec: SpecConfig, quota: int, new_available: int
 ) -> tuple[list[UpdateTopic], int | None, int]:
@@ -282,6 +318,8 @@ def plan_updates(
     merged queue.
     """
     refs = backlog.update_topics(vault_dir)
+    if not updates_supported(vault_dir)[0]:
+        refs = []  # the share falls to new topics, as for any empty share
     new_n, update_n = split_quota(
         quota,
         cycle_split_shares(vault_dir),
@@ -291,17 +329,36 @@ def plan_updates(
     )
     if update_n <= 0:
         return [], None, 0
+    from . import vault_git
+
     notes = _corpus_notes(vault_dir, spec)
     queue = []
-    for ref in refs[: max(quota, update_n)]:
+    limit = max(quota, update_n)
+    for ref in refs:
+        if len(queue) >= limit:
+            break
         found = notes.get(_exclusion_slug(ref.stem))
+        rel = found.relative_to(vault_dir).as_posix() if found else ""
+        if not rel or vault_git.head_content(vault_dir, rel) is None:
+            # Never committed (or not on disk): it can be neither compared nor
+            # restored, so it waits for a commit instead of failing.
+            continue
         queue.append(
             UpdateTopic(
                 stem=ref.stem,
-                path=found.relative_to(vault_dir).as_posix() if found else "",
+                path=rel,
                 reason=ref.reason,
                 as_of=ref.as_of,
                 prompted_by=ref.prompted_by,
             )
         )
+    new_n, update_n = split_quota(
+        quota,
+        cycle_split_shares(vault_dir),
+        mode=cycle_mode(vault_dir, spec),
+        new_available=max(new_available, quota),
+        updates_available=len(queue),
+    )
+    if update_n <= 0:
+        return [], None, 0
     return queue, new_n, update_n
