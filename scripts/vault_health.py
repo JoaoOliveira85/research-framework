@@ -40,7 +40,12 @@ Sub-checks
    one that does not name the note back). Read-only. A one-sided link counts as
    unresolved; notes past review do not.
 
-5. **Control-file git tracking** (spec 058) — for the four critical control
+5. **Discovery** (spec 088) — scope areas the outside-in pass has never checked
+   and areas not checked for more than ``2 x ceil(areas / areas_per_cycle)``
+   cycles. Read-only and advisory (never counted in ``unresolved_count``);
+   absent when the ``cycle_split`` discovery share is 0.
+
+6. **Control-file git tracking** (spec 058) — for the four critical control
    files (``research.spec.md``, ``settings.yaml``,
    the backlog store, the coverage targets under ``_pipeline/state/``),
    warn when a *present* file is untracked or git-ignored in a git-backed
@@ -76,6 +81,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -208,6 +214,7 @@ class HealthReport:
     currency: list[CurrencyRow] = field(default_factory=list)
     supersession_links: list[SupersessionLink] = field(default_factory=list)
     set_aside: list[SetAsideUpdate] = field(default_factory=list)
+    discovery: Any = None  # pipeline.discovery.DiscoveryHealth | None
     update_max_attempts: int = 2
     urls: list[UrlIssue] = field(default_factory=list)
     template_versions: list[tuple[Path, str, str, str]] = field(default_factory=list)
@@ -865,6 +872,13 @@ def scan_set_aside_updates(vault: Path) -> list[SetAsideUpdate]:
     ]
 
 
+def _discovery_health(vault: Path) -> Any:
+    """The Discovery section's findings; ``None`` shows nothing (pass off)."""
+    from research_framework.pipeline import discovery
+
+    return discovery.health(vault)
+
+
 def scan_supersession_links(vault: Path) -> list[SupersessionLink]:
     """Supersession links that are not symmetric, across every note.
 
@@ -1019,6 +1033,25 @@ def render_report(report: HealthReport, vault: Path) -> str:
             )
     lines.append("")
 
+    if report.discovery is not None:
+        found = report.discovery
+        lines.append("## Discovery")
+        if not found.never_checked and not found.stale:
+            lines.append(
+                f"all {found.areas} scope area(s) were checked within the last "
+                f"{found.threshold} cycle(s)"
+            )
+        if found.never_checked:
+            lines.append(f"### never checked ({len(found.never_checked)})")
+            lines += [f"- {area}" for area in found.never_checked]
+        if found.stale:
+            lines.append(
+                f"### not checked for more than {found.threshold} cycles "
+                f"({len(found.stale)})"
+            )
+            lines += [f"- {area} ({ago} cycles ago)" for area, ago in found.stale]
+        lines.append("")
+
     # Spec 058 — control-file git tracking (advisory; contract §5).
     if report.set_aside:
         lines.append(
@@ -1083,8 +1116,10 @@ def run(
     currency = scan_currency(vault)
     supersession_links = scan_supersession_links(vault)
     set_aside = scan_set_aside_updates(vault)
+    discovery_health = _discovery_health(vault)
 
     report = HealthReport(
+        discovery=discovery_health,
         currency=currency,
         supersession_links=supersession_links,
         set_aside=set_aside,

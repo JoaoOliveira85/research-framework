@@ -418,6 +418,11 @@ def write_summary(
         else:
             out.append("- _no notes created or updated this cycle_")
         out.extend(_update_outcome_lines(research.get("update_outcome_results")))
+        from . import discovery
+
+        discovery_info = discovery.cycle_summary(vault_dir, cycle_num)
+        if discovery_info is not None:
+            out.append(f"- {discovery.summary_line(discovery_info)}")
         if topics_new:
             out.append(f"- New scout topics: **{len(topics_new)}**")
         if topics_existing:

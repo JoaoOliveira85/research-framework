@@ -265,6 +265,17 @@ def _update_outcomes(vault_dir: Path) -> dict[str, object] | None:
     return counts
 
 
+def _discovery(vault_dir: Path) -> dict[str, object] | None:
+    """What the last cycle's outside-in pass did (spec 088 FR-010), or ``None``
+    when that cycle ran none. Read from the discovery ledger."""
+    from ..pipeline import discovery
+
+    last = _find_last_summary(vault_dir / "_pipeline" / "cycles")
+    if last is None:
+        return None
+    return discovery.cycle_summary(vault_dir, last[0])
+
+
 def _set_aside_count(vault_dir: Path) -> int:
     """Update entries set aside after repeated failed attempts (spec 087)."""
     from ..pipeline import backlog
@@ -319,6 +330,11 @@ def render_inactive(vault_dir: Path) -> str:
     outcomes = _update_outcomes(vault_dir)
     if outcomes is not None:
         lines.append(_outcomes_line(outcomes))
+    found = _discovery(vault_dir)
+    if found is not None:
+        from ..pipeline import discovery
+
+        lines.append(f"  {discovery.summary_line(found)}")
     aside = _set_aside_count(vault_dir)
     if aside:
         lines.append(f"  updates set aside after repeated failures: {aside}")
@@ -378,6 +394,7 @@ def build_status_json(vault_dir: Path) -> dict[str, object]:
     doc = _build_status_json(vault_dir)
     doc["update_outcomes"] = _update_outcomes(vault_dir)
     doc["update_set_aside"] = _set_aside_count(vault_dir)
+    doc["discovery"] = _discovery(vault_dir)
     if state_layout.is_legacy_layout(vault_dir):
         doc["legacy_layout"] = _LEGACY_NOTICE
     return doc

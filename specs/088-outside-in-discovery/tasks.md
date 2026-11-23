@@ -88,7 +88,7 @@ the spec**: `planned`. Task boxes are live. `087` lands first.
 
 ## Phase 3: Surfaces and proof
 
-- [ ] T005 Cycle summary, `status`, `health`; `README.md`, `ARCHITECTURE.md`,
+- [x] T005 Cycle summary, `status`, `health`; `README.md`, `ARCHITECTURE.md`,
       `CHANGELOG.md`, `docs/ROADMAP.md` (FR-010).
 
   ### Testing Requirements

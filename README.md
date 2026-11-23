@@ -148,7 +148,7 @@ A vault does not just grow; it revisits what it knows.
   note whose `as_of` date (the day it was last checked) is older than that is
   queued for review at the start of the next cycle.
 - **A share of every cycle goes to updates** (`pipeline.cycle_split` in
-  `settings.yaml`, default 60 new / 30 updates / 10 discovery; the spec's
+  `settings.yaml`, default 60 new / 30 updates / 10 discovery, the last being the share for topics found from outside; the spec's
   `research_mode` can turn either side off).
 - **Every update ends in one of four outcomes**: `confirmed` (nothing
   changed, only `as_of` moves), `revised`, `superseded` or `retracted`. The
@@ -157,6 +157,19 @@ A vault does not just grow; it revisits what it knows.
 - **A superseded note points at its successor** and stops counting toward
   coverage; `./vault ask` follows the pointer and says when an answer rests on
   a note past its review date.
+
+**Looking from outside, too.** Everything above starts from what the vault
+already holds, and a field's successor to an idea usually arrives under a new
+name. So each cycle the scout is also asked what is new in a few of the spec's
+scope areas (`pipeline.discovery.areas_per_cycle`, default 3, least recently
+checked first, looking back `window_days`, default 180), searching from the
+area's problem and not from your note titles. A finding must carry a source and
+its publication date or it is dropped. One about a topic that has a note becomes
+an update to that note; a new one becomes a topic, written within the discovery
+share of the cycle (`cycle_split.discovery`, default 10; set it to 0 to switch
+the pass off). `_pipeline/state/discovery-ledger.json` records what each cycle
+checked, including the areas where it found nothing, and `./vault status` and
+`./vault health` read it.
 
 - `./vault audit`
   → runs the validators + an LLM-assisted source-relevance check, produces

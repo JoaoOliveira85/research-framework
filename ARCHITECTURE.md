@@ -117,6 +117,33 @@ The cycle architecture is defined across:
 - `src/research_framework/pipeline/orchestrator.py` — multi-cycle
   orchestration + resume logic + budget tracking.
 
+### The discovery path (spec 088)
+
+A vault also looks from outside its own notes. The path, and where each part lives:
+
+```text
+cycle start   least recently checked scope areas   discovery.choose_areas (ledger) → orchestrator._discovery_assignment
+      ↓  areas + window start rendered into the scout prompt ("Discovery pass"); assignment kept in the cycle's scratch
+scout report  topics_found.discovery, discovery_checked   validate_cycle.py (shape only)
+      ↓
+DG-001        area assigned, a source, `published` inside the window   discovery.evaluate_rows (WARN-only; bad rows dropped)
+      ↓
+routing       note → update:<stem>; reject/duplicate → dropped; open topic → observed;   discovery.route_rows
+              else a `discovery` topic in the backlog (schema 1.2)
+      ↓  pipeline.cycle_split discovery share, as a carried credit   currency.split_quota → (new, update, discovery)
+plan          up to `discovery_n` topics head the priority queue, provenance `discovery`   discovery.plan_discovery_topics
+      ↓
+batch loop    written with the new-topic count; the rest wait, oldest first
+ledger        per area and per cycle; "checked, found nothing" ≠ "never checked"   _pipeline/state/discovery-ledger.json
+```
+
+`pipeline/discovery.py` holds the rotation, the ledger and the routing;
+`state_layout.py` is the one place that spells the ledger's path. Scout
+steps never fail a cycle on a discovery problem: a pass that cannot start is
+skipped, and a report without the discovery keys records its areas as
+"assigned, not reported". `SG-001` and `SG-002` read `topics_found.new` only,
+so discovery rows never count toward the cycle-focus rule or category diversity.
+
 ### The update path (spec 087)
 
 A vault revisits the notes it has. The path, and where each part lives:

@@ -82,9 +82,13 @@ def scope_areas(spec: SpecConfig) -> list[str]:
     A simple-format spec's ``scope.include`` is expanded into
     ``scope.boundaries``, so one source serves both formats.
     """
+    return _clean_areas(spec.scope.boundaries)
+
+
+def _clean_areas(lines: Iterable[Any]) -> list[str]:
     seen: set[str] = set()
     areas: list[str] = []
-    for line in spec.scope.boundaries:
+    for line in lines:
         text = str(line).strip()
         if text and text not in seen:
             seen.add(text)
@@ -624,3 +628,104 @@ def plan_discovery_topics(
         dataclasses.replace(plan, priority_queue=merged + list(plan.priority_queue)),
         len(merged),
     )
+
+
+# ---------------------------------------------------------------------------
+# What the reader sees (spec 088 FR-010): the last cycle's line, and health.
+# ---------------------------------------------------------------------------
+
+
+def cycle_summary(vault_dir: Path, cycle: int) -> dict[str, Any] | None:
+    """What ``cycle``'s pass did, from the ledger; ``None`` when it ran no pass
+    (or the ledger is unreadable: a reader never fails on it).
+
+    ``checked`` are the assigned areas the scout reported on (found or not),
+    ``not_reported`` the assigned ones it did not; ``kept``, ``rerouted`` and
+    ``dropped`` count rows.
+    """
+    try:
+        ledger = load_ledger(vault_dir)
+    except DiscoveryLedgerError:
+        return None
+    record = next((r for r in ledger["cycles"] if r["cycle"] == cycle), None)
+    if record is None:
+        return None
+    assigned = [a for a in record.get("assigned") or [] if isinstance(a, str)]
+    reported = {
+        r.get("area") for r in record.get("reported") or [] if isinstance(r, dict)
+    }
+    return {
+        "cycle": cycle,
+        "checked": [a for a in assigned if a in reported],
+        "not_reported": [a for a in assigned if a not in reported],
+        "kept": int(record.get("kept") or 0),
+        "rerouted": int(record.get("rerouted") or 0),
+        "dropped": len(record.get("dropped") or []),
+    }
+
+
+def summary_line(info: dict[str, Any]) -> str:
+    """One line for the cycle summary and ``./vault status``."""
+    checked = info["checked"]
+    line = (
+        f"discovery (cycle {info['cycle']}): checked {len(checked)} scope area(s)"
+        + (f" [{'; '.join(checked)}]" if checked else "")
+        + f", kept {info['kept']}, re-routed to updates {info['rerouted']}, "
+        f"dropped {info['dropped']}"
+    )
+    if info["not_reported"]:
+        line += f"; not reported: {'; '.join(info['not_reported'])}"
+    return line
+
+
+@dataclass(frozen=True)
+class DiscoveryHealth:
+    """Scope areas the pass has not looked at (read-only; spec 088 FR-010)."""
+
+    cycle: int
+    never_checked: tuple[str, ...]
+    stale: tuple[tuple[str, int], ...]
+    """``(area, cycles since it was last checked)``."""
+    threshold: int
+    """``2 x ceil(areas / areas_per_cycle)``: more cycles than this is stale."""
+    areas: int
+
+
+def health(vault_dir: Path) -> DiscoveryHealth | None:
+    """Areas never checked, and areas not checked for more than
+    ``2 x ceil(areas / areas_per_cycle)`` cycles.
+
+    ``None`` (nothing to show) when the pass is off, the spec has no scope
+    areas, no cycle has run, or the ledger cannot be read.
+    """
+    import math
+
+    from ..spec.parsed import ParsedSpecError, load_parsed_spec
+    from . import cycle_ledger
+
+    if discovery_share(vault_dir) <= 0:
+        return None
+    try:
+        scope = load_parsed_spec(vault_dir).get("scope") or {}
+        areas = _clean_areas(scope.get("boundaries") or [])
+        ledger = load_ledger(vault_dir)
+    except (ParsedSpecError, DiscoveryLedgerError, AttributeError):
+        return None
+    known = [r["cycle"] for r in ledger["cycles"]]
+    latest = max(
+        [*known, cycle_ledger.highest_completed_cycle(vault_dir) or 0], default=0
+    )
+    if not areas or latest < 1:
+        return None
+    threshold = 2 * math.ceil(
+        areas.__len__() / discovery_settings(vault_dir).areas_per_cycle
+    )
+    never: list[str] = []
+    stale: list[tuple[str, int]] = []
+    for area in areas:
+        last = ledger["areas"].get(area, {}).get("last_checked_cycle")
+        if not _is_int(last):
+            never.append(area)
+        elif latest - last > threshold:
+            stale.append((area, latest - last))
+    return DiscoveryHealth(latest, tuple(never), tuple(stale), threshold, len(areas))
