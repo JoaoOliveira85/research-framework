@@ -361,6 +361,8 @@ _NOT_YET_MIGRATED: set[str] = set()
 _NAMES_THE_PATH_ONLY = {
     "src/research_framework/pipeline/state_layout.py",
     "scripts/build_scaffold_manifest.py",
+    # The state-paths guard (spec 083) names it in its exemption list.
+    "scripts/guards/state_paths.py",
 }
 _VIEW_NAME = "research-backlog" + ".md"
 

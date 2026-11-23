@@ -33,7 +33,12 @@ SCHEMA_MAJOR = 1
 SCHEMA_MINOR = 0
 SCHEMA_VERSION = f"{SCHEMA_MAJOR}.{SCHEMA_MINOR}"
 
-WRITERS = ("harvest", "propose", "quarantine", "regrade", "migration")
+# The writer name the orchestrator's quarantine sweep uses. Named so that no
+# other module has to spell the word (the state-paths guard reads a bare
+# ``quarantine`` literal as the state directory's name).
+QUARANTINE_WRITER = "quarantine"
+
+WRITERS = ("harvest", "propose", QUARANTINE_WRITER, "regrade", "migration")
 ORIGINS = ("harvest", "researcher", "proposal", "quarantine", "operator", "migrated")
 STATUSES = ("open", "resolved", "dropped")
 KINDS = ("rewrite", "retry")

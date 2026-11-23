@@ -232,8 +232,9 @@ def _plan_gitignore(vault: Path) -> GitignoreChange | None:
         # appending the re-includes instead would leave the stanza's per-file
         # lines behind, and they would keep un-ignoring files the layout has
         # since moved or turned into ignored views.
+        before, _, after = text.partition(_LEGACY_STANZA)
         return GitignoreChange(
-            text.replace(_LEGACY_STANZA, shipped_new[len(head) :], 1),
+            before + shipped_new[len(head) :] + after,
             "replace the _pipeline stanza in place; the other lines are kept",
         )
     present = {ln.strip() for ln in text.splitlines()}

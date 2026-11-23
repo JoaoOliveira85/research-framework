@@ -303,7 +303,7 @@ def _write_quarantine_backlog(
             tx.observe_quarantine(stem=stem, kind=kind, detail=reason)
 
     try:
-        backlog.update(vault_dir, "quarantine", _apply)
+        backlog.update(vault_dir, backlog.QUARANTINE_WRITER, _apply)
     except OSError as exc:  # pragma: no cover - defensive
         _LOG.warning(
             f"[orchestrator] WARN: backlog pointer reconciliation failed: {exc}"
