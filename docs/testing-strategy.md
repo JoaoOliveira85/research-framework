@@ -707,12 +707,23 @@ modules, and two uses of the word `quarantine` that are not the state directory
 are allowlisted with a reason, all in the guard's own constants. It cannot see a
 name assembled at run time; a tier-2 test plants a literal to prove it fires.
 
+**Settings key consumers (spec 087 SC-005).** `scripts/guards/settings_key_consumers.py`
+is a named line of the battery. It takes every key under `pipeline:` in the settings
+loader's schema (`pipeline/settings.py::_SCHEMA`: the typed fields and the keys other
+modules read from the raw file) and fails when no module under `src/` or `scripts/`
+other than the loader itself refers to it, as an identifier or a string literal.
+Docstrings and comments do not count, for the reason the parser-flag guard gives:
+prose is how an unread option looks read. Like its sibling it is a floor, not
+dataflow analysis, and it fails closed (a tier-2 test asserts it saw the keys and
+the modules it claims to, and plants an unread key to prove it fires).
+
 **Wrong-checkout package (issue #2).** A guard run as a script gets
 `scripts/guards/` on `sys.path[0]`, not `src/`, so `import research_framework`
 resolves through site-packages: a stale editable install or a sibling worktree
 is judged in place of the checkout under test. `scripts/guards/_checkout_package.py`
 asserts the package resolves under `<repo>/src`; `run_all.py`,
-`check_agent_asset_references.py` and `parser_flag_consumers.py` call it and
+`check_agent_asset_references.py`, `parser_flag_consumers.py` and
+`settings_key_consumers.py` call it and
 exit `2` with "imported research_framework from <X>, expected <repo>/src;
 reinstall with pip install -e ." instead of reporting on another tree. Exit `2`
 means the environment is wrong; `1` still means the guard found a defect.

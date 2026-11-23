@@ -289,7 +289,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
   **TDD discipline**: not applicable (documentation).
 
-- [ ] T013 Acceptance and the gates.
+- [x] T013 Acceptance and the gates.
 
   ### Testing Requirements
 
@@ -305,10 +305,25 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
   `ruff format --check .`, `bash build.sh --quality`; refresh the
   test-count marker.
 
-  Rehearsal, reported in the PR: the three migration steps, dry-run then
+  Rehearsal (NOT done in this task: it is done separately, on copies of live
+  vaults, by the owner; `bash build.sh --quality` likewise), reported in the PR: the three migration steps, dry-run then
   real, on copies of two live vaults; then two fake-free research cycles on
   one copy with a 90-day interval on one note type, reporting the outcomes
   by kind, the dollars per worked update, and the extrapolated cost of a
   first pass over that vault (spec Q3).
 
   **TDD discipline**: required.
+
+## Acceptance coverage
+
+Which tests evidence each user story of `spec.md` (the spec's own table is not
+edited here).
+
+| Story | Evidence |
+| --- | --- |
+| US1 — new material on an existing topic updates its note | `tests/e2e/test_update_cycle.py::test_new_material_revises_the_note_in_place`; `tests/pipeline/test_scout_updates.py`; `tests/generator/test_scout_prompt_existing_notes.py` |
+| US2 — a note past its interval is revisited and ends in one outcome | `tests/e2e/test_update_cycle.py::test_a_due_note_ends_in_exactly_one_outcome`; `tests/pipeline/test_due_reviews.py`; `tests/pipeline/test_update_outcomes.py`; `tests/pipeline/test_update_batches.py::test_ten_due_notes_and_a_share_of_three_dispatch_exactly_three_oldest_first` |
+| US3 — a superseded note points at its successor and stops counting | `tests/e2e/test_supersession_end_to_end.py::test_a_superseded_note_links_its_successor_and_ask_follows_it`; `tests/pipeline/test_verifier_currency.py`; `tests/pipeline/test_coverage_currency.py::test_a_superseded_note_stops_counting`; `tests/generator/test_ask_template_currency.py` |
+| US4 — `research_mode` changes what a cycle does | `tests/e2e/test_modes_end_to_end.py::test_refresh_runs_no_new_topic_batches_and_bootstrap_no_update_batches`; `tests/pipeline/test_cycle_split.py`; `tests/quality/test_split_off_matches_baseline.py` (SC-006) |
+| US5 — an existing vault upgrades without a flood | `tests/pipeline/test_stamp_note_currency.py` (including the tier-5 test that the first cycles review at most the update share) |
+| US6 — the operator can see how current the vault is | `tests/cli/test_coverage_currency_columns.py`; `tests/scripts/test_vault_health_currency.py`; `tests/cli/test_status_outcomes.py` |

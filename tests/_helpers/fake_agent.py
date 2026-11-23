@@ -751,6 +751,14 @@ def _edit_frontmatter(text: str, updates: dict[str, str]) -> str:
     return "\n".join(lines)
 
 
+def _with_corroborated(fm: dict, evidence: str) -> str:
+    """``source_urls`` as the note had it plus the outcome's evidence, graded
+    ``corroborated`` (the verifier's IX-currency-evidence needs both)."""
+    entries = list(fm.get("source_urls") or [])
+    entries.append({"url": evidence, "credibility": "corroborated"})
+    return json.dumps(entries)
+
+
 def _today_iso() -> str:
     from datetime import UTC, datetime
 
@@ -814,6 +822,7 @@ def process_update_batch(
             edits["currency"] = "superseded"
             row["evidence_url"] = evidence
             if not lie:
+                edits["source_urls"] = _with_corroborated(fm, evidence)
                 successor = f"{stem}-successor"
                 row["superseded_by"] = successor
                 edits["superseded_by"] = json.dumps([successor])
@@ -840,6 +849,7 @@ def process_update_batch(
             edits["currency"] = "retracted"
             row["evidence_url"] = evidence
             if not lie:
+                edits["source_urls"] = _with_corroborated(fm, evidence)
                 edits["retraction_reason"] = json.dumps(
                     f"The central claim is shown to be wrong by {evidence}."
                 )
