@@ -454,7 +454,7 @@ def _phase(ctx: CycleContext) -> int:
 
     # --- Step 2.5: merge scout-discovered topics into research-plan.md ---
     # The deterministic research plan is generated PRE-cycle from static
-    # state (coverage-targets.json, backlog, exclusions). On a vault whose
+    # state (coverage targets, backlog, exclusions). On a vault whose
     # coverage categories don't enumerate `expected_filenames`, that
     # produces an empty priority queue — there's nothing for the
     # dispatcher to slice in Step 3 and the cycle silently writes a

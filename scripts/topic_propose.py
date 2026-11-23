@@ -32,6 +32,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from research_framework.pipeline import state_layout
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -189,7 +191,7 @@ def _phase1_titles(vault: Path, cycle: int) -> set[str]:
 
 
 def _coverage_gaps(vault: Path) -> list[dict[str, Any]]:
-    ct = _read_json(vault / "_pipeline" / "coverage-targets.json")
+    ct = _read_json(state_layout.coverage_targets_path(vault))
     if not ct:
         return []
     gaps: list[dict[str, Any]] = []

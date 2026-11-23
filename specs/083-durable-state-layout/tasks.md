@@ -57,7 +57,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [ ] T003 Move coverage targets to `L.coverage_targets_path`: the scaffold
+- [x] T003 Move coverage targets to `L.coverage_targets_path`: the scaffold
       seed, `pipeline/coverage.py`, `scripts/topic_harvest.py`, and every
       reader (`quality_report`, `preconditions`, `digest/sections`,
       `quality/`, `research_plan`, `reporter`, `orchestrator`,

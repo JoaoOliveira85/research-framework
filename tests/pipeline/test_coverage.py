@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from research_framework.pipeline import state_layout as L
 from research_framework.pipeline.coverage import (
     all_targets_met,
     classify_note_category,
@@ -48,7 +49,8 @@ def test_all_targets_met_true_when_all_met(tmp_path: Path) -> None:
 
 
 def test_load_targets_malformed_raises(tmp_vault_dir: Path) -> None:
-    (tmp_vault_dir / "_pipeline" / "coverage-targets.json").write_text("not json {{{")
+    L.coverage_targets_path(tmp_vault_dir).parent.mkdir(parents=True, exist_ok=True)
+    (L.coverage_targets_path(tmp_vault_dir)).write_text("not json {{{")
     with pytest.raises(RuntimeError) as exc:
         load_targets(tmp_vault_dir)
     assert "malformed" in str(exc.value)
@@ -90,7 +92,7 @@ def test_save_is_atomic(tmp_path: Path) -> None:
         categories=[CoverageCategory(name="c", note_type="x", target_count=1)]
     )
     save_targets(vault, targets)
-    path = vault / "_pipeline" / "coverage-targets.json"
+    path = L.coverage_targets_path(vault)
     assert path.exists()
     # File must be fully valid JSON (no partial writes visible)
     data = json.loads(path.read_text())

@@ -26,7 +26,6 @@ def _pipeline_lines(body: str) -> list[str]:
 
 
 def test_pipeline_stanza_names_no_file_but_the_transitional_backlog() -> None:
-    # Until T003 lands the coverage targets keep a second transitional line.
     body = _render_vault_gitignore("data_vault")
     assert _pipeline_lines(body) == [
         "!_pipeline/",
@@ -35,8 +34,6 @@ def test_pipeline_stanza_names_no_file_but_the_transitional_backlog() -> None:
         f"{L.STATE_DIR}/*.db-wal",
         f"{L.STATE_DIR}/*.db-shm",
         "!_pipeline/research-backlog.md",
-        # T003 moves the coverage targets and removes this line.
-        "!_pipeline/coverage-targets.json",
     ]
     backlog_at = body.splitlines().index("!_pipeline/research-backlog.md")
     assert "spec 084" in body.splitlines()[backlog_at - 1]
@@ -77,6 +74,7 @@ def test_git_tracks_state(repo: Path, rel: str) -> None:
     [
         "_pipeline/cycles/cycle-001-scout.json",
         "_pipeline/spec-parse.json",
+        "_pipeline/coverage-targets.json",
         "_pipeline/sources.db",
         "_pipeline/state/sources.db-wal",
         "_pipeline/state/sources.db-shm",

@@ -31,6 +31,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from research_framework._assets import asset_path
 from research_framework.generator.scaffold import scaffold
 from research_framework.generator.templates import render_all
+from research_framework.pipeline import state_layout
 from research_framework.pipeline.template_drift import read_template_version
 from research_framework.spec.simple import load as load_spec
 
@@ -44,6 +45,8 @@ _CANONICAL_VAULT_DIR = "/tmp/research_framework-test-vault"
 
 # Files whose rendered content is never stable across runs (SQLite side files)
 # and should be excluded from the manifest.
+_VAULT_ROOT = Path()
+
 _EXCLUDE_PATHS: frozenset[str] = frozenset(
     {
         "_pipeline/sources.db-shm",
@@ -76,7 +79,7 @@ _USER_OWNED_PATTERNS: tuple[str, ...] = (
     # carries a hand-edited Version History, so it alone stays user-owned.
     "_templates/CHANGELOG.md",
     "vault",  # path-specific shell script
-    "_pipeline/coverage-targets.json",  # contains runtime timestamps
+    state_layout.coverage_targets_path(_VAULT_ROOT).as_posix(),  # runtime timestamps
     "_pipeline/spec-parse.json",  # per-vault parsed spec; framework MUST NOT overwrite
     "_pipeline/sources.db",  # SQLite database (user data)
     "_pipeline/budget-log.md",  # append-only user log
@@ -147,7 +150,7 @@ _TIMESTAMP_KEYS = ("last_updated", "generated_at", "created_at", "updated_at")
 def _fix_timestamps(vault_dir: Path) -> None:
     """Replace timestamp fields in generated JSON files with a fixed value.
 
-    Some files (e.g. coverage-targets.json) embed datetime.now() at generation
+    Some files (e.g. the coverage targets) embed datetime.now() at generation
     time. Replacing with a fixed sentinel before hashing makes the manifest
     byte-stable across runs.
     """

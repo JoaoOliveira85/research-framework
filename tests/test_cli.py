@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from research_framework.cli import main
+from research_framework.pipeline import state_layout as L
 
 SIMPLE_SPEC = """---
 name: "Smoke Test Vault"
@@ -53,7 +54,7 @@ class TestGenerateSimpleSpec:
         # Scaffold actually ran:
         assert (vault / "data_vault").is_dir()
         assert (vault / ".gitignore").is_file()
-        assert (vault / "_pipeline" / "coverage-targets.json").is_file()
+        assert (L.coverage_targets_path(vault)).is_file()
 
     def test_generate_rejects_missing_topic_with_exit_2(self, tmp_path: Path) -> None:
         body = "---\nname: n\nowner: o\n---\n"

@@ -181,7 +181,7 @@ pipeline:
   # After every cycle, `topic_harvest.py` ranks every unresolved
   # `[[wikilink]]` by how many distinct existing notes cite it. Any
   # entry whose citation count meets or exceeds this threshold becomes
-  # a new `CoverageCategory` in `_pipeline/coverage-targets.json` —
+  # a new `CoverageCategory` in `_pipeline/state/coverage-targets.json` —
   # so the Phase 3 gate tracks emergent topology rather than just
   # spec-author foresight (constitution v1.3.0 § "Coverage Targets —
   # Dynamic extension via backlog promotion").
@@ -483,7 +483,7 @@ cycles:
 # ---------------------------------------------------------------------------
 research_modes:
   bootstrap:
-    exit_condition: coverage_met          # gate against `coverage-targets.json`
+    exit_condition: coverage_met          # gate against `_pipeline/state/coverage-targets.json`
     scout_bias: new_topics
     note_action: create                   # writer creates new notes
     wind_down:

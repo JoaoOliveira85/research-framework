@@ -23,6 +23,7 @@ from pathlib import Path
 
 import pytest
 
+from research_framework.pipeline import state_layout as L
 from research_framework.spec.schema import (
     BudgetConfig,
     CoverageCategory,
@@ -40,7 +41,7 @@ def _write_coverage(
     categories: list[CoverageCategory],
     cycle_number: int = 0,
 ) -> None:
-    p = tmp_path / "_pipeline" / "coverage-targets.json"
+    p = L.coverage_targets_path(tmp_path)
     p.parent.mkdir(parents=True, exist_ok=True)
     targets = CoverageTargets(categories=categories, cycle_number=cycle_number)
     p.write_text(json.dumps(targets.to_dict(), indent=2) + "\n", encoding="utf-8")

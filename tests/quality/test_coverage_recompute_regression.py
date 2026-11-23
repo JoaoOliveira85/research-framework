@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from research_framework.pipeline import state_layout as L
 from research_framework.pipeline.coverage import recompute_from_disk, save_targets
 from research_framework.pipeline.quality_report import _build_coverage_snapshot
 from research_framework.quality.metrics.coverage import compute_coverage_metric
@@ -105,7 +106,7 @@ def test_harness_coverage_metric_non_zero(tmp_path: Path) -> None:
         vault_dir=vault,
         spec_path=vault / "research.spec.md",
         settings_path=vault / "settings.yaml",
-        coverage_targets_path=vault / "_pipeline" / "coverage-targets.json",
+        coverage_targets_path=L.coverage_targets_path(vault),
         fake_agent_responses_dir=vault / "fake_agent_responses",
         note_count_target=sum(n for *_r, n, _s in _CATEGORIES),
         failure_mode="stale-coverage-count",

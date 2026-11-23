@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from research_framework.pipeline import state_layout as L
+
 SCRIPT = Path(__file__).parent.parent.parent / "scripts" / "topic_harvest.py"
 _SRC_DIR = str(Path(__file__).parent.parent.parent / "src")
 
@@ -114,7 +116,8 @@ def test_skips_wikilinks_to_existing_notes(tmp_path: Path) -> None:
 def test_includes_coverage_gaps(tmp_path: Path) -> None:
     """Unmet categories surface with shortfall, ordered required-first."""
     vault = _seed_vault(tmp_path)
-    (vault / "_pipeline" / "coverage-targets.json").write_text(
+    L.coverage_targets_path(vault).parent.mkdir(parents=True, exist_ok=True)
+    (L.coverage_targets_path(vault)).write_text(
         json.dumps(
             {
                 "categories": [
@@ -225,9 +228,8 @@ def _seed_coverage_targets(vault: Path, categories: list[dict]) -> None:
     """Write a `coverage-targets.json` matching the structure
     `research_framework.pipeline.coverage.load_targets` expects."""
     payload = {"categories": categories}
-    (vault / "_pipeline" / "coverage-targets.json").write_text(
-        json.dumps(payload), encoding="utf-8"
-    )
+    L.coverage_targets_path(vault).parent.mkdir(parents=True, exist_ok=True)
+    (L.coverage_targets_path(vault)).write_text(json.dumps(payload), encoding="utf-8")
 
 
 def _seed_settings_threshold(vault: Path, threshold: int | None) -> None:
@@ -282,7 +284,7 @@ def test_promotes_high_citation_orphans_to_coverage_targets(
     r = _run(vault, 1)
     assert r.returncode == 0, r.stdout + r.stderr
 
-    coverage = json.loads((vault / "_pipeline" / "coverage-targets.json").read_text())
+    coverage = json.loads((L.coverage_targets_path(vault)).read_text())
     names = {c["name"] for c in coverage["categories"]}
     assert "zone-system" in names, names
     assert "stop-bath" in names, names
@@ -306,7 +308,7 @@ def test_promotion_is_idempotent(tmp_path: Path) -> None:
     _run(vault, 1)
     _run(vault, 1)
 
-    coverage = json.loads((vault / "_pipeline" / "coverage-targets.json").read_text())
+    coverage = json.loads((L.coverage_targets_path(vault)).read_text())
     zone_entries = [c for c in coverage["categories"] if c["name"] == "zone-system"]
     assert len(zone_entries) == 1
 
@@ -326,7 +328,7 @@ def test_promotion_threshold_is_configurable(tmp_path: Path) -> None:
 
     _run(vault, 1)
 
-    coverage = json.loads((vault / "_pipeline" / "coverage-targets.json").read_text())
+    coverage = json.loads((L.coverage_targets_path(vault)).read_text())
     names = {c["name"] for c in coverage["categories"]}
     assert "twice-cited" not in names
 

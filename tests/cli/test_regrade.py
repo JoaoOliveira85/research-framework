@@ -14,6 +14,7 @@ import pytest
 import yaml
 
 from research_framework.cli.regrade import RegradeOutcome, run_regrade
+from research_framework.pipeline import state_layout as L
 from research_framework.vault.frontmatter import parse_frontmatter
 
 _SPEC = textwrap.dedent(
@@ -75,7 +76,8 @@ def _build_vault(tmp_path: Path, *, policy: str = "warn", git: bool = True) -> P
     (vault / "settings.yaml").write_text(yaml.safe_dump(settings), encoding="utf-8")
     import json
 
-    (vault / "_pipeline" / "coverage-targets.json").write_text(
+    L.coverage_targets_path(vault).parent.mkdir(parents=True, exist_ok=True)
+    (L.coverage_targets_path(vault)).write_text(
         json.dumps(_COVERAGE_TARGETS), encoding="utf-8"
     )
     if git:

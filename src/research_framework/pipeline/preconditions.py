@@ -58,6 +58,7 @@ from pathlib import Path
 
 from research_framework.spec.schema import SpecValidationError
 
+from . import state_layout
 from .preflight import check_all, load_spec_for_preflight
 
 logger = logging.getLogger(__name__)
@@ -181,14 +182,16 @@ def check(
     # ------------------------------------------------------------------
     # 3-5. Structural files. ALWAYS required (resume needs them too).
     # ------------------------------------------------------------------
-    targets_file = vault_dir / "_pipeline" / "coverage-targets.json"
+    targets_file = state_layout.coverage_targets_path(vault_dir)
     if not targets_file.exists():
-        unmet.append("precondition 3: _pipeline/coverage-targets.json missing")
+        unmet.append(
+            f"precondition 3: {targets_file.relative_to(vault_dir).as_posix()} missing"
+        )
     else:
         try:
             json.loads(targets_file.read_text(encoding="utf-8"))
         except json.JSONDecodeError as e:
-            unmet.append(f"precondition 3: coverage-targets.json malformed ({e})")
+            unmet.append(f"precondition 3: {targets_file.name} malformed ({e})")
 
     if not (vault_dir / "_pipeline" / "budget-log.md").exists():
         unmet.append("precondition 4: _pipeline/budget-log.md missing")

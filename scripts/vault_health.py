@@ -36,7 +36,8 @@ Sub-checks
 
 4. **Control-file git tracking** (spec 058) — for the four critical control
    files (``research.spec.md``, ``settings.yaml``,
-   ``_pipeline/research-backlog.md``, ``_pipeline/coverage-targets.json``),
+   ``_pipeline/research-backlog.md``, the coverage targets under
+   ``_pipeline/state/``),
    warn when a *present* file is untracked or git-ignored in a git-backed
    vault. Advisory only — never counted in ``unresolved_count`` and never
    flips the exit code; silent on non-git vaults.
@@ -73,6 +74,8 @@ from pathlib import Path
 
 import yaml
 
+from research_framework.pipeline import state_layout
+
 # Wayback Machine "available" API. Returns ``{archived_snapshots: {closest: {url}}}``
 # when a snapshot exists, or an empty ``archived_snapshots`` dict when not.
 _WAYBACK_AVAILABLE = "https://archive.org/wayback/available?url="
@@ -89,7 +92,7 @@ CONTROL_FILE_PATHS = (
     "research.spec.md",
     "settings.yaml",
     "_pipeline/research-backlog.md",
-    "_pipeline/coverage-targets.json",
+    state_layout.coverage_targets_path(Path()).as_posix(),
 )
 
 

@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from research_framework.pipeline import state_layout
 from research_framework.spec.simple import load as load_spec
 from research_framework.vault.corpus import corpus_dir
 from research_framework.vault.frontmatter import parse_frontmatter
@@ -112,11 +113,10 @@ def _notes_in_range(
 
 def _load_coverage_targets(vault_dir: Path) -> tuple[list[dict[str, Any]], list[str]]:
     warnings: list[str] = []
-    for rel in (
-        Path("coverage-targets.json"),
-        Path("_pipeline") / "coverage-targets.json",
-    ):
-        path = vault_dir / rel
+    state_path = state_layout.coverage_targets_path(vault_dir)
+    # A digest fixture keeps a bare copy at the vault root; real vaults keep
+    # the state file only.
+    for path in (vault_dir / state_path.name, state_path):
         if not path.is_file():
             continue
         data = _load_json(path)
@@ -124,7 +124,7 @@ def _load_coverage_targets(vault_dir: Path) -> tuple[list[dict[str, Any]], list[
             continue
         if "cycle_number" not in data:
             warnings.append(
-                "[schema-migrated] coverage-targets.json missing cycle_number — "
+                "[schema-migrated] coverage targets missing cycle_number — "
                 "best-effort parse"
             )
         return [c for c in data["categories"] if isinstance(c, dict)], warnings

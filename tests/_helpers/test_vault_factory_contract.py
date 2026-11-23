@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from research_framework.pipeline import state_layout as L
 from research_framework.pipeline.settings import (
     effective_max_cycles,
     load_vault_settings,
@@ -24,16 +25,14 @@ def test_factory_output_passes_validate_vault(tmp_path: Path) -> None:
     assert (vault / "research.spec.md").is_file()
     assert (vault / "settings.yaml").is_file()
     assert (vault / "_pipeline" / "spec-parse.json").is_file()
-    assert (vault / "_pipeline" / "coverage-targets.json").is_file()
+    assert (L.coverage_targets_path(vault)).is_file()
     assert (vault / "_pipeline" / "research-plan.md").is_file()
     assert (vault / "_pipeline" / "prompts" / "scout-prompt.md").is_file()
     assert (vault / "_pipeline" / "prompts" / "dfs-prompt.md").is_file()
     assert (vault / "scripts" / "agent_call.py").is_file()
     assert (vault / "scripts" / "validate_cycle.py").is_file()
 
-    targets = json.loads(
-        (vault / "_pipeline" / "coverage-targets.json").read_text(encoding="utf-8")
-    )
+    targets = json.loads((L.coverage_targets_path(vault)).read_text(encoding="utf-8"))
     assert len(targets["categories"]) == 2
     assert targets["categories"][0]["target_count"] == 3
 
@@ -103,8 +102,8 @@ def test_factory_deterministic_categories(tmp_path: Path) -> None:
     v2 = build_minimal_vault(
         tmp_path / "b", num_categories=3, num_targets_per_category=4
     )
-    t1 = json.loads((v1 / "_pipeline" / "coverage-targets.json").read_text())
-    t2 = json.loads((v2 / "_pipeline" / "coverage-targets.json").read_text())
+    t1 = json.loads((L.coverage_targets_path(v1)).read_text())
+    t2 = json.loads((L.coverage_targets_path(v2)).read_text())
     cats1 = [(c["name"], c["target_count"]) for c in t1["categories"]]
     cats2 = [(c["name"], c["target_count"]) for c in t2["categories"]]
     assert cats1 == cats2

@@ -182,7 +182,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Skip scaffolding and Phase 2/3: load <vault>/research.spec.md, infer the "
-            "next cycle from _pipeline/coverage-targets.json (cycle_number+1, or 1 if "
+            "next cycle from the coverage targets under _pipeline/state/ (cycle_number+1, or 1 if "
             "missing), write _pipeline/research-plan.md and the archived copy under "
             "_pipeline/cycles/, then run the plan narrator. Ignores --resume, --dry-run, "
             "--cycle, and other generate flags that affect Phase 2."

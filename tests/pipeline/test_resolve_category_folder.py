@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from research_framework.pipeline import state_layout as L
 from research_framework.pipeline.coverage import resolve_category_folder
 
 
@@ -13,7 +14,8 @@ def _vault(tmp_path: Path, dirs: list[str], categories: list[dict]) -> Path:
     for d in dirs:
         (vault / "data_vault" / d).mkdir(parents=True, exist_ok=True)
     (vault / "_pipeline").mkdir(parents=True, exist_ok=True)
-    (vault / "_pipeline" / "coverage-targets.json").write_text(
+    L.coverage_targets_path(vault).parent.mkdir(parents=True, exist_ok=True)
+    (L.coverage_targets_path(vault)).write_text(
         json.dumps({"categories": categories}), encoding="utf-8"
     )
     return vault

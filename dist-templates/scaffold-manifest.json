@@ -147,7 +147,7 @@
       "path": "_pipeline/.tmpl-versions.json",
       "kind": "json",
       "template_version": 1,
-      "rendered_sha256": "edd3a7cc374cc1bb6005f288914c181c736888764eae9cfc26e10683d50ccbc4",
+      "rendered_sha256": "f496ad01a1fee550a8bf4483367645328262a4abf13bf6518593d8213e15e415",
       "is_user_owned_after_first_write": true
     },
     {
@@ -155,13 +155,6 @@
       "kind": "markdown",
       "template_version": 1,
       "rendered_sha256": "a06d387991a25d922ef6673f5e2836876eed2e4587dc109d3ffe5e18bd7a6796",
-      "is_user_owned_after_first_write": true
-    },
-    {
-      "path": "_pipeline/coverage-targets.json",
-      "kind": "json",
-      "template_version": 1,
-      "rendered_sha256": "812cd2df0b747920145f3dd3b4ea2ec1f4192fbd02614967e463847561cd69e0",
       "is_user_owned_after_first_write": true
     },
     {
@@ -197,6 +190,20 @@
       "kind": "json",
       "template_version": 1,
       "rendered_sha256": "a026ab3b3eccd6fe87b24bea071b113b171f816b6fd451bc24b9908b8a0706c5",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_pipeline/state/.tmpl-versions.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "2ccf6f9a70fcecce99cf129e20bf67e71af4e4fe797705b263ea4c97ff662762",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_pipeline/state/coverage-targets.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "812cd2df0b747920145f3dd3b4ea2ec1f4192fbd02614967e463847561cd69e0",
       "is_user_owned_after_first_write": true
     },
     {

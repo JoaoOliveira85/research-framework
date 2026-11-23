@@ -263,7 +263,7 @@ def _coverage_summary(vault_dir: Path) -> dict[str, object] | None:
     Read-only: derives ``met_count`` from disk via the same
     :func:`recompute_from_disk` the cycle-end + digest paths use (one source of
     truth, contract C3) but does NOT persist (status is a read-only verb).
-    Returns ``None`` when the vault has no ``coverage-targets.json`` yet.
+    Returns ``None`` when the vault has no coverage targets file yet.
     """
     from ..pipeline.coverage import recompute_from_disk
 

@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+from ..pipeline import state_layout
 from ..pipeline.settings import strict_settings_refusal
 from ..spec.schema import SpecValidationError
 from ..spec.simple import load as load_spec
@@ -491,7 +492,7 @@ def _regenerate_plan_only(args: argparse.Namespace) -> int:
             print(msg, file=sys.stderr)
         return 2
 
-    ct_path = vault_dir / "_pipeline" / "coverage-targets.json"
+    ct_path = state_layout.coverage_targets_path(vault_dir)
     cycle_number = 1
     if ct_path.is_file():
         try:

@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from research_framework.pipeline import preconditions
+from research_framework.pipeline import state_layout as L
 from research_framework.pipeline.preconditions import check
 
 
@@ -40,7 +41,7 @@ def _skip_framework_tests_subprocess(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_missing_coverage_targets(tmp_vault_dir: Path) -> None:
-    (tmp_vault_dir / "_pipeline" / "coverage-targets.json").unlink()
+    (L.coverage_targets_path(tmp_vault_dir)).unlink()
     ok, unmet = check(tmp_vault_dir)
     assert not ok
     assert any("coverage-targets" in m for m in unmet)
@@ -68,7 +69,8 @@ def test_claude_md_missing_naming_convention(tmp_vault_dir: Path) -> None:
 
 
 def test_malformed_coverage_targets(tmp_vault_dir: Path) -> None:
-    (tmp_vault_dir / "_pipeline" / "coverage-targets.json").write_text("not json")
+    L.coverage_targets_path(tmp_vault_dir).parent.mkdir(parents=True, exist_ok=True)
+    (L.coverage_targets_path(tmp_vault_dir)).write_text("not json")
     ok, unmet = check(tmp_vault_dir)
     assert not ok
     assert any("malformed" in m for m in unmet)

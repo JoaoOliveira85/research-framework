@@ -8,6 +8,7 @@ from pathlib import Path
 
 from research_framework._assets import asset_path
 from research_framework.generator.scaffold import scaffold
+from research_framework.pipeline import state_layout as L
 from research_framework.spec.parser import parse
 
 
@@ -119,7 +120,7 @@ def test_scaffold_writes_coverage_targets(
     spec = parse(sample_spec_path)
     vault = tmp_path / "vault"
     scaffold(spec, vault)
-    targets_file = vault / "_pipeline" / "coverage-targets.json"
+    targets_file = L.coverage_targets_path(vault)
     assert targets_file.exists()
     data = json.loads(targets_file.read_text())
     assert len(data["categories"]) == len(spec.coverage_targets.categories)

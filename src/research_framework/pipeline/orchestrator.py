@@ -754,7 +754,7 @@ def run_single_cycle(
     # terminate after still writing notes this cycle, and those notes count
     # toward coverage + the auto-resume decision. ABORT (rc==2) is skipped
     # because the cycle report is unreliable then. Skip CG-aborted intermediate
-    # attempts (017 Q3): they must not roll back coverage-targets / notes.
+    # attempts (017 Q3): they must not roll back coverage targets / notes.
     cycle_report: dict | None = None
     if not aborted and returncode in (0, 1):
         report_file = _cycle_research_report_path(vault_dir, cycle_num)
@@ -884,7 +884,7 @@ def run_cycles(
     - **Abort** (rc=2): structural error inside ``run_single_cycle`` (e.g.
       scout JSON malformed). Stops immediately.
 
-    Auto-promotion of high-citation orphans into ``coverage-targets.json``
+    Auto-promotion of high-citation orphans into the coverage targets
     is owned by ``scripts/topic_harvest.py`` (called as Step 7 of the
     cycle runner). By the time ``run_single_cycle`` returns, the
     coverage targets already reflect the latest emergent topology, so the

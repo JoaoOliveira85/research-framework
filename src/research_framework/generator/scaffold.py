@@ -12,6 +12,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from .. import __version__ as _FRAMEWORK_VERSION
 from .._assets import asset_path, default_settings_path
+from ..pipeline import state_layout
 from ..pipeline.state_layout import STATE_DIR
 from ..spec.parsed import stamp_parsed_spec, write_parsed_spec
 from ..spec.schema import SpecConfig
@@ -108,9 +109,6 @@ def _render_vault_gitignore(corpus: str) -> str:
         f"{STATE_DIR}/*.db-shm\n"
         "# Transitional until spec 084 converts the backlog; 084 removes this line.\n"
         "!_pipeline/research-backlog.md\n"
-        # Spec 083 T003 moves the coverage targets under state/ and deletes
-        # this re-include with them.
-        "!_pipeline/coverage-targets.json\n"
     )
 
 
@@ -268,7 +266,7 @@ def scaffold(
             encoding="utf-8",
         )
 
-    # Initialize coverage-targets.json from spec targets. ``display_name`` is
+    # Initialize the coverage targets (state, spec 083) from spec targets. ``display_name`` is
     # carried forward so the per-category classifier in pipeline/coverage.py
     # has the human-readable label to match notes against — without it the
     # classifier would fall back to pure round-robin on the slugified name.
@@ -287,7 +285,9 @@ def scaffold(
             for cat in spec.coverage_targets.categories
         ],
     }
-    (pipeline / "coverage-targets.json").write_text(
+    targets_path = state_layout.coverage_targets_path(vault_dir)
+    targets_path.parent.mkdir(parents=True, exist_ok=True)
+    targets_path.write_text(
         json.dumps(coverage_data, indent=2) + "\n", encoding="utf-8"
     )
 
@@ -317,7 +317,6 @@ def scaffold(
     (pipeline / ".tmpl-versions.json").write_text(
         json.dumps(
             {
-                "coverage-targets.json": 1,
                 "spec-parse.json": 1,
                 "sources.db": 1,
             },
@@ -325,6 +324,12 @@ def scaffold(
         )
         + "\n",
         encoding="utf-8",
+    )
+
+    # The state directory carries its own stamp: its files sit beside it, and
+    # the template-version reader looks for a sibling JSON.
+    (state_layout.state_dir(vault_dir) / ".tmpl-versions.json").write_text(
+        json.dumps({targets_path.name: 1}, indent=2) + "\n", encoding="utf-8"
     )
 
     # Self-containment: copy the source spec + settings.yaml in so the vault

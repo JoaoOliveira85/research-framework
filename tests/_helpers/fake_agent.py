@@ -31,6 +31,8 @@ from typing import Any
 
 import yaml
 
+from research_framework.pipeline import state_layout as L
+
 _LOG = logging.getLogger(__name__)
 
 # Regex for the ``## Batch topics (JSON)`` block embedded in note_writer
@@ -149,7 +151,7 @@ def _load_spec_parse(vault_dir: Path) -> dict:
 
 
 def _load_coverage_targets(vault_dir: Path) -> list[dict]:
-    p = vault_dir / "_pipeline" / "coverage-targets.json"
+    p = L.coverage_targets_path(vault_dir)
     if not p.is_file():
         return []
     doc = json.loads(p.read_text(encoding="utf-8")) or {}

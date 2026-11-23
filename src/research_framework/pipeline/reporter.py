@@ -59,7 +59,7 @@ def generate_report(vault_dir: Path) -> Path:
             for c in targets.categories
         ]
     except (FileNotFoundError, RuntimeError):
-        coverage_rows = ["| (no coverage-targets.json found) | — | — | — |"]
+        coverage_rows = ["| (no coverage targets found) | — | — | — |"]
 
     budget_log_file = pipeline / "budget-log.md"
     budget_log = (

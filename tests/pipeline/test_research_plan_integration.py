@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from research_framework.pipeline import state_layout as L
 from research_framework.spec.schema import (
     BudgetConfig,
     CoverageCategory,
@@ -69,7 +70,7 @@ class TestResearchPlanGoldenPath:
         )
 
         spec = _spec_thirteen_categories()
-        path = tmp_path / "_pipeline" / "coverage-targets.json"
+        path = L.coverage_targets_path(tmp_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             json.dumps(spec.coverage_targets.to_dict(), indent=2) + "\n",
