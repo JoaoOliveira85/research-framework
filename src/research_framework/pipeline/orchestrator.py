@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 from ..spec.schema import SpecConfig
 from . import (
     backlog,
+    currency,
     cycle_ledger,
     plan_narrator,
     quality_report,
@@ -46,6 +47,7 @@ from .coverage import (
     all_targets_met,
     existing_vault_filenames,
     merge_expected_filenames_from_scan,
+    recompute_from_disk,
     unmet_expected_filenames,
     unmet_targets,
     update_after_cycle,
@@ -143,6 +145,24 @@ def _quarantine_orphan_note(vault_dir: Path, note_path: Path) -> None:
     qdir.mkdir(parents=True, exist_ok=True)
     dest = _free_quarantine_path(qdir, note_path)
     shutil.move(str(note_path), str(dest))
+
+
+def _refresh_before_planning(vault_dir: Path, spec: SpecConfig) -> None:
+    """Recount coverage from disk and queue due reviews, before the plan is made.
+
+    The planner reads the persisted coverage counts, so they are recomputed
+    first; the sweep (spec 087 FR-010) then records a ``review_due`` update
+    entry for every note past its type's interval. Neither calls a model, and
+    neither may stop the cycle.
+    """
+    try:
+        recompute_from_disk(vault_dir)
+    except Exception as exc:  # noqa: BLE001 - best-effort pre-cycle step
+        _LOG.warning("WARN: coverage recount before planning failed: %s", exc)
+    try:
+        currency.queue_due_reviews(vault_dir, spec, dt.datetime.now(dt.UTC).date())
+    except Exception as exc:  # noqa: BLE001 - best-effort pre-cycle step
+        _LOG.error("[currency] due-review sweep failed: %s", exc)
 
 
 def _reconcile_orphan_notes_at_cycle_start(vault_dir: Path, cycle_num: int) -> None:
@@ -621,6 +641,7 @@ def run_single_cycle(
     )
 
     if spec is not None:
+        _refresh_before_planning(vault_dir, spec)
         try:
             plan = research_plan.generate_plan(vault_dir, spec, cycle_num)
             (vault_dir / "_pipeline").mkdir(parents=True, exist_ok=True)

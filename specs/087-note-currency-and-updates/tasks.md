@@ -74,7 +74,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
   **TDD discipline**: required.
 
-- [ ] T004 `pipeline/currency.py::queue_due_reviews`, called at cycle start
+- [x] T004 `pipeline/currency.py::queue_due_reviews`, called at cycle start
       before the plan is generated, with a `recompute_from_disk` beside it
       (FR-010, FR-018's "where the planner looks"; plan § 4).
 
