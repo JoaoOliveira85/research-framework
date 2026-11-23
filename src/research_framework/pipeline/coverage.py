@@ -10,9 +10,10 @@ import logging
 import math
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
+from research_framework.vault import note_currency
 from research_framework.vault.corpus import corpus_dir
 from research_framework.vault.frontmatter import (
     FrontmatterParseError,
@@ -467,6 +468,10 @@ def recompute_from_disk(vault_dir: Path, *, persist: bool = True) -> CoverageTar
                 continue
             if str((fm or {}).get("note_type", "") or "").strip().lower() == "alias":
                 continue
+            if not note_currency.countable(fm):
+                # Spec 087 FR-018: a superseded or retracted note is not
+                # coverage; its replacement (or nothing) is.
+                continue
             ntype = str((fm or {}).get("type", "") or "").strip()
             if not ntype:
                 continue
@@ -491,6 +496,86 @@ def recompute_from_disk(vault_dir: Path, *, persist: bool = True) -> CoverageTar
     if persist:
         save_targets(vault_dir, targets)
     return targets
+
+
+@dataclass(frozen=True)
+class CurrencyCount:
+    """Per category: notes past their review interval, and notes that no longer
+    count because they are superseded or retracted (spec 087 FR-019)."""
+
+    past_review: int = 0
+    uncountable: int = 0
+    past_notes: tuple[str, ...] = ()
+    """Vault-relative paths of the notes counted in ``past_review``."""
+    uncountable_notes: tuple[str, ...] = ()
+
+
+def review_intervals(vault_dir: Path) -> dict[str, int]:
+    """``{note type: review_after_days}`` for the types that declare one."""
+    from research_framework.spec.parsed import ParsedSpecError, load_parsed_spec
+
+    try:
+        note_types = load_parsed_spec(vault_dir).get("note_types") or []
+    except ParsedSpecError:
+        return {}
+    intervals: dict[str, int] = {}
+    for nt in note_types:
+        days = nt.get("review_after_days") if isinstance(nt, dict) else None
+        if isinstance(days, int) and not isinstance(days, bool) and days > 0:
+            intervals[str(nt.get("name"))] = days
+    return intervals
+
+
+def currency_counts(
+    vault_dir: Path,
+    *,
+    intervals: dict[str, int] | None = None,
+    today: date | None = None,
+) -> dict[str, CurrencyCount]:
+    """Read-only: per coverage category, how many notes are past review and how
+    many are superseded or retracted. Notes are assigned to categories exactly
+    as :func:`recompute_from_disk` assigns them."""
+    targets = load_targets(vault_dir)
+    for cat in targets.categories:
+        cat.met_count = (
+            0  # as recompute_from_disk: the fallback reads the running count
+        )
+    intervals = review_intervals(vault_dir) if intervals is None else intervals
+    today = today or datetime.now(UTC).date()
+    past: dict[str, list[str]] = {c.name: [] for c in targets.categories}
+    gone: dict[str, list[str]] = {c.name: [] for c in targets.categories}
+    data_vault = corpus_dir(vault_dir)
+    if data_vault.is_dir():
+        for note in sorted(data_vault.rglob("*.md")):
+            try:
+                fm, _body = parse_frontmatter(note)
+            except (OSError, FrontmatterParseError):
+                continue
+            if not fm:
+                continue
+            if str(fm.get("note_type", "") or "").strip().lower() == "alias":
+                continue
+            ntype = str(fm.get("type", "") or "").strip()
+            eligible = [c for c in targets.categories if c.note_type == ntype]
+            chosen = classify_note_category(fm, note.name, eligible) if ntype else None
+            if chosen is None:
+                continue
+            rel = note.relative_to(vault_dir).as_posix()
+            if not note_currency.countable(fm):
+                gone[chosen.name].append(rel)
+                continue
+            chosen.met_count += 1
+            if note_currency.is_due(fm, intervals.get(ntype), today):
+                past[chosen.name].append(rel)
+    return {
+        name: CurrencyCount(
+            past_review=len(past[name]),
+            uncountable=len(gone[name]),
+            past_notes=tuple(past[name]),
+            uncountable_notes=tuple(gone[name]),
+        )
+        for name in past
+    }
 
 
 def _eligible_created_count(vault_dir: Path, research_report: dict) -> int | None:
@@ -523,6 +608,8 @@ def _eligible_created_count(vault_dir: Path, research_report: dict) -> int | Non
         if not fm:
             continue
         if str((fm or {}).get("note_type", "") or "").strip().lower() == "alias":
+            continue
+        if not note_currency.countable(fm):
             continue
         ntype = str((fm or {}).get("type", "") or "").strip()
         if not ntype or ntype not in types_with_targets:

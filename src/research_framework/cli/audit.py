@@ -8,8 +8,8 @@ import sys
 def _cmd_coverage(args: argparse.Namespace) -> int:
     try:
         from ..pipeline.coverage import (
-            all_targets_met,
-            load_targets,
+            currency_counts,
+            recompute_from_disk,
             unmet_expected_filenames,
         )
     except ImportError:
@@ -19,16 +19,27 @@ def _cmd_coverage(args: argparse.Namespace) -> int:
         print(f"ERROR: vault directory not found: {args.vault}", file=sys.stderr)
         return 2
     try:
-        targets = load_targets(args.vault)
+        # Recounted from the notes, in memory (spec 087 FR-018/FR-019): the
+        # persisted file is a cache and this verb writes nothing, so what it
+        # prints agrees with `status --json` and with what the next cycle plans.
+        targets = recompute_from_disk(args.vault, persist=False)
+        currency = currency_counts(args.vault)
     except FileNotFoundError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2
     print(f"Coverage Targets — {args.vault}")
-    print("─" * 60)
-    print(f"{'Category':<25} {'Target':>6} {'Met':>5} Status")
+    print("─" * 72)
+    print(
+        f"{'Category':<25} {'Target':>6} {'Met':>5} {'Past review':>11} "
+        f"{'Superseded':>10} Status"
+    )
     for cat in targets.categories:
         status = "✓ MET" if cat.is_met else f"✗ UNMET (gap: {cat.gap})"
-        print(f"{cat.name:<25} {cat.target_count:>6} {cat.met_count:>5} {status}")
+        counts = currency[cat.name]
+        print(
+            f"{cat.name:<25} {cat.target_count:>6} {cat.met_count:>5} "
+            f"{counts.past_review:>11} {counts.uncountable:>10} {status}"
+        )
 
     # Feature 002: print expected filenames for unmet categories when
     # repo-scan.json has populated them. Enables focused resume runs.
@@ -42,7 +53,7 @@ def _cmd_coverage(args: argparse.Namespace) -> int:
             if len(filenames) > 20:
                 print(f"    … and {len(filenames) - 20} more")
 
-    met = all_targets_met(args.vault)
+    met = all(c.is_met for c in targets.categories)
     print(f"\nPhase 3 gate: {'OPEN' if met else 'CLOSED'}")
     if met:
         return 0

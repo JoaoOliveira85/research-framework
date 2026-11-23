@@ -231,7 +231,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
 ## Phase 4: What the vault says about itself
 
-- [ ] T010 Coverage skips uncountable notes; `./vault coverage` recounts in
+- [x] T010 Coverage skips uncountable notes; `./vault coverage` recounts in
       memory and shows past-review and superseded counts per category;
       `health` gains a Currency section; `status` shows the last cycle's
       outcomes by kind; the `ask` template's rule; prompt corpus regenerated

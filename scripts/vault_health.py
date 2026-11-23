@@ -34,7 +34,13 @@ Sub-checks
    - Else mark the URL ``verifier_status: rejected`` in the note (only with
      ``--apply``) and list it in ``_pipeline/broken-links.md``.
 
-4. **Control-file git tracking** (spec 058) — for the four critical control
+4. **Currency** (spec 087) — per coverage category, the notes past their
+   type's review interval and the notes superseded or retracted; plus every
+   supersession link that is not symmetric (a successor that never arrived, or
+   one that does not name the note back). Read-only. A one-sided link counts as
+   unresolved; notes past review do not.
+
+5. **Control-file git tracking** (spec 058) — for the four critical control
    files (``research.spec.md``, ``settings.yaml``,
    the backlog store, the coverage targets under ``_pipeline/state/``),
    warn when a *present* file is untracked or git-ignored in a git-backed
@@ -74,6 +80,7 @@ from pathlib import Path
 import yaml
 
 from research_framework.pipeline import state_layout
+from research_framework.vault import note_currency as nc
 
 # Wayback Machine "available" API. Returns ``{archived_snapshots: {closest: {url}}}``
 # when a snapshot exists, or an empty ``archived_snapshots`` dict when not.
@@ -151,8 +158,31 @@ class ControlFileTrackingWarning:
 
 
 @dataclass
+class CurrencyRow:
+    """One coverage category's notes past review and superseded/retracted notes."""
+
+    category: str
+    past_review: int
+    uncountable: int
+    past_notes: tuple[str, ...] = ()
+    uncountable_notes: tuple[str, ...] = ()
+
+
+@dataclass
+class SupersessionLink:
+    """A supersession link that is not symmetric (spec 087 FR-007)."""
+
+    note: str
+    field: str
+    target: str
+    problem: str  # "not in the vault" | "one-sided"
+
+
+@dataclass
 class HealthReport:
     wikilinks: list[WikilinkIssue] = field(default_factory=list)
+    currency: list[CurrencyRow] = field(default_factory=list)
+    supersession_links: list[SupersessionLink] = field(default_factory=list)
     urls: list[UrlIssue] = field(default_factory=list)
     template_versions: list[tuple[Path, str, str, str]] = field(default_factory=list)
     control_file_tracking: list[ControlFileTrackingWarning] = field(
@@ -170,6 +200,9 @@ class HealthReport:
         # the ones it leaves alone (body links) are still unresolved.
         unresolved += sum(1 for w in self.wikilinks if w.classification == "orphan")
         unresolved += len(self.template_versions)
+        # a supersession link that never became symmetric is a defect; notes
+        # past review are not (they are queued work, not a broken vault)
+        unresolved += len(self.supersession_links)
         # Spec 058: control_file_tracking is ADVISORY and intentionally
         # excluded — untracked/ignored control files never flip the exit code.
         return unresolved
@@ -755,6 +788,61 @@ def _is_git_work_tree(vault: Path) -> bool:
     return res.returncode == 0 and res.stdout.strip() == "true"
 
 
+def scan_currency(vault: Path) -> list[CurrencyRow]:
+    """Per coverage category: notes past review, and superseded or retracted
+    ones (read-only; spec 087 FR-019). Empty when the vault has no targets."""
+    from research_framework.pipeline.coverage import currency_counts
+
+    try:
+        counts = currency_counts(vault)
+    except (FileNotFoundError, OSError, RuntimeError):
+        return []
+    return [
+        CurrencyRow(
+            category=name,
+            past_review=c.past_review,
+            uncountable=c.uncountable,
+            past_notes=c.past_notes,
+            uncountable_notes=c.uncountable_notes,
+        )
+        for name, c in counts.items()
+    ]
+
+
+def scan_supersession_links(vault: Path) -> list[SupersessionLink]:
+    """Supersession links that are not symmetric, across every note.
+
+    ``IX-supersession-symmetry`` judges the notes a cycle touches and tolerates
+    a successor reported as pending for that cycle; this is the check that
+    catches a link which never became symmetric (spec 087 FR-007).
+    """
+    notes = nc.corpus_notes_by_slug(vault)
+    frontmatter: dict[str, dict] = {}
+    for slug, path in notes.items():
+        try:
+            fm, _body = _parse_frontmatter(path)
+        except OSError:
+            continue
+        if fm and str(fm.get("note_type", "")).strip().lower() != "alias":
+            frontmatter[slug] = fm
+    out: list[SupersessionLink] = []
+    for slug, fm in sorted(frontmatter.items()):
+        for name, back in (
+            (nc.SUPERSEDED_BY_FIELD, nc.SUPERSEDES_FIELD),
+            (nc.SUPERSEDES_FIELD, nc.SUPERSEDED_BY_FIELD),
+        ):
+            for target in nc.refs(fm.get(name)):
+                partner = frontmatter.get(target)
+                if partner is None:
+                    problem = "not in the vault"
+                elif slug not in nc.refs(partner.get(back)):
+                    problem = "one-sided"
+                else:
+                    continue
+                out.append(SupersessionLink(notes[slug].stem, name, target, problem))
+    return out
+
+
 def scan_control_file_git_tracking(
     vault: Path,
 ) -> list[ControlFileTrackingWarning]:
@@ -851,6 +939,28 @@ def render_report(report: HealthReport, vault: Path) -> str:
             )
     lines.append("")
 
+    lines.append("## Currency")
+    if not report.currency:
+        lines.append("no coverage targets to report on")
+    for row in report.currency:
+        lines.append(
+            f"- {row.category}: {row.past_review} past review, "
+            f"{row.uncountable} superseded or retracted"
+        )
+        lines += [f"- past review: `{rel}`" for rel in row.past_notes]
+        lines += [
+            f"- superseded or retracted: `{rel}`" for rel in row.uncountable_notes
+        ]
+    if report.supersession_links:
+        lines.append(
+            f"### one-sided supersession links ({len(report.supersession_links)})"
+        )
+        for link in report.supersession_links:
+            lines.append(
+                f"- {link.note}: {link.field} -> {link.target} ({link.problem})"
+            )
+    lines.append("")
+
     # Spec 058 — control-file git tracking (advisory; contract §5).
     lines.append("## Control-file git tracking")
     if not report.control_files_git_backed:
@@ -895,8 +1005,12 @@ def run(
     urls = scan_urls(vault, offline=offline)
     template_versions = scan_template_versions(vault)
     control_file_tracking = scan_control_file_git_tracking(vault)
+    currency = scan_currency(vault)
+    supersession_links = scan_supersession_links(vault)
 
     report = HealthReport(
+        currency=currency,
+        supersession_links=supersession_links,
         wikilinks=wikilinks,
         urls=urls,
         template_versions=template_versions,
