@@ -8,6 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from research_framework.pipeline import backlog
 from research_framework.pipeline import state_layout as L
 
 SCRIPT = Path(__file__).parent.parent.parent / "scripts" / "topic_harvest.py"
@@ -28,10 +29,7 @@ def _seed_vault(tmp_path: Path) -> Path:
     vault = tmp_path / "vault"
     (vault / "data_vault" / "concept").mkdir(parents=True)
     (vault / "_pipeline" / "cycles").mkdir(parents=True)
-    (vault / "_pipeline" / "research-backlog.md").write_text(
-        "# Research Backlog\n\nTopics deferred from scout passes.\n",
-        encoding="utf-8",
-    )
+    backlog.create_empty(vault)
     return vault
 
 
@@ -160,9 +158,10 @@ def test_includes_coverage_gaps(tmp_path: Path) -> None:
     assert gap_names == ["architecture", "optional_cat"]
     assert m["coverage_gaps"][0]["shortfall"] == 3
 
-    backlog = (vault / "_pipeline" / "research-backlog.md").read_text(encoding="utf-8")
-    assert "architecture" in backlog
-    assert "Unmet coverage categories" in backlog
+    # Gaps are not stored (spec 084 FR-011); the view renders them live.
+    view = backlog.view_path(vault).read_text(encoding="utf-8")
+    assert "architecture" in view
+    assert "Unmet coverage categories" in view
 
 
 def test_merges_researcher_flagged_links(tmp_path: Path) -> None:
@@ -188,11 +187,21 @@ def test_merges_researcher_flagged_links(tmp_path: Path) -> None:
 
 
 def test_preserves_manual_backlog_entries(tmp_path: Path) -> None:
-    """Only the managed block is replaced; manual bullets outside survive."""
+    """A hand-added store entry survives the harvest, run twice for one cycle."""
     vault = _seed_vault(tmp_path)
-    (vault / "_pipeline" / "research-backlog.md").write_text(
-        "# Research Backlog\n\n- Manual entry I added by hand\n",
-        encoding="utf-8",
+    store = L.research_backlog_path(vault)
+    manual = {
+        "id": "topic:manual entry i added by hand",
+        "title": "Manual entry I added by hand",
+        "origin": "operator",
+        "status": "open",
+        "status_by": "operator",
+        "status_written": "open",
+        "detail": "mine",
+        "my_own_field": [1, 2],
+    }
+    store.write_text(
+        json.dumps({"schema_version": "1.0", "entries": [manual]}), encoding="utf-8"
     )
     (vault / "data_vault" / "concept" / "N.md").write_text(
         "See [[Ghost]].\n", encoding="utf-8"
@@ -203,10 +212,15 @@ def test_preserves_manual_backlog_entries(tmp_path: Path) -> None:
     # Run a second time for the same cycle — must still be idempotent and keep manual line.
     assert _run(vault, 1).returncode == 0
 
-    backlog = (vault / "_pipeline" / "research-backlog.md").read_text(encoding="utf-8")
-    assert "Manual entry I added by hand" in backlog
-    assert backlog.count("topic-harvest:cycle=001") == 2  # one start + one end marker
-    assert backlog.count("Ghost") == 1
+    entries = json.loads(store.read_text(encoding="utf-8"))["entries"]
+    kept = next(e for e in entries if e["id"] == manual["id"])
+    assert {k: kept[k] for k in manual} == manual
+    ghosts = [e for e in entries if e["title"] == "Ghost"]
+    assert len(ghosts) == 1
+    assert ghosts[0]["seen_cycles"] == 1
+    view = backlog.view_path(vault).read_text(encoding="utf-8")
+    assert "Manual entry I added by hand" in view
+    assert view.count("Ghost") == 1
 
 
 def test_skipped_when_no_research_json(tmp_path: Path) -> None:
@@ -345,9 +359,7 @@ def test_harvest_reads_a_non_default_corpus_dir(tmp_path: Path) -> None:
     (vault / "_pipeline" / "spec-parse.json").write_text(
         json.dumps({"vault_corpus_dir": "cases"}), encoding="utf-8"
     )
-    (vault / "_pipeline" / "research-backlog.md").write_text(
-        "# Research Backlog\n", encoding="utf-8"
-    )
+    backlog.create_empty(vault)
     (vault / "cases" / "concept" / "A.md").write_text(
         "See [[Alpha]].\n", encoding="utf-8"
     )

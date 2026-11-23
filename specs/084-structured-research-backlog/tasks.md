@@ -102,7 +102,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
 ## Phase 2: Writers and the reader move onto the module
 
-- [ ] T004 `scripts/topic_harvest.py` records its follow-ups through `B`
+- [x] T004 `scripts/topic_harvest.py` records its follow-ups through `B`
       and resolves covered topics; it no longer writes the Markdown file
       (FR-006, FR-009, FR-011).
 

@@ -5,7 +5,7 @@ Runs once per cycle, after `validate_cycle.py` has signed off the research
 report. Emits two artifacts the next scout will read:
 
     _pipeline/cycles/cycle-NNN-harvest.json   — machine-readable manifest
-    _pipeline/research-backlog.md             — human + LLM-readable bullets
+    the backlog store                         — follow-ups, via pipeline/backlog.py
 
 Signals harvested (Phase 1, no LLM):
 
@@ -22,9 +22,10 @@ Contract:
 
   * Best-effort. Any failure prints a WARN and exits 0 so the cycle never
     dies because of harvest issues.
-  * Idempotent per cycle: the backlog block for a given cycle is replaced
-    on re-run, not duplicated.
-  * Preserves manual backlog entries outside the managed block.
+  * Idempotent per cycle: a topic is one backlog entry, observed again on
+    re-run, never duplicated.
+  * Never touches an operator's entry or any field it does not own (spec 084).
+  * Coverage gaps go to the manifest only; the backlog view renders them live.
 
 See `specs/003-topic-harvest-stage/spec.md`.
 """
@@ -41,14 +42,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from research_framework.pipeline import state_layout
+from research_framework.pipeline import backlog, state_layout
 
 # Match any non-bracket content inside [[...]]. Normalization below handles
 # aliases (| ...), anchors (# ...), folder prefixes, and `.md` suffixes.
 _WIKILINK_RE = re.compile(r"\[\[([^\[\]]+?)\]\]")
-
-_BLOCK_START_FMT = "<!-- topic-harvest:cycle={c:03d} -->"
-_BLOCK_END_FMT = "<!-- /topic-harvest:cycle={c:03d} -->"
 
 # Default citation threshold for auto-promoting orphan wikilinks into
 # the coverage targets. Overridable via `pipeline.backlog_promotion_threshold`
@@ -266,58 +264,36 @@ def _coverage_gaps(vault: Path) -> list[CoverageGap]:
 
 
 # ---------------------------------------------------------------------------
-# Backlog rendering
+# Backlog store
 # ---------------------------------------------------------------------------
 
 
-def _render_backlog_body(
-    cycle: int,
-    ts: str,
-    followups: list[Followup],
-    gaps: list[CoverageGap],
-) -> str:
-    lines: list[str] = [f"## Harvest — cycle {cycle:03d} ({ts[:10]})", ""]
+def _record_followups(
+    vault_dir: Path, cycle: int, followups: list[Followup], existing: set[str]
+) -> bool:
+    """Observe every follow-up, then resolve topics whose note now exists.
 
-    if followups:
-        lines.append(
-            "Follow-on topics (wikilink targets with no note yet, "
-            "ranked by citation count):"
-        )
-        lines.append("")
+    One transaction: one read, one atomic write, one view render. Resolving
+    comes after observing so a topic seen again is not reopened by its own
+    observation (spec 084 FR-007). Returns ``False`` when the store is
+    unusable (the module has logged why); the harvest carries on.
+    """
+
+    def _apply(tx: backlog.Transaction) -> None:
         for f in followups:
             if f.reason == "researcher_flagged":
-                lines.append(f"- **{f.title}** — flagged by researcher")
-                continue
-            sample = ", ".join(f"`{p}`" for p in f.cited_from[:3])
-            more = f" (+{len(f.cited_from) - 3} more)" if len(f.cited_from) > 3 else ""
-            lines.append(
-                f"- **{f.title}** — cited by {f.citation_count} note(s): {sample}{more}"
-            )
-        lines.append("")
+                tx.observe_topic(cycle=cycle, title=f.title, origin="researcher")
+            else:
+                tx.observe_topic(
+                    cycle=cycle,
+                    title=f.title,
+                    origin="harvest",
+                    citation_count=f.citation_count,
+                    cited_from=f.cited_from,
+                )
+        tx.resolve_covered(existing)
 
-    if gaps:
-        lines.append("Unmet coverage categories:")
-        lines.append("")
-        for g in gaps:
-            tag = " (required)" if g.required else ""
-            lines.append(
-                f"- `{g.name}` [{g.note_type}] — {g.met_count}/{g.target_count}{tag}"
-            )
-        lines.append("")
-
-    return "\n".join(lines).rstrip() + "\n"
-
-
-def _replace_managed_block(backlog: str, cycle: int, body: str) -> str:
-    start = _BLOCK_START_FMT.format(c=cycle)
-    end = _BLOCK_END_FMT.format(c=cycle)
-    wrapped = f"{start}\n{body.strip()}\n{end}\n"
-    if start in backlog and end in backlog:
-        pre, _, rest = backlog.partition(start)
-        _, _, post = rest.partition(end)
-        return pre.rstrip("\n") + "\n\n" + wrapped + post.lstrip("\n")
-    sep = "" if backlog.endswith("\n") else "\n"
-    return backlog + sep + "\n" + wrapped
+    return backlog.update(vault_dir, "harvest", _apply)
 
 
 # ---------------------------------------------------------------------------
@@ -479,20 +455,7 @@ def harvest(vault_dir: Path, cycle: int, *, max_followups: int = 100) -> dict[st
 
     write_json(cycles_dir / f"cycle-{cycle:03d}-harvest.json", manifest)
 
-    backlog_path = pipeline / "research-backlog.md"
-    backlog_updated = False
-    if followups or gaps:
-        pipeline.mkdir(parents=True, exist_ok=True)
-        body = _render_backlog_body(cycle, ts, followups, gaps)
-        prev = (
-            backlog_path.read_text(encoding="utf-8")
-            if backlog_path.is_file()
-            else "# Research Backlog\n\nTopics deferred from scout passes.\n"
-        )
-        backlog_path.write_text(
-            _replace_managed_block(prev, cycle, body), encoding="utf-8"
-        )
-        backlog_updated = True
+    backlog_updated = _record_followups(vault_dir, cycle, followups, existing)
 
     # Auto-promote high-citation orphan wikilinks into coverage targets so
     # the Phase-3 gate tracks emergent topology (constitution v1.3.0).
