@@ -100,8 +100,23 @@ the spec**: `planned`. Task boxes are live. `087` lands first.
 
   **TDD discipline**: required for the two surfaces.
 
-- [ ] T006 Gates: fast loop, e2e, guard battery, both ruff gates; refresh the
+- [x] T006 Gates: fast loop, e2e, guard battery, both ruff gates; refresh the
       test-count marker. `build.sh --quality` and the rehearsal on a vault
       copy are done separately.
 
   **TDD discipline**: not applicable.
+
+## Acceptance coverage
+
+Which tests evidence each user story of `spec.md` (the spec's own table is not
+edited here).
+
+| Story | Evidence |
+| --- | --- |
+| US1 — a topic the vault had no word for | `tests/e2e/test_discovery_cycle.py::test_a_topic_with_no_shared_term_is_dispatched_and_attributed` (SC-001); `tests/pipeline/test_discovery_routing.py::test_rows_route_to_topic_update_observation_or_drop`; `tests/pipeline/test_discovery_routing.py::test_the_share_holds_some_topics_and_the_rest_wait_oldest_first` |
+| US2 — new material about something the vault already holds | `tests/e2e/test_discovery_cycle.py::test_a_finding_about_an_existing_note_becomes_one_update_entry` (SC-004); `tests/pipeline/test_discovery_routing.py::test_rows_route_to_topic_update_observation_or_drop` |
+| US3 — "nothing new" is recorded, not assumed | `tests/pipeline/test_discovery_ledger.py::test_checked_with_nothing_found_is_distinct_from_never_checked`; `tests/pipeline/test_discovery_ledger.py::test_assigned_but_not_reported_does_not_advance_the_area`; `tests/e2e/test_discovery_cycle.py::test_checked_with_nothing_found_is_recorded_as_checked`; `tests/e2e/test_discovery_cycle.py::test_a_report_with_no_discovery_keys_records_the_areas_as_not_reported` |
+| US4 — every scope area gets looked at | `tests/pipeline/test_discovery_rotation.py::test_every_area_is_checked_within_the_expected_cycles` (SC-002); `tests/pipeline/test_discovery_assignment.py::test_three_areas_a_cycle_least_recently_checked_first`; `tests/scripts/test_vault_health_discovery.py` |
+| US5 — discovery cannot crowd out, or be crowded out | `tests/pipeline/test_discovery_routing.py::test_discovery_rows_do_not_count_toward_focus_or_diversity`; `tests/pipeline/test_cycle_split.py::test_unused_discovery_share_falls_to_new_topics_and_refresh_dispatches_none`; `tests/pipeline/test_cycle_split.py::test_a_ten_percent_share_yields_one_slot_every_ten_quota_units` |
+| US6 — off means unchanged | `tests/quality/test_discovery_off_matches_baseline.py::test_share_zero_plans_the_same_work_as_before` (SC-003); `tests/generator/test_scout_prompt_discovery.py::test_no_areas_means_no_section`; `tests/e2e/test_discovery_cycle.py::test_share_zero_runs_no_pass` |
+
