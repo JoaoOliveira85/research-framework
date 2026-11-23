@@ -13,6 +13,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from .. import __version__ as _FRAMEWORK_VERSION
 from .._assets import asset_path, default_settings_path
 from ..pipeline import backlog, state_layout
+from ..pipeline.coverage import recompute_from_disk
 from ..pipeline.state_layout import STATE_DIR
 from ..spec.parsed import stamp_parsed_spec, write_parsed_spec
 from ..spec.schema import SpecConfig
@@ -269,26 +270,44 @@ def scaffold(
     # carried forward so the per-category classifier in pipeline/coverage.py
     # has the human-readable label to match notes against — without it the
     # classifier would fall back to pure round-robin on the slugified name.
+    #
+    # Categories are written via ``CoverageCategory.to_dict()`` so ``priority``
+    # and ``expected_filenames`` reach the planner (#54). Re-scaffolding an
+    # existing vault keeps its ``cycle_number``, recomputes ``met_count`` from the
+    # notes on disk, and keeps a hand-set JSON ``priority`` where the spec leaves
+    # it unset (0); a non-zero spec priority wins.
+    targets_path = state_layout.coverage_targets_path(vault_dir)
+    existing_priority: dict[str, int] = {}
+    cycle_number = 0
+    if targets_path.exists():
+        try:
+            existing = json.loads(targets_path.read_text(encoding="utf-8"))
+            cycle_number = int(existing.get("cycle_number", 0) or 0)
+            for entry in existing.get("categories", []):
+                existing_priority[entry["name"]] = int(entry.get("priority", 0) or 0)
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            existing_priority, cycle_number = {}, 0
+    categories = []
+    for cat in spec.coverage_targets.categories:
+        entry = cat.to_dict()
+        entry["met_count"] = 0
+        if not cat.priority and existing_priority.get(cat.name):
+            entry["priority"] = existing_priority[cat.name]
+        categories.append(entry)
     coverage_data = {
         "last_updated": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "cycle_number": 0,
-        "categories": [
-            {
-                "name": cat.name,
-                "note_type": cat.note_type,
-                "target_count": cat.target_count,
-                "met_count": 0,
-                "required": cat.required,
-                "display_name": cat.display_name,
-            }
-            for cat in spec.coverage_targets.categories
-        ],
+        "cycle_number": cycle_number,
+        "categories": categories,
     }
-    targets_path = state_layout.coverage_targets_path(vault_dir)
     targets_path.parent.mkdir(parents=True, exist_ok=True)
     targets_path.write_text(
         json.dumps(coverage_data, indent=2) + "\n", encoding="utf-8"
     )
+    # Re-scaffold of a vault that already has notes: recount rather than zero.
+    if (vault_dir / "data_vault").is_dir() and any(
+        (vault_dir / "data_vault").rglob("*.md")
+    ):
+        recompute_from_disk(vault_dir)
 
     # Seed the empty backlog store and render its view (spec 084). After the
     # coverage targets, because the view lists the unmet categories.

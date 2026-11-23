@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Scaffolding a vault no longer drops a category's `priority` and `expected_filenames` from `_pipeline/state/coverage-targets.json` (#54), so spec priorities reach the planner (`_select_cycle_focus` filters on priority >= 50) instead of being silently ignored. Re-scaffolding an existing vault no longer zeroes progress: `cycle_number` is kept, `met_count` is recomputed from the notes on disk, and a priority set by hand in the JSON survives where the spec leaves it unset (0); a non-zero spec priority wins. (test: `tests/generator/test_scaffold_coverage_priority.py::test_scaffold_carries_spec_priority_to_planner`)
+
 ## [2.1.0] - 2026-11-23
 
 ### Added
