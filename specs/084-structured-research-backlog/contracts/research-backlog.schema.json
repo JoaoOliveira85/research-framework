@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "research-backlog-1.0",
+  "$id": "research-backlog-1.1",
   "title": "Research backlog store (_pipeline/state/research-backlog.json)",
   "type": "object",
   "required": ["schema_version", "entries"],
@@ -24,18 +24,18 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^(topic|quarantine|migrated):.+$",
-          "description": "topic:<title, whitespace collapsed, case-folded> | quarantine:<note stem> | migrated:<NNNN>. Unique in the store. Never changes."
+          "pattern": "^(topic|quarantine|migrated|update):.+$",
+          "description": "topic:<title, whitespace collapsed, case-folded> | quarantine:<note stem> | migrated:<NNNN> | update:<note stem> (1.1). Unique in the store. Never changes."
         },
         "title": { "type": "string", "minLength": 1 },
         "origin": {
-          "enum": ["harvest", "researcher", "proposal", "quarantine", "operator", "migrated"],
+          "enum": ["harvest", "researcher", "proposal", "quarantine", "operator", "migrated", "update"],
           "description": "Who created the entry. Never changes. A minor schema bump may add a value."
         },
         "status": { "enum": ["open", "resolved", "dropped"] },
         "status_by": {
           "type": "string",
-          "description": "operator, or the writer that last set status: harvest | propose | quarantine | regrade | migration."
+          "description": "operator, or the writer that last set status: harvest | propose | quarantine | regrade | migration | scout | review | research."
         },
         "status_written": {
           "enum": ["open", "resolved", "dropped"],
@@ -53,12 +53,39 @@
         "parent_note": { "type": "string" },
         "scope_warn": { "type": "boolean" },
         "stem": { "type": "string" },
-        "kind": { "enum": ["rewrite", "retry"] }
+        "kind": { "enum": ["rewrite", "retry"] },
+        "reason": {
+          "enum": ["new_material", "operator", "review_due"],
+          "description": "update entries (1.1): why the note is queued. new_material outranks operator outranks review_due; a reason is only replaced by a stronger one."
+        },
+        "prompted_by": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "update entries (1.1): the source URLs that prompted the update; accumulated, deduplicated."
+        },
+        "as_of": {
+          "type": "string",
+          "description": "update entries (1.1): the note's own as_of date when last seen (YYYY-MM-DD)."
+        },
+        "outcome": {
+          "enum": ["confirmed", "revised", "superseded", "retracted"],
+          "description": "update entries (1.1): how the worked update ended. Cleared into outcome_history when the entry reopens."
+        },
+        "outcome_cycle": { "type": "integer", "minimum": 1 },
+        "outcome_history": {
+          "type": "array",
+          "items": { "type": "object" },
+          "description": "update entries (1.1): earlier outcomes, oldest first, each {outcome, cycle?}."
+        }
       },
       "allOf": [
         {
           "if": { "properties": { "origin": { "const": "quarantine" } } },
           "then": { "required": ["stem", "kind"] }
+        },
+        {
+          "if": { "properties": { "origin": { "const": "update" } } },
+          "then": { "required": ["stem", "reason"] }
         }
       ]
     }

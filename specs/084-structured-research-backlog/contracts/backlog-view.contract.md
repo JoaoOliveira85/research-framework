@@ -17,6 +17,10 @@ the operator; **never parsed by code** (FR-016).
 
 - **<title>** — cited by <N> note(s): `<path>`, `<path>`, `<path>` (+<k> more) · first seen cycle <a>, last seen cycle <b> (<n> cycles)
 
+## Notes to update
+
+- **<stem>** — <reason> · as of <date or "unknown"> · <n> prompting source(s)
+
 ## Flagged by the researcher
 
 - **<title>** — <detail> · first seen cycle <a>
@@ -49,11 +53,13 @@ _<R> resolved and <D> dropped entries are kept in the JSON file._
 
 ## Rules
 
-1. Sections appear in this order (FR-017: harvest, researcher, quarantine,
-   operator, proposal, migrated, then coverage). A section with no open entry
+1. Sections appear in this order (FR-017: harvest, notes to update (spec 087),
+   researcher, quarantine, operator, proposal, migrated, then coverage). A section with no open entry
    is omitted, heading included. The header, the summary line and the footer
    are always present.
-2. Only `open` entries are listed. Within a section, entries are ordered by
+2. Only `open` entries are listed. "Notes to update" lists `update` entries in
+   `update_topics()` order (`new_material` first, then oldest `as_of`, missing
+   last, then store order); every other section is ordered as follows. Within a section, entries are ordered by
    `first_seen_cycle` (nulls last), then store order.
 3. A topic entry is listed under the section of its `origin`, except that an
    entry with `citation_count >= 1` is listed under "Follow-on topics"

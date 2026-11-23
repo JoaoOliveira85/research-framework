@@ -46,6 +46,9 @@ from .atomic_write import write_bytes
 
 _LOG = logging.getLogger(__name__)
 
+# A legacy Markdown backlog cannot hold a note update (spec 087).
+_LEGACY_ORIGINS = tuple(o for o in backlog.ORIGINS if o != "update")
+
 _MARKER_RE = re.compile(
     r"^<!-- (/?)(?:topic-(harvest|propose):cycle=(\d+)|(quarantine)) -->$"
 )
@@ -117,7 +120,7 @@ class ConversionResult:
     def info_line(self, archive: Path | str) -> str:
         counts = " ".join(
             f"{origin}={self.entries_by_origin.get(origin, 0)}"
-            for origin in backlog.ORIGINS
+            for origin in _LEGACY_ORIGINS
         )
         return (
             f"research backlog converted: {counts}; "
@@ -356,7 +359,7 @@ def convert_legacy(markdown: str, *, today: str) -> ConversionResult:
         entry.pop("_cite_cycle", None)
     result.migrated_lines = builder.migrated
     result.duplicates_collapsed = builder.duplicates
-    counts = {origin: 0 for origin in backlog.ORIGINS}
+    counts = {origin: 0 for origin in _LEGACY_ORIGINS}
     for entry in builder.entries:
         counts[entry["origin"]] += 1
     result.entries_by_origin = counts

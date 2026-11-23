@@ -53,7 +53,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
   **TDD discipline**: required.
 
-- [ ] T003 `pipeline/backlog.py`: origin `update`, id `update:<stem>`,
+- [x] T003 `pipeline/backlog.py`: origin `update`, id `update:<stem>`,
       schema `1.1`, `observe_update`, `close_update`, `update_topics`, the
       "Notes to update" section of the view; the contracts under
       `specs/084-structured-research-backlog/contracts/` gain the origin

@@ -390,3 +390,65 @@ def test_nothing_under_src_or_scripts_parses_the_view() -> None:
 def test_the_allowlist_has_no_stale_entries() -> None:
     stale = (_NOT_YET_MIGRATED | _NAMES_THE_PATH_ONLY) - _files_naming_the_view()
     assert not stale, f"remove migrated files from the allowlist: {sorted(stale)}"
+
+
+def test_view_lists_notes_to_update(tmp_path: Path) -> None:
+    """Spec 087 T003: a section after 'Follow-on topics', one line per note."""
+    _seed(
+        tmp_path,
+        [
+            _entry(
+                "topic:late",
+                "Late",
+                "harvest",
+                citation_count=1,
+                cited_from=["a.md"],
+                first_seen_cycle=1,
+            ),
+            _entry(
+                "update:old-review",
+                "old-review",
+                "update",
+                stem="old-review",
+                reason="review_due",
+                as_of="2025-01-01",
+                prompted_by=[],
+            ),
+            _entry(
+                "update:fresh",
+                "fresh",
+                "update",
+                stem="fresh",
+                reason="new_material",
+                as_of="2026-02-02",
+                prompted_by=["https://a.example", "https://b.example"],
+            ),
+            _entry(
+                "update:unstamped",
+                "unstamped",
+                "update",
+                stem="unstamped",
+                reason="review_due",
+            ),
+            {
+                **_entry(
+                    "update:done", "done", "update", stem="done", reason="review_due"
+                ),
+                "status": "resolved",
+                "status_written": "resolved",
+            },
+            _entry("topic:flagged", "Flagged", "researcher", detail="d"),
+        ],
+    )
+
+    text = _render(tmp_path)
+
+    assert text.index("## Follow-on topics") < text.index("## Notes to update")
+    assert text.index("## Notes to update") < text.index("## Flagged by the researcher")
+    section = text.split("## Notes to update\n\n")[1].split("\n\n")[0].splitlines()
+    assert section == [
+        "- **fresh** — new_material · as of 2026-02-02 · 2 prompting sources",
+        "- **old-review** — review_due · as of 2025-01-01 · 0 prompting sources",
+        "- **unstamped** — review_due · as of unknown · 0 prompting sources",
+    ]
+    assert "done" not in section
