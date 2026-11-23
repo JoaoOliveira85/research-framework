@@ -267,7 +267,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [ ] T012 State-writing verbs refuse a legacy vault with exit 2 before any
+- [x] T012 State-writing verbs refuse a legacy vault with exit 2 before any
       dispatch; `status`, `status --json` and `health` without `--apply`
       report it and carry on (FR-015, FR-016).
 

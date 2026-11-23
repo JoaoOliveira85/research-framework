@@ -934,6 +934,20 @@ def main(argv: Iterable[str] | None = None) -> int:
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
 
+    # Spec 083 FR-015/FR-016: `--apply` writes state (archive snapshots), so a
+    # vault still in the pre-083 layout is refused; a plain check reports it.
+    try:
+        state_layout.require_migrated(args.vault)
+    except state_layout.LegacyLayoutError as exc:
+        if args.apply:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(
+            "NOTICE: legacy `_pipeline/` layout — run "
+            f"`{state_layout.MIGRATION_COMMAND}`",
+            file=sys.stderr,
+        )
+
     try:
         report = run(
             args.vault,

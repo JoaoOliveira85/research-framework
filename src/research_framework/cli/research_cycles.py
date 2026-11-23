@@ -11,7 +11,7 @@ from ..spec.schema import SpecValidationError
 from ..spec.simple import load as load_spec
 from ..spec.validator import validate
 from ._budget_resolve import BudgetError, resolve_cycle_budget_from_path
-from ._common import refuse_if_archived
+from ._common import refuse_if_archived, refuse_if_legacy_layout
 
 #: The two pause markers, in the precedence the resume path resolves them
 #: (budget-marker.contract.md §4: budget first, approval second).
@@ -73,6 +73,9 @@ def _cmd_cycle(args: argparse.Namespace) -> int:
     # cost preflight for a cycle that will never run.
     if (archived_rc := refuse_if_archived(args.vault)) is not None:
         return archived_rc
+    # Spec 083 FR-015: a cycle writes state; a pre-083 vault is migrated first.
+    if (legacy_rc := refuse_if_legacy_layout(args.vault)) is not None:
+        return legacy_rc
 
     # A standing pause outranks every other complaint this verb could make:
     # it is the one fact that explains why the vault is where it is, and a
@@ -390,6 +393,8 @@ def _cmd_pipeline(args: argparse.Namespace) -> int:
     if sub in {"full", "collect", "extract", "scout", "resume", "finish"}:
         if (archived_rc := refuse_if_archived(vault)) is not None:
             return archived_rc
+        if (legacy_rc := refuse_if_legacy_layout(vault)) is not None:
+            return legacy_rc
 
     # Issue #232: `--budget-cap` was accepted here, threaded into `run_full`,
     # documented as "passed to agent invocations" — and read by nothing in

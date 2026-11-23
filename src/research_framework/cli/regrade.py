@@ -421,6 +421,11 @@ def _cmd_regrade(args: argparse.Namespace) -> int:
     if not vault_dir.is_dir():
         print(f"error: vault not found: {vault_dir}", file=sys.stderr)
         return 2
+    # Spec 083 FR-015: re-grade reads and writes the quarantine under state/.
+    from ._common import refuse_if_legacy_layout
+
+    if (legacy_rc := refuse_if_legacy_layout(vault_dir)) is not None:
+        return legacy_rc
     return run_regrade(
         vault_dir,
         dry_run=bool(getattr(args, "dry_run", False)),

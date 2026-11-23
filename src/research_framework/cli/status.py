@@ -10,6 +10,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ..pipeline import state_layout
 from ..pipeline.archived import is_archived
 from ..pipeline.cycle_state import CycleState
 from ..pipeline.cycle_state import read as read_cycle_state
@@ -295,8 +296,25 @@ def _coverage_summary(vault_dir: Path) -> dict[str, object] | None:
     }
 
 
+_LEGACY_NOTICE = (
+    "legacy `_pipeline/` layout — run `./vault migrate-layout` "
+    "(durable state is still at its pre-083 paths)"
+)
+
+
 def build_status_json(vault_dir: Path) -> dict[str, object]:
-    """Stable ``--json`` object for automation (contract §3)."""
+    """Stable ``--json`` object for automation (contract §3).
+
+    A vault still in the pre-083 layout gains one extra key, ``legacy_layout``,
+    holding the notice (spec 083 FR-016); a migrated vault's object is unchanged.
+    """
+    doc = _build_status_json(vault_dir)
+    if state_layout.is_legacy_layout(vault_dir):
+        doc["legacy_layout"] = _LEGACY_NOTICE
+    return doc
+
+
+def _build_status_json(vault_dir: Path) -> dict[str, object]:
     state = read_cycle_state(vault_dir)
     active = state is not None and state.active
     coverage = _coverage_summary(vault_dir)
@@ -385,6 +403,8 @@ def _emit_text(vault_dir: Path, body: str) -> None:
     """
     if is_archived(vault_dir):
         print(_ARCHIVED_LINE)
+    if state_layout.is_legacy_layout(vault_dir):
+        print(_LEGACY_NOTICE)
     print(body)
 
 
