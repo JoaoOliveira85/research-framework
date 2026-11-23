@@ -76,7 +76,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
   **TDD discipline**: required.
 
-- [ ] T003 The view: render per `contracts/backlog-view.contract.md`, the
+- [x] T003 The view: render per `contracts/backlog-view.contract.md`, the
       digest footer, hand-edit detection with the single overwritten copy,
       render-if-missing (FR-011, FR-016…FR-018; `research.md` R4).
 

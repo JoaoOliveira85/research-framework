@@ -14,6 +14,7 @@ a newer major, what they can validate) and log ``WARNING``.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -24,7 +25,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from . import state_layout
-from .atomic_write import write_text
+from .atomic_write import write_bytes, write_text
 
 _LOG = logging.getLogger(__name__)
 
@@ -549,6 +550,7 @@ def update(vault_dir: Path, writer: str, fn: Callable[[Transaction], None]) -> b
     after = _dumps(loaded.data)
     if after != before:
         write_text(loaded.path, after)
+    _render_view(vault_dir, loaded.entries)
     return True
 
 
@@ -681,6 +683,157 @@ def all_titles(vault_dir: Path) -> list[TitleRef]:
 # ---------------------------------------------------------------------------
 
 
+def _one_line(text: str) -> str:
+    return " ".join(str(text).split())
+
+
+def _plural(count: int, word: str) -> str:
+    return f"{count} {word}" if count == 1 else f"{count} {word}s"
+
+
+def _topic_line_harvest(entry: dict[str, Any]) -> str:
+    count = entry.get("citation_count", 0)
+    line = f"- **{_one_line(entry['title'])}** — cited by {count} note(s)"
+    paths = list(entry.get("cited_from", []))
+    if paths:
+        shown = ", ".join(f"`{p}`" for p in paths[:3])
+        line += f": {shown}"
+        if len(paths) > 3:
+            line += f" (+{len(paths) - 3} more)"
+    first = entry.get("first_seen_cycle")
+    if first is not None:
+        last = entry.get("last_seen_cycle", first)
+        seen = entry.get("seen_cycles", 1)
+        line += (
+            f" · first seen cycle {first}, last seen cycle {last}"
+            f" ({_plural(seen, 'cycle')})"
+        )
+    return line
+
+
+def _topic_line_researcher(entry: dict[str, Any]) -> str:
+    detail = _one_line(entry.get("detail", "")) or "flagged by the researcher"
+    line = f"- **{_one_line(entry['title'])}** — {detail}"
+    first = entry.get("first_seen_cycle")
+    if first is not None:
+        line += f" · first seen cycle {first}"
+    return line
+
+
+def _quarantine_line(entry: dict[str, Any]) -> str:
+    action = (
+        "retry the refresh; previous content restored"
+        if entry.get("kind") == "retry"
+        else "rewrite the quarantined note"
+    )
+    line = f"- **{_one_line(entry.get('stem', entry['title']))}** — {action}"
+    detail = _one_line(entry.get("detail", ""))
+    return f"{line} ({detail})" if detail else line
+
+
+def _operator_line(entry: dict[str, Any]) -> str:
+    line = f"- **{_one_line(entry['title'])}**"
+    detail = _one_line(entry.get("detail", ""))
+    return f"{line} — {detail}" if detail else line
+
+
+def _proposal_line(entry: dict[str, Any]) -> str:
+    line = f"- **{_one_line(entry['title'])}**"
+    if entry.get("scope_warn"):
+        line += " ⚠️"
+    relation = _one_line(entry.get("relation", ""))
+    parent = _one_line(entry.get("parent_note", ""))
+    if relation and parent:
+        line += f" ({relation} of [[{parent}]])"
+    elif parent:
+        line += f" (of [[{parent}]])"
+    detail = _one_line(entry.get("detail", ""))
+    return f"{line} — {detail}" if detail else line
+
+
+def _migrated_line(entry: dict[str, Any]) -> str:
+    return f"- {entry.get('detail', entry['title']).replace(chr(10), ' ')}"
+
+
+def _coverage_lines(vault_dir: Path) -> list[str]:
+    # Local import: coverage pulls in the spec and vault packages.
+    from .coverage import load_targets
+
+    try:
+        targets = load_targets(vault_dir)
+    except Exception:  # noqa: BLE001 - missing/unreadable file omits the section
+        return []
+    lines = []
+    for category in targets.categories:
+        if category.is_met:
+            continue
+        flag = "required" if category.required else "optional"
+        lines.append(
+            f"- `{category.name}` [{category.note_type}] — "
+            f"{category.met_count}/{category.target_count} ({flag})"
+        )
+    return lines
+
+
+def _render_text(vault_dir: Path, entries: list[dict[str, Any]]) -> str:
+    open_entries = [(i, e) for i, e in enumerate(entries) if e["status"] == "open"]
+    open_entries.sort(key=_first_seen_sort_key)
+    sections: dict[str, list[str]] = {
+        "harvest": [],
+        "researcher": [],
+        "quarantine": [],
+        "operator": [],
+        "proposal": [],
+        "migrated": [],
+    }
+    for _, entry in open_entries:
+        origin = entry["origin"]
+        topic = entry["id"].startswith("topic:")
+        if topic and entry.get("citation_count", 0) >= 1:
+            sections["harvest"].append(_topic_line_harvest(entry))
+        elif origin == "harvest":
+            sections["harvest"].append(_topic_line_harvest(entry))
+        elif origin == "researcher":
+            sections["researcher"].append(_topic_line_researcher(entry))
+        elif origin == "quarantine":
+            sections["quarantine"].append(_quarantine_line(entry))
+        elif origin == "operator":
+            sections["operator"].append(_operator_line(entry))
+        elif origin == "proposal":
+            sections["proposal"].append(_proposal_line(entry))
+        elif origin == "migrated":
+            sections["migrated"].append(_migrated_line(entry))
+    headings = (
+        ("harvest", "Follow-on topics (harvest)"),
+        ("researcher", "Flagged by the researcher"),
+        ("quarantine", "Quarantined notes"),
+        ("operator", "Added by the operator"),
+        ("proposal", "Proposed tangents (advisory)"),
+        ("migrated", "Carried over from the old backlog"),
+    )
+    store_rel = state_layout.research_backlog_path(Path()).as_posix()
+    blocks = [
+        "# Research Backlog\n\n"
+        f"> Generated from `{store_rel}` — edit that file,\n"
+        "> not this one. A change made here is overwritten on the next write; the\n"
+        f"> overwritten text is kept once at `{_OVERWRITTEN_REL}`.\n"
+    ]
+    for key, heading in headings:
+        if sections[key]:
+            blocks.append(f"## {heading}\n\n" + "\n".join(sections[key]) + "\n")
+    coverage = _coverage_lines(vault_dir)
+    if coverage:
+        blocks.append("## Unmet coverage categories\n\n" + "\n".join(coverage) + "\n")
+    resolved = sum(1 for e in entries if e["status"] == "resolved")
+    dropped = sum(1 for e in entries if e["status"] == "dropped")
+    blocks.append(
+        f"_{resolved} resolved and {dropped} dropped entries are kept in the JSON file._\n"
+    )
+    body = "\n".join(blocks) + "\n"
+    digest = hashlib.sha256(body.encode("utf-8")).hexdigest()
+    return f"{body}{_FOOTER_PREFIX}{digest} -->\n"
+
+
 def _split_footer(raw: bytes) -> tuple[bytes, str] | None:
     """Return (bytes above the footer, recorded digest) or ``None`` if absent."""
     try:
@@ -694,3 +847,60 @@ def _split_footer(raw: bytes) -> tuple[bytes, str] | None:
     if match is None:
         return None
     return text[:at].encode("utf-8"), match.group(1)
+
+
+def _view_was_hand_edited(raw: bytes) -> bool:
+    split = _split_footer(raw)
+    if split is None:
+        return True
+    above, recorded = split
+    return hashlib.sha256(above).hexdigest() != recorded
+
+
+def _render_view(vault_dir: Path, entries: list[dict[str, Any]]) -> None:
+    path = view_path(vault_dir)
+    new_text = _render_text(vault_dir, entries)
+    current: bytes | None = None
+    if path.is_file():
+        try:
+            current = path.read_bytes()
+        except OSError:
+            current = None
+    if current == new_text.encode("utf-8"):
+        return
+    if current is not None and _view_was_hand_edited(current):
+        copy = overwritten_path(vault_dir)
+        write_bytes(copy, current)
+        _LOG.warning(
+            "research backlog view %s was changed outside the module and is "
+            "being overwritten; make changes in %s instead. The overwritten "
+            "text is kept at %s",
+            path,
+            store_path(vault_dir),
+            copy,
+        )
+    write_text(path, new_text)
+
+
+def ensure_view(vault_dir: Path) -> Path | None:
+    """Render the view from the store before a reader (the scout prompt) uses it.
+
+    Idempotent: an up-to-date view is left untouched. Does nothing, returning
+    ``None``, when the store is unusable or the vault is unconverted.
+    """
+    try:
+        loaded = _load(vault_dir)
+    except BacklogUnavailable as exc:
+        _LOG.warning("research backlog view not rendered: %s", exc)
+        return None
+    if loaded.read_only:
+        _LOG.warning(
+            "research backlog view not rendered: %s is read-only (newer schema)",
+            loaded.path,
+        )
+        return None
+    if not loaded.path.exists():
+        return None
+    _normalize(loaded.entries)
+    _render_view(vault_dir, loaded.entries)
+    return view_path(vault_dir)
