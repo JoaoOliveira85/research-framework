@@ -47,11 +47,12 @@ def test_missing_coverage_targets(tmp_vault_dir: Path) -> None:
     assert any("coverage-targets" in m for m in unmet)
 
 
-def test_missing_budget_log(tmp_vault_dir: Path) -> None:
+def test_missing_budget_log_is_recreated_not_blocking(tmp_vault_dir: Path) -> None:
+    # Spec 083 D9: the budget log is a regenerable record.
     (tmp_vault_dir / "_pipeline" / "budget-log.md").unlink()
-    ok, unmet = check(tmp_vault_dir)
-    assert not ok
-    assert any("budget-log" in m for m in unmet)
+    _, unmet = check(tmp_vault_dir)
+    assert not any("budget-log" in m for m in unmet)
+    assert (tmp_vault_dir / "_pipeline" / "budget-log.md").is_file()
 
 
 def test_missing_claude_md(tmp_vault_dir: Path) -> None:

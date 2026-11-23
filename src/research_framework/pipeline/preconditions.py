@@ -86,6 +86,20 @@ def _cwd_looks_like_framework_repo() -> bool:
     )
 
 
+def _recreate_budget_log(vault_dir: Path) -> None:
+    log = vault_dir / "_pipeline" / "budget-log.md"
+    if log.exists():
+        return
+    from research_framework.generator.scaffold import budget_log_header
+
+    try:
+        log.write_text(budget_log_header(), encoding="utf-8")
+    except OSError as exc:
+        logger.warning("precondition 4: could not re-create %s: %s", log, exc)
+    else:
+        logger.info("precondition 4: re-created missing _pipeline/budget-log.md")
+
+
 def check(
     vault_dir: Path,
     *,
@@ -193,8 +207,16 @@ def check(
         except json.JSONDecodeError as e:
             unmet.append(f"precondition 3: {targets_file.name} malformed ({e})")
 
-    if not (vault_dir / "_pipeline" / "budget-log.md").exists():
-        unmet.append("precondition 4: _pipeline/budget-log.md missing")
+    # Spec 083 D9: the budget log is a regenerable record, not state. What a run
+    # needs is the state directory (the ledger's parent); a missing log is
+    # re-created with the scaffold's header.
+    if not state_layout.state_dir(vault_dir).is_dir():
+        unmet.append(
+            f"precondition 4: {state_layout.STATE_DIR}/ missing "
+            f"(run `{state_layout.MIGRATION_COMMAND}` on a pre-083 vault)"
+        )
+    else:
+        _recreate_budget_log(vault_dir)
 
     claude = vault_dir / "CLAUDE.md"
     if not claude.exists():

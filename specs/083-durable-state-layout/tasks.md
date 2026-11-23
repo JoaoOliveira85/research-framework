@@ -163,7 +163,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [ ] T008 Precondition 4 requires the state directory and the ledger's
+- [x] T008 Precondition 4 requires the state directory and the ledger's
       parent, not `budget-log.md`; a missing `budget-log.md` is re-created
       (spec D9; plan § 10).
 

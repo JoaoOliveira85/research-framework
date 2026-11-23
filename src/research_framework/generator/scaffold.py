@@ -112,6 +112,26 @@ def _render_vault_gitignore(corpus: str) -> str:
     )
 
 
+def budget_log_header() -> str:
+    """The header the scaffold writes into ``_pipeline/budget-log.md``.
+
+    Columns must match the row format written by
+    ``research_framework.pipeline.orchestrator._append_budget_log`` — a mismatch
+    produces malformed tables that survive across resume runs. Shared with the
+    run preconditions, which re-create a missing log (spec 083 D9).
+    """
+    return (
+        "---\n_template_version: 1\n---\n"
+        "# Budget Log\n\n"
+        "Budget + cycle caps are configured in `settings.yaml` "
+        "(`pipeline.max_cycles` / `pipeline.budget_usd`) and overridable per "
+        "run via `--max-cycles` / `--max-usd` (spec 061).\n\n"
+        "One row per completed cycle. Appends across `--resume` runs.\n\n"
+        "| Timestamp | Cycle | Notes Created | Cycle Cost USD | Cumulative USD |\n"
+        "|-----------|-------|---------------|----------------|----------------|\n"
+    )
+
+
 def scaffold(
     spec: SpecConfig,
     vault_dir: Path,
@@ -245,17 +265,7 @@ def scaffold(
     # produces malformed tables that survive across resume runs.
     budget_log = pipeline / "budget-log.md"
     if not budget_log.exists():
-        budget_log.write_text(
-            "---\n_template_version: 1\n---\n"
-            "# Budget Log\n\n"
-            "Budget + cycle caps are configured in `settings.yaml` "
-            "(`pipeline.max_cycles` / `pipeline.budget_usd`) and overridable per "
-            "run via `--max-cycles` / `--max-usd` (spec 061).\n\n"
-            "One row per completed cycle. Appends across `--resume` runs.\n\n"
-            "| Timestamp | Cycle | Notes Created | Cycle Cost USD | Cumulative USD |\n"
-            "|-----------|-------|---------------|----------------|----------------|\n",
-            encoding="utf-8",
-        )
+        budget_log.write_text(budget_log_header(), encoding="utf-8")
 
     # Initialize research-backlog.md
     backlog = pipeline / "research-backlog.md"

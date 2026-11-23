@@ -234,13 +234,11 @@ def test_resume_still_demands_coverage_targets(tmp_path: Path) -> None:
     assert any("coverage-targets" in m for m in unmet)
 
 
-def test_resume_still_demands_budget_log(tmp_path: Path) -> None:
-    vault = tmp_path / "v-no-budget"
-    pl = vault / "_pipeline"
-    pl.mkdir(parents=True)
-    targets = L.coverage_targets_path(vault)
-    targets.parent.mkdir(parents=True, exist_ok=True)
-    targets.write_text("{}", encoding="utf-8")
+def test_resume_requires_the_state_directory_not_the_budget_log(
+    tmp_path: Path,
+) -> None:
+    vault = tmp_path / "v-no-state"
+    (vault / "_pipeline").mkdir(parents=True)
     vault.joinpath("CLAUDE.md").write_text(
         "# vault\nnaming convention: snake_case\n", encoding="utf-8"
     )
@@ -248,7 +246,8 @@ def test_resume_still_demands_budget_log(tmp_path: Path) -> None:
 
     ok, unmet = check(vault, for_resume=True)
     assert not ok
-    assert any("budget-log" in m for m in unmet)
+    assert any("precondition 4" in m for m in unmet)
+    assert not any("budget-log" in m for m in unmet)
 
 
 def test_resume_still_demands_claude_md_with_naming_convention(
