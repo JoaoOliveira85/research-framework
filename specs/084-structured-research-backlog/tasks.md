@@ -8,7 +8,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
 ## Phase 1: The module, with no caller
 
-- [ ] T001 The store: load, validate against
+- [x] T001 The store: load, validate against
       `contracts/research-backlog.schema.json` (hand-rolled checks, no
       dependency), atomic save, `update(vault, writer, fn)`, id derivation,
       operator-status detection (`status_by` / `status_written`), unknown
