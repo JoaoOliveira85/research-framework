@@ -25,7 +25,14 @@ if TYPE_CHECKING:
     from ..cli._budget_resolve import BudgetResolution
 
 from ..spec.schema import SpecConfig
-from . import plan_narrator, quality_report, research_plan, vault_commit, vault_git
+from . import (
+    plan_narrator,
+    quality_report,
+    research_plan,
+    state_layout,
+    vault_commit,
+    vault_git,
+)
 from .abort_diagnosis import diagnose_cycle_abort
 from .archived import (  # noqa: F401 - is_archived re-exported (spec 071)
     ARCHIVED_EXIT,
@@ -1532,7 +1539,7 @@ def _phase2_promoted_titles(vault_dir: Path, *, before_cycle: int) -> list[str]:
 
 
 def _persistent_reject_titles(vault_dir: Path) -> list[str]:
-    """Read ``_pipeline/propose-rejects.md`` and return titles to exclude.
+    """Read the persistent propose rejects and return titles to exclude.
 
     Format written by ``scripts/topic_propose.py`` is::
 
@@ -1544,7 +1551,7 @@ def _persistent_reject_titles(vault_dir: Path) -> list[str]:
     """
     import re as _re
 
-    path = vault_dir / "_pipeline" / "propose-rejects.md"
+    path = state_layout.propose_rejects_path(vault_dir)
     if not path.is_file():
         return []
     try:

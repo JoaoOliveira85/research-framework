@@ -569,7 +569,7 @@ def _absolute_archive_snapshot_url(location: str) -> str:
 
 
 def _archive_snapshots_path(vault: Path) -> Path:
-    return vault / "_pipeline" / "archive-snapshots.json"
+    return state_layout.archive_snapshots_path(vault)
 
 
 def _load_archive_snapshots(vault: Path) -> dict:

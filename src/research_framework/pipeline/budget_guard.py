@@ -18,14 +18,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NoReturn
 
-from research_framework.pipeline import atomic_write
+from research_framework.pipeline import atomic_write, state_layout
 from research_framework.pipeline.settings import LimitsSettings, VaultSettings
 
 _LOG = logging.getLogger(__name__)
 
 BUDGET_PAUSED_REL = "_pipeline/BUDGET_PAUSED"
 APPROVAL_REQUIRED_REL = "_pipeline/APPROVAL_REQUIRED"
-APPROVAL_DECISIONS_REL = "_pipeline/approval-decisions.json"
 _MARKER_SCHEMA_VERSION = "1.0"
 _DECISION_LOG_SCHEMA_VERSION = "1.0"
 #: approval-marker.contract.md §6 `decided_by_mode` — a closed set.
@@ -220,7 +219,7 @@ class ApprovalDecision:
 
 
 def approval_decisions_path(vault_dir: Path) -> Path:
-    return vault_dir / APPROVAL_DECISIONS_REL
+    return state_layout.approval_decisions_path(vault_dir)
 
 
 def validate_approval_decision_log(doc: dict[str, Any]) -> None:
@@ -260,7 +259,7 @@ def _load_approval_decision_log(vault_dir: Path) -> dict[str, Any]:
 
 
 def record_approval_decision(vault_dir: Path, decision: ApprovalDecision) -> bool:
-    """Append one verdict to ``_pipeline/approval-decisions.json``.
+    """Append one verdict to the approval decision log under ``_pipeline/state/``.
 
     Returns ``True`` when the row was written. A log this build cannot read is
     NEVER truncated to make room: it is the operator's record of every earlier

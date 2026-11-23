@@ -9,7 +9,7 @@ of structural rules; writes:
 
     _pipeline/cycles/cycle-NNN-propose.json
     _pipeline/research-backlog.md             (managed "topic-propose" block)
-    _pipeline/propose-rejects.md              (scope rejections, persistent)
+    _pipeline/state/<propose rejects file>    (scope rejections, persistent)
 
 Opt-in: `stages.topic_propose.enabled` in settings.yaml gates the whole
 stage. Best-effort: any failure logs a WARN and exits 0 — the cycle
@@ -735,7 +735,7 @@ def _replace_managed_block(backlog: str, cycle: int, body: str) -> str:
 def _append_persistent_rejects(
     vault: Path, cycle: int, ts: str, rejected: list[dict[str, Any]]
 ) -> int:
-    """Append scope-check rejections to _pipeline/propose-rejects.md.
+    """Append scope-check rejections to the propose rejects under _pipeline/state/.
 
     Other rejection reasons (cap_exceeded, dedupe_*, parent_missing, …)
     are transient — excluding them from the persistent file means we
@@ -745,9 +745,10 @@ def _append_persistent_rejects(
     persistent = [r for r in rejected if r.get("rejected_by") == "scope_check"]
     if not persistent:
         return 0
-    path = vault / "_pipeline" / "propose-rejects.md"
-    if not path.parent.is_dir():
+    path = state_layout.propose_rejects_path(vault)
+    if not (vault / state_layout.PIPELINE_DIR).is_dir():
         return 0
+    path.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = []
     if not path.is_file():
         lines.append("# Persistent tangent rejections\n\n")

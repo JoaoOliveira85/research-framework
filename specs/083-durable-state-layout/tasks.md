@@ -81,7 +81,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [ ] T004 Move `propose-rejects.md`, `approval-decisions.json`,
+- [x] T004 Move `propose-rejects.md`, `approval-decisions.json`,
       `archive-snapshots.json` and `sources/<module>/facts-schema.json`
       (`scripts/topic_propose.py`, `orchestrator._load_propose_rejects`,
       `budget_guard`, `cli/pause.py`, `scripts/vault_health.py`,
