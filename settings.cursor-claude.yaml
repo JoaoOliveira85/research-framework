@@ -345,6 +345,12 @@ limits:
   cycle_wallclock_budget_minutes: 90
   codex_token_budget: 1500000
 
+# A stage named here pauses the run before it is dispatched: the run writes
+# _pipeline/APPROVAL_REQUIRED and stops until it is approved
+# (./vault research --approve <stage>; headless also needs
+# RF_APPROVE_<STAGE>_ACK=1). Empty = unattended.
+approval_gates: []
+
 # ---------------------------------------------------------------------------
 # Vault commands. Runtime-agnostic.
 # ---------------------------------------------------------------------------

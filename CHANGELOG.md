@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Every shipped settings profile (`settings.yaml`, the codex, cursor, cursor-claude, opencode and ollama peers) and `examples/settings.yml` now carries `approval_gates: []` with a comment on what it does, so the per-stage approval gate is discoverable without reading the code (#55). Existing vaults' `settings.yaml` are user-owned and are not rewritten by `./vault update`; add the key by hand to use it.
+
 ### Fixed
 
 - Scaffolding a vault no longer drops a category's `priority` and `expected_filenames` from `_pipeline/state/coverage-targets.json` (#54), so spec priorities reach the planner (`_select_cycle_focus` filters on priority >= 50) instead of being silently ignored. Re-scaffolding an existing vault no longer zeroes progress: `cycle_number` is kept, `met_count` is recomputed from the notes on disk, and a priority set by hand in the JSON survives where the spec leaves it unset (0); a non-zero spec priority wins. (test: `tests/generator/test_scaffold_coverage_priority.py::test_scaffold_carries_spec_priority_to_planner`)
