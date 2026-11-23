@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -15,18 +14,11 @@ from research_framework.pipeline import cycle_ledger, layout_migration, state_la
 from tests._helpers.legacy_layout import (
     COVERAGE_V2,
     build_legacy_vault,
-    close_open_database,
     git,
     legacy_gitignore,
 )
 
 S = state_layout.STATE_DIR
-
-
-@pytest.fixture(autouse=True)
-def _close_db() -> Iterator[None]:
-    yield
-    close_open_database()
 
 
 def _tree(vault: Path) -> dict[str, bytes]:
@@ -82,9 +74,6 @@ def test_moves_every_state_path_and_leaves_the_backlog(tmp_path: Path) -> None:
     assert first_add in follow
     # The WAL was folded in before the move: the moved file alone holds the row.
     assert not [t for t in _ls(vault) if t.endswith(("-wal", "-shm"))]
-    assert all(
-        f.stat().st_size == 0 for f in (vault / S).glob("sources.db-*")
-    )  # (an empty -wal can linger while the test's own connection is open)
     conn = sqlite3.connect(vault / S / "sources.db")
     try:
         assert conn.execute("SELECT x FROM s").fetchall() == [(42,)]

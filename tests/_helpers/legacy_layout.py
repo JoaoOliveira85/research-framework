@@ -7,6 +7,7 @@ other state artefact sat untracked at its legacy path under ``_pipeline/``.
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -44,6 +45,28 @@ def legacy_gitignore(corpus: str = "data_vault") -> str:
         "!research.spec.md\n"
         "!settings.yaml\n" + LEGACY_GITIGNORE_STANZA
     )
+
+
+def _write_db_with_rows_in_wal(dest: Path) -> None:
+    """Leave ``dest`` plus a non-empty ``-wal`` beside it, with no open connection.
+
+    SQLite checkpoints and deletes the WAL when the last connection closes, so
+    the files are copied while a connection is still open.
+    """
+    work = dest.parent / ".db-build"
+    work.mkdir()
+    conn = sqlite3.connect(work / "sources.db")
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA wal_autocheckpoint=0")
+        conn.execute("CREATE TABLE s (x)")
+        conn.execute("INSERT INTO s VALUES (42)")
+        conn.commit()
+        shutil.copy2(work / "sources.db", dest)
+        shutil.copy2(work / "sources.db-wal", dest.with_name(dest.name + "-wal"))
+    finally:
+        conn.close()
+    shutil.rmtree(work)
 
 
 def build_legacy_vault(
@@ -95,13 +118,7 @@ def build_legacy_vault(
     (pipe / "sources" / "mod-a" / "facts-schema.json").write_text(
         json.dumps({"module": "mod-a"}), encoding="utf-8"
     )
-    conn = sqlite3.connect(pipe / "sources.db")
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("CREATE TABLE s (x)")
-    conn.execute("INSERT INTO s VALUES (42)")
-    conn.commit()
-    # Left open on purpose: the WAL still holds the row until a checkpoint.
-    build_legacy_vault._open = conn  # type: ignore[attr-defined]
+    _write_db_with_rows_in_wal(pipe / "sources.db")
 
     cycles_dir = pipe / "cycles"
     for n in range(1, cycles + 1):
@@ -115,10 +132,3 @@ def build_legacy_vault(
     (pipe / "BUDGET_PAUSED").write_text("{}", encoding="utf-8")
     (pipe / "pipeline-state.json").write_text("{}", encoding="utf-8")
     return vault
-
-
-def close_open_database() -> None:
-    conn = getattr(build_legacy_vault, "_open", None)
-    if conn is not None:
-        conn.close()
-        build_legacy_vault._open = None  # type: ignore[attr-defined]
