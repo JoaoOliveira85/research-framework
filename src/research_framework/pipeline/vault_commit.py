@@ -1065,11 +1065,15 @@ def commit_framework_change(
     title: str,
     body: str = "",
     paths: list[str] | None = None,
+    no_add: list[str] | None = None,
 ) -> CommitResult:
     """Commit a framework upgrade / scaffold refresh directly on the base branch.
 
     ``paths`` limits the commit to those pathspecs (the layout migration commits
-    only what it moved); by default everything in the tree is staged.
+    only what it moved); by default everything in the tree is staged. ``no_add``
+    names paths inside ``paths`` that are committed as they stand in the index
+    but never staged with ``git add`` (a file the caller removed from the index
+    that still exists on disk, git-ignored).
 
     Called twice around destructive upgrades: once to capture the
     pre-upgrade state (idempotent if clean), once after. Both calls are
@@ -1086,6 +1090,7 @@ def commit_framework_change(
         message=message,
         sidecar_label="framework",
         paths=paths,
+        no_add=no_add,
     )
 
 
@@ -1173,6 +1178,7 @@ def _stage_and_commit(
     sidecar_label: str = "vault",
     amend: bool = False,
     paths: list[str] | None = None,
+    no_add: list[str] | None = None,
 ) -> CommitResult:
     """Shared "git add -A + git commit" helper used by every public hook.
 
@@ -1193,7 +1199,12 @@ def _stage_and_commit(
     pathspec = ["--", *paths] if paths else []
     # A path that is gone from disk and already staged as a deletion (a
     # ``git mv`` source) cannot be re-added, but it still belongs in the commit.
-    addspec = ["--", *(p for p in paths if (vault_dir / p).exists())] if paths else []
+    skip = set(no_add or ())
+    addspec = (
+        ["--", *(p for p in paths if (vault_dir / p).exists() and p not in skip)]
+        if paths
+        else []
+    )
     _checkpoint_sources_db(vault_dir)
     try:
         _git(vault_dir, "add", "-A", *addspec)
@@ -1231,12 +1242,25 @@ def _stage_and_commit(
     if amend:
         commit_args.insert(1, "--amend")
     commit_args.extend(pathspec)
+    # A ``no_add`` path was removed from the index but still exists on disk:
+    # ``git commit -- <path>`` would take the working-tree file and re-add it,
+    # so it is moved aside for the duration of the commit.
+    aside = [
+        (vault_dir / p, vault_dir / f"{p}.framework-aside")
+        for p in skip
+        if (vault_dir / p).exists()
+    ]
+    for src, dst in aside:
+        os.replace(src, dst)
     try:
         _git(vault_dir, *commit_args)
     except subprocess.CalledProcessError as exc:
         err = _short_err(exc)
         _emit_sidecar(vault_dir, sidecar_label, stage="commit", error=err)
         return CommitResult(ok=False, error=f"git commit failed: {err}")
+    finally:
+        for src, dst in aside:
+            os.replace(dst, src)
 
     sha_result = _git(vault_dir, "rev-parse", "HEAD")
     sha = sha_result.stdout.strip()

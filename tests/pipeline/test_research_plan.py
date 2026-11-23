@@ -23,6 +23,7 @@ from pathlib import Path
 
 import pytest
 
+from research_framework.pipeline import backlog
 from research_framework.pipeline import state_layout as L
 from research_framework.spec.schema import (
     BudgetConfig,
@@ -82,11 +83,13 @@ def _minimal_spec(
     )
 
 
-def _backlog_block(cycle: int, lines: list[str]) -> str:
-    start = f"<!-- topic-harvest:cycle={cycle:03d} -->"
-    end = f"<!-- /topic-harvest:cycle={cycle:03d} -->"
-    body = "\n".join(lines)
-    return f"{start}\n{body}\n{end}\n"
+def _operator_entry(vault: Path, title: str) -> None:
+    """Add an operator-owned open entry, as an operator editing the JSON would."""
+    backlog.create_empty(vault)
+    store = L.research_backlog_path(vault)
+    data = json.loads(store.read_text(encoding="utf-8"))
+    data["entries"].append({"title": title, "origin": "operator", "status": "open"})
+    store.write_text(json.dumps(data), encoding="utf-8")
 
 
 class TestPriorityQueueOrdering:
@@ -117,9 +120,7 @@ class TestPriorityQueueOrdering:
             ),
         ]
         _write_coverage(tmp_path, categories=cats)
-        (tmp_path / "_pipeline" / "research-backlog.md").write_text(
-            "# backlog\n", encoding="utf-8"
-        )
+        backlog.create_empty(tmp_path)
         spec = _minimal_spec(categories=cats)
         plan = generate_plan(tmp_path, spec, cycle_number=1)
         assert plan.priority_queue[0].category == "prefer"
@@ -152,21 +153,20 @@ class TestHarvestOrphanWeighting:
             ),
         ]
         _write_coverage(tmp_path, categories=cats)
-        body = _backlog_block(
-            1,
-            [
-                "## Harvest — cycle 001 (2026-05-15)",
-                "",
-                "Follow-on topics (wikilink targets with no note yet, "
-                "ranked by citation count):",
-                "",
-                f"- **Orphan Title** — cited by {citations} note(s): `n/a`",
-                "",
-            ],
-        )
-        (tmp_path / "_pipeline" / "research-backlog.md").write_text(
-            f"# Backlog\n\n{body}", encoding="utf-8"
-        )
+        # No citations is only reachable through an operator's own entry; a
+        # harvested orphan always carries at least one (spec 084 FR-012).
+        if citations:
+            assert backlog.observe_topic(
+                tmp_path,
+                "harvest",
+                cycle=1,
+                title="Orphan Title",
+                origin="harvest",
+                citation_count=citations,
+                cited_from=["n/a"],
+            )
+        else:
+            _operator_entry(tmp_path, "Orphan Title")
         spec = _minimal_spec(categories=cats)
         plan = generate_plan(tmp_path, spec, cycle_number=2)
         orch = [
@@ -223,9 +223,7 @@ class TestCycleFocusSelection:
             ),
         ]
         _write_coverage(tmp_path, categories=cats)
-        (tmp_path / "_pipeline" / "research-backlog.md").write_text(
-            "# x\n", encoding="utf-8"
-        )
+        backlog.create_empty(tmp_path)
         spec = _minimal_spec(categories=cats)
         plan = generate_plan(tmp_path, spec, cycle_number=1)
         assert set(plan.cycle_focus) >= {
@@ -275,9 +273,7 @@ class TestExclusionsDedup:
             categories=cats,
             out_of_scope=["dup-slug", "dup-slug", "other-scope"],
         )
-        (tmp_path / "_pipeline" / "research-backlog.md").write_text(
-            "# x\n", encoding="utf-8"
-        )
+        backlog.create_empty(tmp_path)
         plan = generate_plan(tmp_path, spec, cycle_number=1)
         assert len(plan.exclusions) == len(set(plan.exclusions))
         joined = "\n".join(plan.exclusions)
@@ -300,9 +296,7 @@ class TestCycleQuota:
             ),
         ]
         _write_coverage(tmp_path, categories=cats)
-        (tmp_path / "_pipeline" / "research-backlog.md").write_text(
-            "# x\n", encoding="utf-8"
-        )
+        backlog.create_empty(tmp_path)
         spec = _minimal_spec(categories=cats, max_cycles=10)
         _write_settings_max_cycles(tmp_path, 10)
         plan = generate_plan(tmp_path, spec, cycle_number=3)
@@ -325,9 +319,7 @@ class TestCycleQuota:
             ),
         ]
         _write_coverage(tmp_path, categories=cats)
-        (tmp_path / "_pipeline" / "research-backlog.md").write_text(
-            "# x\n", encoding="utf-8"
-        )
+        backlog.create_empty(tmp_path)
         spec = _minimal_spec(categories=cats)
         _write_settings_max_cycles(tmp_path, 0)
         plan = generate_plan(tmp_path, spec, cycle_number=30)
@@ -350,9 +342,7 @@ class TestInsufficientQueue:
             ),
         ]
         _write_coverage(tmp_path, categories=cats)
-        (tmp_path / "_pipeline" / "research-backlog.md").write_text(
-            "# empty\n", encoding="utf-8"
-        )
+        backlog.create_empty(tmp_path)
         spec = _minimal_spec(categories=cats, max_cycles=1)
         with pytest.raises(ValueError, match="(?i)quota|queue|topic"):
             generate_plan(tmp_path, spec, cycle_number=1, require_nonempty_queue=True)
@@ -378,9 +368,7 @@ class TestInsufficientQueue:
             ),
         ]
         _write_coverage(tmp_path, categories=cats)
-        (tmp_path / "_pipeline" / "research-backlog.md").write_text(
-            "# empty\n", encoding="utf-8"
-        )
+        backlog.create_empty(tmp_path)
         spec = _minimal_spec(categories=cats, max_cycles=1)
         plan = generate_plan(tmp_path, spec, cycle_number=1)
         assert plan.priority_queue == []

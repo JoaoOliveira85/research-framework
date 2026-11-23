@@ -54,11 +54,13 @@ SCAN_ROOTS = ("src", "scripts")
 # Both lists are explicit so that widening one is a reviewed edit.
 EXEMPT_EVERYWHERE = frozenset({"research-backlog.md"})
 ALLOWED_IN_FILE: dict[str, frozenset[str]] = {
+    # In the backlog module and its converter ``quarantine`` is an entry
+    # origin and a writer name (spec 084), not the state directory.
     "src/research_framework/pipeline/backlog.py": frozenset(
-        {"research-backlog.json", "research-backlog.pre-migration.md"}
+        {"research-backlog.json", "research-backlog.pre-migration.md", "quarantine"}
     ),
     "src/research_framework/pipeline/backlog_conversion.py": frozenset(
-        {"research-backlog.json", "research-backlog.pre-migration.md"}
+        {"research-backlog.json", "research-backlog.pre-migration.md", "quarantine"}
     ),
     # ``quarantine`` is also an everyday word. These two uses are not the state
     # directory: the source bridge's per-module raw-signal quarantine under

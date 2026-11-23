@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 
+from research_framework.pipeline import backlog as backlog_module
 from research_framework.pipeline import state_layout as L
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -114,10 +115,7 @@ def _seed_vault(
     vault = tmp_path / "vault"
     (vault / "data_vault" / "concept").mkdir(parents=True)
     (vault / "_pipeline" / "cycles").mkdir(parents=True)
-    (vault / "_pipeline" / "research-backlog.md").write_text(
-        "# Research Backlog\n\nTopics deferred from scout passes.\n",
-        encoding="utf-8",
-    )
+    backlog_module.create_empty(vault)
     _write_settings(vault, **(settings_kwargs or {}))
     _write_spec(vault, out_of_scope)
     contents = touched_contents or {
@@ -190,9 +188,13 @@ def test_happy_path_accepts_valid_proposal(tmp_path: Path, topic_propose) -> Non
     assert m["proposals"][0]["title"] == "Gas Oven"
     assert m["proposals"][0]["parent_note"] == "data_vault/concept/Oven.md"
 
-    backlog = (vault / "_pipeline" / "research-backlog.md").read_text(encoding="utf-8")
-    assert "Gas Oven" in backlog
-    assert "topic-propose:cycle=001" in backlog
+    entries = json.loads(L.research_backlog_path(vault).read_text(encoding="utf-8"))[
+        "entries"
+    ]
+    assert [(e["title"], e["origin"], e["status"]) for e in entries] == [
+        ("Gas Oven", "proposal", "open")
+    ]
+    assert "Gas Oven" in backlog_module.view_path(vault).read_text(encoding="utf-8")
 
 
 def test_parent_note_missing_rejected(tmp_path: Path, topic_propose) -> None:
@@ -414,16 +416,17 @@ def test_persistent_rejects_file_records_scope_rejections(
 
 
 def test_coexistence_with_phase1_backlog_block(tmp_path: Path, topic_propose) -> None:
-    """Both managed blocks can live in the same research-backlog.md."""
+    """A harvest entry and a proposal live side by side in the one store."""
     vault = _seed_vault(tmp_path, out_of_scope=["thermodynamics"])
-    # Simulate Phase 1 having already written its block.
-    (vault / "_pipeline" / "research-backlog.md").write_text(
-        "# Research Backlog\n\n"
-        "<!-- topic-harvest:cycle=001 -->\n"
-        "## Harvest — cycle 001 (2026-04-29)\n"
-        "- **Kitchen appliance** — cited by 1 note(s): `foo`\n"
-        "<!-- /topic-harvest:cycle=001 -->\n",
-        encoding="utf-8",
+    # Simulate Phase 1 having already recorded its follow-up.
+    assert backlog_module.observe_topic(
+        vault,
+        "harvest",
+        cycle=1,
+        title="Kitchen appliance",
+        origin="harvest",
+        citation_count=1,
+        cited_from=["foo"],
     )
     caller = _stub_agent(
         [
@@ -437,9 +440,14 @@ def test_coexistence_with_phase1_backlog_block(tmp_path: Path, topic_propose) ->
         ]
     )
     topic_propose.propose(vault, 1, agent_caller=caller)
-    body = (vault / "_pipeline" / "research-backlog.md").read_text(encoding="utf-8")
-    assert "topic-harvest:cycle=001" in body
-    assert "topic-propose:cycle=001" in body
+    entries = json.loads(L.research_backlog_path(vault).read_text(encoding="utf-8"))[
+        "entries"
+    ]
+    assert {e["title"]: e["origin"] for e in entries} == {
+        "Kitchen appliance": "harvest",
+        "Gas Oven": "proposal",
+    }
+    body = backlog_module.view_path(vault).read_text(encoding="utf-8")
     assert "Kitchen appliance" in body
     assert "Gas Oven" in body
 

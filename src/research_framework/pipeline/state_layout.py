@@ -48,12 +48,22 @@ class StateArtefact:
 
 STATE_ARTEFACTS: tuple[StateArtefact, ...] = (
     # Spec 084 converts the Markdown backlog into this file and keeps the
-    # ``.md`` as an ignored view; until then the legacy path is the live one
-    # and the migration does not touch it (D-3).
+    # ``.md`` as an ignored view. 083's move does not touch it (D-3); 084's
+    # own migration step converts it, and ``legacy_paths_present`` reports the
+    # Markdown as legacy while no store exists.
     StateArtefact(
         "research_backlog",
         f"{STATE_DIR}/research-backlog.json",
         f"{PIPELINE_DIR}/research-backlog.md",
+        "file",
+        moved_by_083=False,
+    ),
+    # Spec 084 FR-022: the pre-conversion Markdown backlog, kept byte for byte.
+    # It had no file before this layout, so no layout migration moves it.
+    StateArtefact(
+        "research_backlog_archive",
+        f"{STATE_DIR}/research-backlog.pre-migration.md",
+        "",
         "file",
         moved_by_083=False,
     ),
@@ -152,8 +162,13 @@ def state_dir(vault_dir: Path) -> Path:
 
 
 def research_backlog_path(vault_dir: Path) -> Path:
-    """Spec 084's store. Nothing writes it until 084 ships."""
+    """Spec 084's backlog store; ``pipeline/backlog.py`` is its only writer."""
     return _new(vault_dir, "research_backlog")
+
+
+def research_backlog_archive_path(vault_dir: Path) -> Path:
+    """The Markdown backlog as it was before conversion (spec 084 FR-022)."""
+    return _new(vault_dir, "research_backlog_archive")
 
 
 def coverage_targets_path(vault_dir: Path) -> Path:
@@ -191,8 +206,10 @@ def cycle_ledger_path(vault_dir: Path) -> Path:
 def legacy_paths_present(vault_dir: Path) -> list[Path]:
     """Every pre-083 state path that exists, in registry order.
 
-    Only rows the layout migration moves are considered: the Markdown backlog
-    is still the live backlog until spec 084, and the ledger never had a file.
+    Rows the layout migration moves are considered, plus one more case (spec
+    084): a Markdown backlog while no store exists is unconverted legacy state,
+    and the view's own path is reported so the refusal names it. The ledger
+    never had a file.
     """
     found: list[Path] = []
     for artefact in STATE_ARTEFACTS:
@@ -211,6 +228,12 @@ def legacy_paths_present(vault_dir: Path) -> list[Path]:
         path = vault_dir / artefact.legacy_rel
         if path.exists():
             found.append(path)
+    # Imported here, not at module level: ``backlog`` imports this module for
+    # its store path, so a top-level import would be circular.
+    from . import backlog
+
+    if backlog.is_unconverted(vault_dir):
+        found.append(backlog.view_path(vault_dir))
     return found
 
 

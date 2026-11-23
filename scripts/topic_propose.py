@@ -8,7 +8,7 @@ backlog / Phase 1 state; calls the `topic_propose` stage via
 of structural rules; writes:
 
     _pipeline/cycles/cycle-NNN-propose.json
-    _pipeline/research-backlog.md             (managed "topic-propose" block)
+    the backlog store                         (proposal entries, via pipeline/backlog.py)
     _pipeline/state/<propose rejects file>    (scope rejections, persistent)
 
 Opt-in: `stages.topic_propose.enabled` in settings.yaml gates the whole
@@ -32,7 +32,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from research_framework.pipeline import state_layout
+from research_framework.pipeline import backlog, state_layout
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -58,9 +58,6 @@ _REJECT_REASONS = {
     "dedupe_phase1",
     "cap_exceeded",
 }
-
-_BACKLOG_START_FMT = "<!-- topic-propose:cycle={c:03d} -->"
-_BACKLOG_END_FMT = "<!-- /topic-propose:cycle={c:03d} -->"
 
 
 # ---------------------------------------------------------------------------
@@ -162,16 +159,8 @@ def _resolve_note(vault: Path, rel: str) -> Path | None:
 
 
 def _backlog_titles(vault: Path) -> set[str]:
-    """Casefolded titles already listed in backlog (any **Bold** span)."""
-    path = vault / "_pipeline" / "research-backlog.md"
-    if not path.is_file():
-        return set()
-    text = path.read_text(encoding="utf-8")
-    return {
-        m.group(1).strip().casefold()
-        for m in re.finditer(r"\*\*([^*\n]+?)\*\*", text)
-        if m.group(1).strip()
-    }
+    """Normalised keys of every backlog entry's title, whatever its status."""
+    return {t.key for t in backlog.all_titles(vault)}
 
 
 def _phase1_titles(vault: Path, cycle: int) -> set[str]:
@@ -624,7 +613,7 @@ def validate_proposals(
                 )
             )
             continue
-        if key in backlog_titles_cf:
+        if backlog.title_key(title) in backlog_titles_cf:
             rejected.append(
                 _reject(
                     prop,
@@ -700,36 +689,25 @@ def validate_proposals(
 # ---------------------------------------------------------------------------
 
 
-def _render_backlog_body(cycle: int, ts: str, accepted: list[dict[str, Any]]) -> str:
-    lines = [
-        f"## Proposed tangents — cycle {cycle:03d} ({ts[:10]}, agent)",
-        "",
-        (
-            "Scope-bounded tangents the agent identified. Lower priority than "
-            "the Phase 1 Harvest block; the scout can still consult them."
-        ),
-        "",
-    ]
-    for p in accepted:
-        parent = Path(p["parent_note"]).stem if p.get("parent_note") else "?"
-        warn = " ⚠️" if p.get("scope_check") == "warn" else ""
-        lines.append(
-            f"- **{p['title']}**{warn} ({p['relation_type']} of "
-            f"[[{parent}]]) — {p['justification']}"
-        )
-    return "\n".join(lines).rstrip() + "\n"
+def _record_proposals(
+    vault_dir: Path, cycle: int, accepted: list[dict[str, Any]]
+) -> bool:
+    """Record each accepted proposal as an open ``proposal`` backlog entry."""
 
+    def _apply(tx: backlog.Transaction) -> None:
+        for p in accepted:
+            parent = Path(p["parent_note"]).stem if p.get("parent_note") else None
+            tx.observe_topic(
+                cycle=cycle,
+                title=p["title"],
+                origin="proposal",
+                relation=p["relation_type"],
+                parent_note=parent,
+                scope_warn=p.get("scope_check") == "warn",
+                detail=p["justification"],
+            )
 
-def _replace_managed_block(backlog: str, cycle: int, body: str) -> str:
-    start = _BACKLOG_START_FMT.format(c=cycle)
-    end = _BACKLOG_END_FMT.format(c=cycle)
-    wrapped = f"{start}\n{body.strip()}\n{end}\n"
-    if start in backlog and end in backlog:
-        pre, _, rest = backlog.partition(start)
-        _, _, post = rest.partition(end)
-        return pre.rstrip("\n") + "\n\n" + wrapped + post.lstrip("\n")
-    sep = "" if backlog.endswith("\n") else "\n"
-    return backlog + sep + "\n" + wrapped
+    return backlog.update(vault_dir, "propose", _apply)
 
 
 def _append_persistent_rejects(
@@ -889,15 +867,7 @@ def propose(
         if (vault_dir / "data_vault").is_dir()
         else []
     )
-    backlog_titles_display: list[str] = []
-    backlog_path = vault_dir / "_pipeline" / "research-backlog.md"
-    if backlog_path.is_file():
-        for m in re.finditer(
-            r"\*\*([^*\n]+?)\*\*", backlog_path.read_text(encoding="utf-8")
-        ):
-            title = m.group(1).strip()
-            if title:
-                backlog_titles_display.append(title)
+    backlog_titles_display = [t.title for t in backlog.all_titles(vault_dir)]
     phase1_titles_display: list[str] = []
     p1 = _read_json(
         vault_dir / "_pipeline" / "cycles" / f"cycle-{cycle:03d}-harvest.json"
@@ -981,18 +951,7 @@ def propose(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
-    backlog_updated = False
-    if accepted:
-        body = _render_backlog_body(cycle, ts, accepted)
-        prev = (
-            backlog_path.read_text(encoding="utf-8")
-            if backlog_path.is_file()
-            else "# Research Backlog\n\nTopics deferred from scout passes.\n"
-        )
-        backlog_path.write_text(
-            _replace_managed_block(prev, cycle, body), encoding="utf-8"
-        )
-        backlog_updated = True
+    backlog_updated = bool(accepted) and _record_proposals(vault_dir, cycle, accepted)
 
     persistent = _append_persistent_rejects(vault_dir, cycle, ts, rejected)
 

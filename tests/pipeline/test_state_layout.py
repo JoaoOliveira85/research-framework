@@ -59,6 +59,13 @@ def _spec_table_rows() -> set[tuple[str, str]]:
     return rows
 
 
+# Artefacts a later spec adds to the registry; spec 083's FR-002 table cannot
+# list them. Each entry names the spec that declares it.
+_DECLARED_BY_A_LATER_SPEC = {
+    "research-backlog.pre-migration.md": "spec 084 FR-022",
+}
+
+
 def test_registry_is_the_spec_table() -> None:
     registry = {
         (
@@ -66,22 +73,45 @@ def test_registry_is_the_spec_table() -> None:
             a.legacy_rel.removeprefix("_pipeline/"),
         )
         for a in L.STATE_ARTEFACTS
+        if a.new_rel.removeprefix("_pipeline/state/") not in _DECLARED_BY_A_LATER_SPEC
     }
     assert registry == _spec_table_rows()
+    archive = next(a for a in L.STATE_ARTEFACTS if a.name == "research_backlog_archive")
+    assert (archive.legacy_rel, archive.moved_by_083) == ("", False)
+    assert L.research_backlog_archive_path(Path("v")) == Path(
+        "v/_pipeline/state/research-backlog.pre-migration.md"
+    )
     backlog = next(a for a in L.STATE_ARTEFACTS if a.name == "research_backlog")
     assert backlog.moved_by_083 is False
     assert all(
-        a.moved_by_083 or a.name in {"research_backlog", "cycle_ledger"}
+        a.moved_by_083
+        or a.name in {"research_backlog", "research_backlog_archive", "cycle_ledger"}
         for a in L.STATE_ARTEFACTS
     )
 
 
-def test_legacy_layout_is_detected_from_any_legacy_path_but_the_backlog(
+def test_legacy_layout_is_detected_from_any_legacy_path_and_an_unconverted_backlog(
     tmp_path: Path,
 ) -> None:
+    from research_framework.pipeline import backlog
+
     pipeline = tmp_path / "_pipeline"
     pipeline.mkdir()
-    (pipeline / "research-backlog.md").write_text("# backlog\n", encoding="utf-8")
+    # Spec 084: a Markdown backlog while no store exists is unconverted state.
+    md = pipeline / "research-backlog.md"
+    md.write_text("# backlog\n", encoding="utf-8")
+    assert L.is_legacy_layout(tmp_path) is True
+    assert L.legacy_paths_present(tmp_path) == [md]
+    with pytest.raises(L.LegacyLayoutError) as unconverted:
+        L.require_migrated(tmp_path)
+    assert "./vault migrate-layout" in str(unconverted.value)
+    assert "_pipeline/research-backlog.md" in str(unconverted.value)
+
+    # Converted (a store exists): the Markdown is a view, never legacy.
+    store = L.research_backlog_path(tmp_path)
+    store.parent.mkdir(parents=True)
+    store.write_text('{"schema_version": "1.0", "entries": []}', encoding="utf-8")
+    assert backlog.is_unconverted(tmp_path) is False
     assert L.is_legacy_layout(tmp_path) is False
     L.require_migrated(tmp_path)  # does not raise
 

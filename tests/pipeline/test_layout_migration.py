@@ -33,7 +33,7 @@ def _ls(vault: Path) -> list[str]:
     return git(vault, "ls-files").split()
 
 
-def test_moves_every_state_path_and_leaves_the_backlog(tmp_path: Path) -> None:
+def test_moves_every_state_path_and_converts_the_backlog(tmp_path: Path) -> None:
     vault = build_legacy_vault(tmp_path)
     first_add = git(
         vault,
@@ -62,9 +62,12 @@ def test_moves_every_state_path_and_leaves_the_backlog(tmp_path: Path) -> None:
     # Byte for byte: hand-set priorities survive.
     assert (vault / S / "coverage-targets.json").read_text() == COVERAGE_V2
     assert not state_layout.is_legacy_layout(vault)
-    # The backlog and run control are where they were.
+    # Spec 084: the backlog is converted by the step after this one; the
+    # Markdown stays on disk as the (untracked) view, the store is tracked.
     assert (vault / "_pipeline" / "research-backlog.md").is_file()
-    assert "_pipeline/research-backlog.md" in _ls(vault)
+    assert "_pipeline/research-backlog.md" not in _ls(vault)
+    assert f"{S}/research-backlog.json" in _ls(vault)
+    # Run control is where it was.
     assert (vault / "_pipeline" / "BUDGET_PAUSED").is_file()
     assert (vault / "_pipeline" / "pipeline-state.json").is_file()
     # History follows the rename back to the commit that first added the file.
@@ -89,17 +92,21 @@ def test_the_commit_is_renames_additions_ignore_file_and_ledger_only(
     (vault / "_pipeline" / "scratch.txt").write_text("x")  # ignored scratch
     result = layout_migration.migrate(vault)
     assert result.committed
+    # The layout move is its own commit; spec 084's conversion follows it.
     assert git(vault, "log", "-1", "--format=%s").strip() == (
+        "framework: convert the research backlog to a store"
+    )
+    assert git(vault, "log", "-1", "--format=%s", "HEAD~1").strip() == (
         "framework: migrate _pipeline layout"
     )
-    stat = git(vault, "show", "--stat", "-M", "--format=", "HEAD")
+    stat = git(vault, "show", "--stat", "-M", "--format=", "HEAD~1")
     assert (
         "_pipeline/coverage-targets.json => _pipeline/state/coverage-targets.json"
         in stat
         or ("coverage-targets.json" in stat and "=>" in stat)
     )
     changes = git(
-        vault, "show", "--name-status", "-M", "--format=", "HEAD"
+        vault, "show", "--name-status", "-M", "--format=", "HEAD~1"
     ).splitlines()
     renames = [c for c in changes if c.startswith("R")]
     assert any(c.startswith("R100") and "coverage-targets.json" in c for c in renames)

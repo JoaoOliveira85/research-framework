@@ -9,7 +9,6 @@ import datetime as dt
 import itertools
 import json
 import logging
-import re
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -26,6 +25,7 @@ if TYPE_CHECKING:
 
 from ..spec.schema import SpecConfig
 from . import (
+    backlog,
     cycle_ledger,
     plan_narrator,
     quality_report,
@@ -40,7 +40,7 @@ from .archived import (  # noqa: F401 - is_archived re-exported (spec 071)
     archived_refusal_message,
     is_archived,
 )
-from .atomic_write import write_json, write_text
+from .atomic_write import write_json
 from .correction import build_directive
 from .coverage import (
     all_targets_met,
@@ -271,120 +271,39 @@ def _first_verifier_note(fm: dict) -> str:
     return text[0].strip() if text else "no reason recorded"
 
 
-_QUARANTINE_BLOCK_START = "<!-- quarantine -->"
-_QUARANTINE_BLOCK_END = "<!-- /quarantine -->"
-_QUARANTINE_STEM_RE = re.compile(r"<!-- stem:(\S+) -->\s*$")
+def _write_quarantine_backlog(
+    vault_dir: Path,
+    quarantine_dir: Path,
+    observed: list[tuple[str, str, str]],
+) -> None:
+    """Reconcile the backlog's quarantine entries against ``quarantine_dir``.
 
+    ``observed`` is ``(stem, kind, reason)`` per note quarantined this sweep.
+    An entry whose quarantine file is gone is resolved — a note reinstated via
+    ``./vault re-grade`` or fixed by hand clears its own pointer on the next
+    sweep (#257) — and every observed note is upserted (spec 084 FR-010).
+    Collision-renamed copies (``<stem>-<n>.md``) are a known gap: matching is
+    on the *original* stem.
 
-def _quarantine_pointer_line(note_stem: str, *, restored: bool, reason: str) -> str:
-    """One research-backlog bullet for a quarantined note.
-
-    The trailing ``<!-- stem:... -->`` tag (invisible in rendered markdown) is
-    how :func:`_reconcile_quarantine_block` matches a pointer back to its
-    quarantine file across sweeps (#257) without having to remember, at
-    reconciliation time, whether the note was a brand-new quarantine or a
-    restored refresh.
+    Best-effort — an unusable store is logged by the module and must not abort
+    the cycle (spec 062 FR1). With nothing observed and no store there is
+    nothing to reconcile, so no store is created.
     """
-    if restored:
-        text = (
-            f"- [ ] retry refresh of {note_stem} — previous content restored, "
-            f"rejected draft quarantined (verifier_status: rejected — {reason})"
-        )
-    else:
-        text = (
-            f"- [ ] rewrite quarantined note: {note_stem} "
-            f"(verifier_status: rejected — {reason})"
-        )
-    return f"{text} <!-- stem:{note_stem} -->\n"
-
-
-def _extract_managed_block(text: str, start: str, end: str) -> str | None:
-    """Return a ``start``/``end`` delimited block's inner text, or None if absent."""
-    if start not in text or end not in text:
-        return None
-    _, _, rest = text.partition(start)
-    inner, _, _ = rest.partition(end)
-    return inner.strip("\n")
-
-
-def _replace_managed_block(text: str, start: str, end: str, body: str) -> str:
-    """Insert, replace, or remove a ``start``/``end`` delimited block in ``text``.
-
-    Mirrors ``scripts/topic_harvest.py``'s per-cycle managed block: content
-    outside the block — an operator's own manual backlog entries — is always
-    left untouched. An empty ``body`` removes the block entirely rather than
-    leaving an empty marker pair behind, which is how #257's "clear when the
-    quarantine empties" is satisfied.
-    """
-    has_block = start in text and end in text
-    if not body:
-        if not has_block:
-            return text
-        pre, _, rest = text.partition(start)
-        _, _, post = rest.partition(end)
-        return pre.rstrip("\n") + ("\n" if pre.strip() else "") + post.lstrip("\n")
-    wrapped = f"{start}\n{body}\n{end}\n"
-    if has_block:
-        pre, _, rest = text.partition(start)
-        _, _, post = rest.partition(end)
-        return pre.rstrip("\n") + "\n\n" + wrapped + post.lstrip("\n")
-    sep = "" if not text or text.endswith("\n") else "\n"
-    return text + sep + wrapped
-
-
-def _reconcile_quarantine_block(
-    backlog_text: str, quarantine_dir: Path, new_lines: list[str]
-) -> str:
-    """Merge ``new_lines`` into the backlog's ``quarantine`` managed block.
-
-    Any previously-recorded pointer whose quarantine file no longer exists is
-    dropped — a note reinstated via ``./vault re-grade`` or fixed by hand
-    clears its own pointer on the next sweep instead of the backlog growing
-    forever (#257). Collision-renamed quarantine copies (``<stem>-<n>.md``,
-    written when two same-named notes are quarantined in one sweep) are a
-    known gap: reconciliation matches on the *original* stem, which such a
-    copy no longer carries.
-    """
+    if not observed and not backlog.store_path(vault_dir).exists():
+        return
     live_stems = (
         {p.stem for p in quarantine_dir.glob("*.md")}
         if quarantine_dir.is_dir()
         else set()
     )
-    existing = _extract_managed_block(
-        backlog_text, _QUARANTINE_BLOCK_START, _QUARANTINE_BLOCK_END
-    )
-    kept_lines: list[str] = []
-    known_stems: set[str] = set()
-    for line in (existing or "").splitlines(keepends=True):
-        match = _QUARANTINE_STEM_RE.search(line)
-        if match and match.group(1) in live_stems:
-            kept_lines.append(line if line.endswith("\n") else line + "\n")
-            known_stems.add(match.group(1))
-    for line in new_lines:
-        match = _QUARANTINE_STEM_RE.search(line)
-        if match and match.group(1) not in known_stems:
-            kept_lines.append(line)
-            known_stems.add(match.group(1))
-    body = "".join(kept_lines).rstrip("\n")
-    return _replace_managed_block(
-        backlog_text, _QUARANTINE_BLOCK_START, _QUARANTINE_BLOCK_END, body
-    )
 
+    def _apply(tx: backlog.Transaction) -> None:
+        tx.resolve_quarantine(live_stems)
+        for stem, kind, reason in observed:
+            tx.observe_quarantine(stem=stem, kind=kind, detail=reason)
 
-def _write_quarantine_backlog(
-    vault_dir: Path, quarantine_dir: Path, new_lines: list[str]
-) -> None:
-    """Reconcile the backlog's quarantine block against ``quarantine_dir`` and
-    persist any change. Best-effort — a write failure here must not abort the
-    cycle (spec 062 FR1)."""
-    backlog = vault_dir / "_pipeline" / "research-backlog.md"
     try:
-        current = backlog.read_text(encoding="utf-8") if backlog.exists() else ""
-        updated = _reconcile_quarantine_block(current, quarantine_dir, new_lines)
-        if updated == current:
-            return
-        backlog.parent.mkdir(parents=True, exist_ok=True)
-        write_text(backlog, updated)
+        backlog.update(vault_dir, backlog.QUARANTINE_WRITER, _apply)
     except OSError as exc:  # pragma: no cover - defensive
         _LOG.warning(
             f"[orchestrator] WARN: backlog pointer reconciliation failed: {exc}"
@@ -397,8 +316,8 @@ def _quarantine_rejected_notes(vault_dir: Path) -> int:
 
     Mirrors :func:`_quarantine_out_of_scope_notes`. The indexer/readers only scan
     ``data_vault/`` (steps/research.py), so a quarantined note becomes uncitable and
-    unindexed for free. Each move appends a rewrite pointer to the research backlog
-    so the next cycle can fix it. Returns the count quarantined (Principle IX/VIII).
+    unindexed for free. Each move records a quarantine entry in the research backlog
+    store so the next cycle can fix it. Returns the count quarantined (Principle IX/VIII).
 
     Clean-exit behaviour is unchanged: the correction/rewrite loop clears rejections
     first, so this sweep finds zero on a clean run.
@@ -422,7 +341,7 @@ def _quarantine_rejected_notes(vault_dir: Path) -> int:
         return 0
     quarantine = state_layout.quarantine_dir(vault_dir)
     quarantined = 0
-    new_backlog_lines: list[str] = []
+    observed: list[tuple[str, str, str]] = []
     for note in sorted(corpus.rglob("*.md")):
         if note.name.startswith("_"):
             continue
@@ -462,10 +381,8 @@ def _quarantine_rejected_notes(vault_dir: Path) -> int:
             restored = True
 
         quarantined += 1
-        new_backlog_lines.append(
-            _quarantine_pointer_line(
-                note.stem, restored=restored, reason=_first_verifier_note(fm)
-            )
+        observed.append(
+            (note.stem, "retry" if restored else "rewrite", _first_verifier_note(fm))
         )
         if restored:
             _LOG.warning(
@@ -489,7 +406,7 @@ def _quarantine_rejected_notes(vault_dir: Path) -> int:
     # Reconcile on every sweep, not just when this run quarantined something —
     # a note fixed since the last sweep (e.g. via ./vault re-grade) must have
     # its pointer cleared even on an otherwise-clean exit (#257).
-    _write_quarantine_backlog(vault_dir, quarantine, new_backlog_lines)
+    _write_quarantine_backlog(vault_dir, quarantine, observed)
     return quarantined
 
 
@@ -1165,7 +1082,9 @@ def run_cycles(
             # default and the run just stopped.
             _LOG.error(
                 f"[orchestrator] research loop has no remaining fuel "
-                f"(scout found 0 new topics, backlog empty, no stubs/orphans) "
+                f"(scout found 0 new topics, this cycle's harvest manifest "
+                f"cycle-{cycle:03d}-harvest.json lists no follow-on topics, "
+                f"no stubs/orphans) "
                 f"but {len(unmet)} coverage target(s) remain unmet:"
             )
             for cat in unmet:
@@ -1417,8 +1336,9 @@ def _constrained_exit(
         )
     if followups:
         _LOG.warning(
-            f"  - {len(followups)} orphan wikilink(s) in the backlog "
-            "(see _pipeline/research-backlog.md)"
+            f"  - {len(followups)} orphan wikilink(s) in the latest harvest "
+            "manifest (_pipeline/cycles/cycle-NNN-harvest.json); the backlog is "
+            f"{state_layout.research_backlog_path(Path()).as_posix()}"
         )
     if stubs_count:
         _LOG.warning(f"  - {stubs_count} stub note(s) (see Principle VIII criteria)")

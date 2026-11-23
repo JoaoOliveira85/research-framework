@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from research_framework.pipeline.backlog import create_empty as create_empty_backlog
 from research_framework.pipeline.coverage import save_targets
 from research_framework.spec.schema import (
     BudgetConfig,
@@ -89,9 +90,7 @@ class TestR001OrphanNotesWithoutBatchReport:
         dv = vault / "data_vault"
         dv.mkdir(parents=True)
         (vault / "_pipeline").mkdir(parents=True)
-        (vault / "_pipeline" / "research-backlog.md").write_text(
-            "# backlog\n", encoding="utf-8"
-        )
+        create_empty_backlog(vault)
         spec = _minimal_spec(vault)
         _write_coverage(vault, spec)
         names = ["a-alpha.md", "b-beta.md", "c-gamma.md", "d-delta.md"]
@@ -137,9 +136,7 @@ class TestFr014CrashMidBatch:
         dv = vault / "data_vault"
         dv.mkdir(parents=True)
         (vault / "_pipeline").mkdir(parents=True)
-        (vault / "_pipeline" / "research-backlog.md").write_text(
-            "#b\n", encoding="utf-8"
-        )
+        create_empty_backlog(vault)
         spec = _minimal_spec(vault)
         _write_coverage(vault, spec)
         partial = ["mid-a.md", "mid-b.md"]
@@ -184,9 +181,7 @@ class TestFr014CrashBetweenBatches:
         dv.mkdir(parents=True)
         cyc = vault / "_pipeline" / "cycles"
         cyc.mkdir(parents=True)
-        (vault / "_pipeline" / "research-backlog.md").write_text(
-            "#b\n", encoding="utf-8"
-        )
+        create_empty_backlog(vault)
         spec = _minimal_spec(vault)
         _write_coverage(vault, spec)
 
@@ -250,9 +245,7 @@ class TestFr014CrashAfterCgFailRetryOne:
         (vault / "data_vault").mkdir(parents=True)
         cyc = vault / "_pipeline" / "cycles"
         cyc.mkdir(parents=True)
-        (vault / "_pipeline" / "research-backlog.md").write_text(
-            "#b\n", encoding="utf-8"
-        )
+        create_empty_backlog(vault)
         spec = _minimal_spec(vault)
         _write_coverage(vault, spec)
         _write_research_json(vault, 1, [])

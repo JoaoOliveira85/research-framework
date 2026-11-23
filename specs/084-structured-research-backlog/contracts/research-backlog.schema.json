@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "research-backlog-1.0",
+  "title": "Research backlog store (_pipeline/state/research-backlog.json)",
+  "type": "object",
+  "required": ["schema_version", "entries"],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\.[0-9]+$",
+      "description": "A newer major is read-only for this build; a newer minor is read and written with unknown fields preserved."
+    },
+    "entries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "required": ["id", "title", "origin", "status"],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(topic|quarantine|migrated):.+$",
+          "description": "topic:<title, whitespace collapsed, case-folded> | quarantine:<note stem> | migrated:<NNNN>. Unique in the store. Never changes."
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "origin": {
+          "enum": ["harvest", "researcher", "proposal", "quarantine", "operator", "migrated"],
+          "description": "Who created the entry. Never changes. A minor schema bump may add a value."
+        },
+        "status": { "enum": ["open", "resolved", "dropped"] },
+        "status_by": {
+          "type": "string",
+          "description": "operator, or the writer that last set status: harvest | propose | quarantine | regrade | migration."
+        },
+        "status_written": {
+          "enum": ["open", "resolved", "dropped"],
+          "description": "The status the module last wrote. Absent or different from status means an operator changed it."
+        },
+        "added": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "updated": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "first_seen_cycle": { "type": ["integer", "null"], "minimum": 1 },
+        "last_seen_cycle": { "type": ["integer", "null"], "minimum": 1 },
+        "seen_cycles": { "type": "integer", "minimum": 0 },
+        "citation_count": { "type": "integer", "minimum": 0 },
+        "cited_from": { "type": "array", "items": { "type": "string" } },
+        "detail": { "type": "string" },
+        "relation": { "type": "string" },
+        "parent_note": { "type": "string" },
+        "scope_warn": { "type": "boolean" },
+        "stem": { "type": "string" },
+        "kind": { "enum": ["rewrite", "retry"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "origin": { "const": "quarantine" } } },
+          "then": { "required": ["stem", "kind"] }
+        }
+      ]
+    }
+  }
+}

@@ -13,6 +13,7 @@ import json
 import subprocess
 from pathlib import Path
 
+from research_framework.pipeline import backlog as backlog_module
 from research_framework.pipeline import state_layout as L
 from research_framework.pipeline.orchestrator import (
     _quarantine_out_of_scope_notes,
@@ -30,6 +31,15 @@ def _note(vault: Path, name: str, status: str, *, notes: str = "") -> Path:
     p = data / f"{name}.md"
     p.write_text("---\n" + "\n".join(fm) + "\n---\nBody text.\n", encoding="utf-8")
     return p
+
+
+def _pointers(vault: Path) -> dict[str, dict]:
+    """The quarantine entries of the backlog store, keyed by stem."""
+    path = L.research_backlog_path(vault)
+    if not path.is_file():
+        return {}
+    entries = json.loads(path.read_text(encoding="utf-8"))["entries"]
+    return {e["stem"]: e for e in entries if e["origin"] == "quarantine"}
 
 
 def _git(*args: str, cwd: Path) -> subprocess.CompletedProcess:
@@ -75,9 +85,12 @@ def test_backlog_pointer_appended_with_reason(tmp_path: Path) -> None:
     vault = tmp_path / "v"
     _note(vault, "bad-one", "rejected", notes="missing intent_implementation_drift")
     _quarantine_rejected_notes(vault)
-    backlog = (vault / "_pipeline" / "research-backlog.md").read_text(encoding="utf-8")
-    assert "rewrite quarantined note: bad-one" in backlog
-    assert "missing intent_implementation_drift" in backlog
+    pointer = _pointers(vault)["bad-one"]
+    assert (pointer["kind"], pointer["status"]) == ("rewrite", "open")
+    assert pointer["detail"] == "missing intent_implementation_drift"
+    view = backlog_module.view_path(vault).read_text(encoding="utf-8")
+    assert "**bad-one** — rewrite the quarantined note" in view
+    assert "missing intent_implementation_drift" in view
 
 
 def test_quarantined_note_not_under_data_vault_scan(tmp_path: Path) -> None:
@@ -179,9 +192,11 @@ def test_rejected_refresh_of_committed_note_is_restored_not_lost(
     )
     assert "Rejected rewrite body." in quarantined
     assert "verifier_status: rejected" in quarantined
-    backlog = (vault / "_pipeline" / "research-backlog.md").read_text(encoding="utf-8")
-    assert "retry refresh of Existing-Note" in backlog
-    assert "previous content restored" in backlog
+    pointer = _pointers(vault)["Existing-Note"]
+    assert pointer["kind"] == "retry"
+    assert pointer["detail"] == "fabricated claim"
+    view = backlog_module.view_path(vault).read_text(encoding="utf-8")
+    assert "previous content restored" in view
 
 
 def test_rejected_brand_new_note_in_git_vault_still_quarantined_as_before(
@@ -217,31 +232,34 @@ class TestQuarantineBacklogReconciliation:
     def test_pointer_lives_inside_a_managed_quarantine_block(
         self, tmp_path: Path
     ) -> None:
+        """Rewritten for spec 084: the "managed block" is now the quarantine
+        entries of the backlog store (one typed entry per stem), not a
+        comment-delimited region of a Markdown file."""
         vault = tmp_path / "v"
         _note(vault, "bad-one", "rejected", notes="missing citation")
         _quarantine_rejected_notes(vault)
-        backlog = (vault / "_pipeline" / "research-backlog.md").read_text(
-            encoding="utf-8"
-        )
-        assert "<!-- quarantine -->" in backlog
-        assert "<!-- /quarantine -->" in backlog
-        start = backlog.index("<!-- quarantine -->")
-        end = backlog.index("<!-- /quarantine -->")
-        assert start < backlog.index("rewrite quarantined note: bad-one") < end
+        _quarantine_rejected_notes(vault)
+        entries = json.loads(
+            L.research_backlog_path(vault).read_text(encoding="utf-8")
+        )["entries"]
+        assert [(e["id"], e["origin"], e["status"]) for e in entries] == [
+            ("quarantine:bad-one", "quarantine", "open")
+        ]
+        view = backlog_module.view_path(vault).read_text(encoding="utf-8")
+        assert "<!-- quarantine -->" not in view
+        assert "## Quarantined notes" in view
 
     def test_pointer_clears_once_the_quarantine_file_is_gone(
         self, tmp_path: Path
     ) -> None:
         """Simulates the note being fixed and its quarantine copy removed
         (e.g. by ``./vault re-grade`` or a manual rewrite) — the NEXT
-        reconciliation sweep must drop the stale pointer, not carry it
+        reconciliation sweep must resolve the stale pointer, not carry it
         forever."""
         vault = tmp_path / "v"
         _note(vault, "bad-one", "rejected", notes="missing citation")
         _quarantine_rejected_notes(vault)
-        assert "rewrite quarantined note: bad-one" in (
-            vault / "_pipeline" / "research-backlog.md"
-        ).read_text(encoding="utf-8")
+        assert _pointers(vault)["bad-one"]["status"] == "open"
 
         # The note was fixed and its quarantine copy removed; nothing else
         # is rejected this sweep.
@@ -249,12 +267,11 @@ class TestQuarantineBacklogReconciliation:
         count = _quarantine_rejected_notes(vault)
 
         assert count == 0
-        backlog = (vault / "_pipeline" / "research-backlog.md").read_text(
-            encoding="utf-8"
-        )
-        assert "bad-one" not in backlog
-        # The block itself clears too — nothing left to reconcile.
-        assert "<!-- quarantine -->" not in backlog
+        assert _pointers(vault)["bad-one"]["status"] == "resolved"
+        view = backlog_module.view_path(vault).read_text(encoding="utf-8")
+        assert "bad-one" not in view
+        # The section clears too — nothing left to reconcile.
+        assert "## Quarantined notes" not in view
 
     def test_reconciliation_keeps_still_quarantined_entries_and_adds_new_ones(
         self, tmp_path: Path
@@ -266,28 +283,57 @@ class TestQuarantineBacklogReconciliation:
         _note(vault, "bad-two", "rejected", notes="reason two")
         _quarantine_rejected_notes(vault)
 
-        backlog = (vault / "_pipeline" / "research-backlog.md").read_text(
-            encoding="utf-8"
-        )
-        assert "rewrite quarantined note: bad-one" in backlog
-        assert "rewrite quarantined note: bad-two" in backlog
-        # Exactly one managed block, not one per sweep.
-        assert backlog.count("<!-- quarantine -->") == 1
+        pointers = _pointers(vault)
+        assert {s: p["status"] for s, p in pointers.items()} == {
+            "bad-one": "open",
+            "bad-two": "open",
+        }
+        # Exactly one section, not one per sweep.
+        view = backlog_module.view_path(vault).read_text(encoding="utf-8")
+        assert view.count("## Quarantined notes") == 1
+
+    def test_a_note_quarantined_again_reopens_its_pointer(self, tmp_path: Path) -> None:
+        vault = tmp_path / "v"
+        _note(vault, "bad-one", "rejected", notes="first")
+        _quarantine_rejected_notes(vault)
+        (L.quarantine_dir(vault) / "bad-one.md").unlink()
+        _quarantine_rejected_notes(vault)
+        assert _pointers(vault)["bad-one"]["status"] == "resolved"
+
+        _note(vault, "bad-one", "rejected", notes="second")
+        _quarantine_rejected_notes(vault)
+
+        pointer = _pointers(vault)["bad-one"]
+        assert (pointer["status"], pointer["detail"]) == ("open", "second")
 
     def test_manual_backlog_entries_outside_the_block_are_preserved(
         self, tmp_path: Path
     ) -> None:
         vault = tmp_path / "v"
-        backlog = vault / "_pipeline" / "research-backlog.md"
-        backlog.parent.mkdir(parents=True)
-        backlog.write_text("- [ ] operator's own manual TODO\n", encoding="utf-8")
+        store = L.research_backlog_path(vault)
+        store.parent.mkdir(parents=True)
+        manual = {
+            "id": "topic:operator's own manual todo",
+            "title": "Operator's own manual TODO",
+            "origin": "operator",
+            "status": "open",
+            "status_by": "operator",
+            "status_written": "open",
+        }
+        store.write_text(
+            json.dumps({"schema_version": "1.0", "entries": [manual]}),
+            encoding="utf-8",
+        )
 
         _note(vault, "bad-one", "rejected")
         _quarantine_rejected_notes(vault)
 
-        text = backlog.read_text(encoding="utf-8")
-        assert "operator's own manual TODO" in text
-        assert "rewrite quarantined note: bad-one" in text
+        entries = json.loads(store.read_text(encoding="utf-8"))["entries"]
+        kept = next(e for e in entries if e["id"] == manual["id"])
+        assert {k: kept[k] for k in manual} == manual
+        assert "bad-one" in _pointers(vault)
+        view = backlog_module.view_path(vault).read_text(encoding="utf-8")
+        assert "Operator's own manual TODO" in view
 
 
 def test_run_report_records_rejected_unresolved(tmp_path: Path) -> None:

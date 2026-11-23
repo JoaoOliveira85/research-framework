@@ -55,10 +55,9 @@ def _prepare_smoke_vault(tmp_path: Path) -> Path:
 
     spec = load_spec(vault / "research.spec.md", location=vault)
     save_targets(vault, spec.coverage_targets)
-    (vault / "_pipeline" / "research-backlog.md").write_text(
-        "# backlog\n\n(no orphans)\n",
-        encoding="utf-8",
-    )
+    from research_framework.pipeline.backlog import create_empty
+
+    create_empty(vault)
     (vault / "settings.yaml").write_text(
         "pipeline:\n  gates:\n    sg_003_abstraction_warn_pct: 20\n",
         encoding="utf-8",

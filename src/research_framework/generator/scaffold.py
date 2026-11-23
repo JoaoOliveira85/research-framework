@@ -12,7 +12,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from .. import __version__ as _FRAMEWORK_VERSION
 from .._assets import asset_path, default_settings_path
-from ..pipeline import state_layout
+from ..pipeline import backlog, state_layout
 from ..pipeline.state_layout import STATE_DIR
 from ..spec.parsed import stamp_parsed_spec, write_parsed_spec
 from ..spec.schema import SpecConfig
@@ -83,8 +83,8 @@ def _render_vault_gitignore(corpus: str) -> str:
     file whose parent directory is excluded: un-ignore the directory, re-exclude
     its contents, then un-exclude ``state/``. No file under ``_pipeline/`` is
     named, so the stanza does not change when a durable file is added (spec 083
-    FR-003) — with one transitional exception, the Markdown backlog, which
-    stays tracked at its old path until spec 084 converts it (FR-019).
+    FR-003). The backlog's JSON store lives under ``state/`` and is tracked;
+    its Markdown view is rendered from it and falls under ``_pipeline/*`` (spec 084 FR-024).
     """
     return (
         f"# research-framework: track {corpus}/ + the control files; "
@@ -107,8 +107,6 @@ def _render_vault_gitignore(corpus: str) -> str:
         "# SQLite sidecars of a tracked database are never tracked.\n"
         f"{STATE_DIR}/*.db-wal\n"
         f"{STATE_DIR}/*.db-shm\n"
-        "# Transitional until spec 084 converts the backlog; 084 removes this line.\n"
-        "!_pipeline/research-backlog.md\n"
     )
 
 
@@ -267,15 +265,6 @@ def scaffold(
     if not budget_log.exists():
         budget_log.write_text(budget_log_header(), encoding="utf-8")
 
-    # Initialize research-backlog.md
-    backlog = pipeline / "research-backlog.md"
-    if not backlog.exists():
-        backlog.write_text(
-            "---\n_template_version: 1\n---\n"
-            "# Research Backlog\n\nTopics deferred from scout passes.\n",
-            encoding="utf-8",
-        )
-
     # Initialize the coverage targets (state, spec 083) from spec targets. ``display_name`` is
     # carried forward so the per-category classifier in pipeline/coverage.py
     # has the human-readable label to match notes against — without it the
@@ -300,6 +289,10 @@ def scaffold(
     targets_path.write_text(
         json.dumps(coverage_data, indent=2) + "\n", encoding="utf-8"
     )
+
+    # Seed the empty backlog store and render its view (spec 084). After the
+    # coverage targets, because the view lists the unmet categories.
+    backlog.create_empty(vault_dir)
 
     # .tmpl-versions.json — one per directory containing non-markdown scaffold
     # files. Each maps filename → template_version (integer). Written here so
@@ -342,6 +335,7 @@ def scaffold(
             {
                 targets_path.name: 1,
                 state_layout.sources_db_path(vault_dir).name: 1,
+                state_layout.research_backlog_path(vault_dir).name: 1,
             },
             indent=2,
         )

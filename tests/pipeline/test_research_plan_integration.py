@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from research_framework.pipeline import backlog
 from research_framework.pipeline import state_layout as L
 from research_framework.spec.schema import (
     BudgetConfig,
@@ -76,9 +77,7 @@ class TestResearchPlanGoldenPath:
             json.dumps(spec.coverage_targets.to_dict(), indent=2) + "\n",
             encoding="utf-8",
         )
-        (tmp_path / "_pipeline" / "research-backlog.md").write_text(
-            "# backlog\n", encoding="utf-8"
-        )
+        backlog.create_empty(tmp_path)
         (tmp_path / "data_vault").mkdir(parents=True, exist_ok=True)
 
         plan = generate_plan(tmp_path, spec, cycle_number=1)
