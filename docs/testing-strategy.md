@@ -700,7 +700,7 @@ of the battery. It walks the AST of every file under `src/` and `scripts/`
 except `pipeline/state_layout.py` and fails on a whitespace-free string literal
 with a path segment equal to a state artefact's name from
 `state_layout.STATE_ARTEFACTS` (`"coverage-targets.json"`,
-`"_pipeline/sources.db"`, `vault / "_pipeline" / "propose-rejects.md"`).
+`"state/sources.db"`, `vault / "_pipeline" / "propose-rejects.md"`).
 Docstrings, comments and prose messages are not flagged. The Markdown backlog
 name is exempt until spec 084; the JSON backlog names are allowed in two named
 modules, and two uses of the word `quarantine` that are not the state directory
