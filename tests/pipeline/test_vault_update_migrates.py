@@ -31,9 +31,11 @@ def test_an_old_shims_update_hook_migrates_the_vault(tmp_path: Path) -> None:
     assert "marker.py" in changed
     assert not state_layout.is_legacy_layout(vault)
     assert (vault / S / "coverage-targets.json").is_file()
-    assert git(vault, "log", "-1", "--format=%s").strip() == (
-        "framework: migrate _pipeline layout"
-    )
+    # The layout move, then spec 084's backlog conversion, each its own commit.
+    assert git(vault, "log", "-2", "--format=%s").splitlines() == [
+        "framework: convert the research backlog to a store",
+        "framework: migrate _pipeline layout",
+    ]
     # The upgrade commit comes after, as its own commit.
     from research_framework.pipeline import vault_commit
 
@@ -41,7 +43,7 @@ def test_an_old_shims_update_hook_migrates_the_vault(tmp_path: Path) -> None:
     vault_commit.commit_framework_change(vault, title="upgrade to 9.9.9")
     subjects = git(vault, "log", "-3", "--format=%s").splitlines()
     assert subjects[0] == "framework: upgrade to 9.9.9"
-    assert subjects[1] == "framework: migrate _pipeline layout"
+    assert subjects[1] == "framework: convert the research backlog to a store"
 
 
 def test_a_failed_migration_fails_the_update_loudly(
