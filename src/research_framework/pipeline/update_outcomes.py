@@ -358,6 +358,27 @@ def apply_batch(
     return BatchOutcomes(gate=gate, verdicts=verdicts)
 
 
+def sidecar_results(cycles_dir: Path, cycle: int) -> list[dict[str, Any]]:
+    """The cycle's recorded results, across every update batch."""
+    return [
+        r
+        for r in _read_json(_sidecar(cycles_dir, cycle)).get("results", [])
+        if isinstance(r, dict)
+    ]
+
+
+def verifiable_paths(vault_dir: Path, cycle: int) -> list[str]:
+    """Notes whose outcome passed UG-001 and changed the note: they are owed the
+    verifier, whatever the research report lists."""
+    return [
+        r["path"]
+        for r in sidecar_results(vault_dir / "_pipeline" / "cycles", cycle)
+        if r.get("status") == "passed"
+        and r.get("outcome") != "confirmed"
+        and r.get("path")
+    ]
+
+
 def recorded_result(
     vault_dir: Path, cycle: int, note_rel: str
 ) -> dict[str, Any] | None:
@@ -454,6 +475,8 @@ __all__ = [
     "BatchOutcomes",
     "recorded_result",
     "record_pre_existing",
+    "sidecar_results",
+    "verifiable_paths",
     "reject_outcome",
     "Verdict",
     "apply_batch",

@@ -17,6 +17,7 @@ from .._helpers import state as st
 from ..atomic_write import write_json as _atomic_write_json
 from ..gates import GateResult, run_gate
 from ..gates_step import SG004_validate_vault_wrapper, SG005_frontmatter_completeness
+from ..report_reconcile import CycleRecord
 from ._types import CycleContext, ResearchResult, ScoutResult, VerifierRejection
 
 _LOG = logging.getLogger(__name__)
@@ -140,7 +141,7 @@ def _phase(ctx: CycleContext) -> int:
         # Every note a batch of THIS cycle wrote. An agent rewrites the shared
         # report on each batch, so a later (update) batch's report drops the
         # earlier batches' notes_created; they are merged back after every batch.
-        cycle_written: list[str] = []
+        record = CycleRecord(vault_dir)
 
         for i, assignment in enumerate(assignments):
             runtime_state = ctx.runtime_state
@@ -263,9 +264,9 @@ def _phase(ctx: CycleContext) -> int:
             new_paths = st._discover_new_markdown_files(data_vault, seen_before)
             note_paths = sorted(new_paths, key=lambda p: p.as_posix())
             note_names = [p.relative_to(vault_dir).as_posix() for p in note_paths]
-            cycle_written.extend(n for n in note_names if n not in cycle_written)
-            if cycle_written:
-                st._merge_research_notes(research_report, cycle_written)
+            record.absorb(research_report, note_names)
+            if record.notes_created:
+                st._merge_research_notes(research_report, record.notes_created)
             # B.2 (post-mortem 2026-05-30): backfill the framework-owned
             # `lifecycle.created_at_cycle` field so orchestrator's
             # "what did this cycle produce?" queries work. Idempotent;
@@ -363,6 +364,9 @@ def _phase(ctx: CycleContext) -> int:
                     )
 
         research_report.parent.mkdir(parents=True, exist_ok=True)
+        if research_report.is_file():
+            # what the last agent wrote is not what the cycle did (see the module)
+            record.apply(cycles_dir, research_report, cycle_num)
         if not research_report.is_file():
             _atomic_write_json(
                 research_report,

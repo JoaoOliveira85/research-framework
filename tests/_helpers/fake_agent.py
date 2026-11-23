@@ -341,8 +341,9 @@ def write_scout(
         vault_dir=vault_dir,
     )
 
-    if (os.environ.get(SCOUT_NEW_ENV) or "").strip() == "0":
-        topics = []
+    wanted = (os.environ.get(SCOUT_NEW_ENV) or "").strip()
+    if wanted.isdigit():
+        topics = topics[: int(wanted)]  # "0": the scout finds nothing new
     topics_from_code = []
     topics_found_new = []
     proposed_filenames = []
@@ -987,6 +988,8 @@ def process_batch(
         written_paths.append(out_path)
         written_names.append(out_path.relative_to(vault_dir).as_posix())
 
+    if os.environ.get(REPORT_REWRITE_ENV) == "1":
+        research_report.unlink(missing_ok=True)
     _write_research_report(
         research_report,
         cycle=cycle,

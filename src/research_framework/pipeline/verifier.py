@@ -518,9 +518,24 @@ def run_verifier_stage(
     if scripts_dir is None:
         scripts_dir = vault_dir / "scripts"
 
-    note_paths = research_report.get("notes_created", []) + research_report.get(
-        "notes_updated", []
+    note_paths = list(
+        dict.fromkeys(
+            research_report.get("notes_created", [])
+            + research_report.get("notes_updated", [])
+        )
     )
+    # Spec 087: an update outcome that passed UG-001 and changed its note is owed
+    # the verifier whatever the report lists (an agent rewrites the report on each
+    # batch). The sidecar is the pipeline's own record; verify from it and say so.
+    for owed in update_outcomes.verifiable_paths(vault_dir, cycle_num):
+        if owed not in note_paths:
+            _LOG.error(
+                "verifier: update outcome for %s passed UG-001 but the research "
+                "report does not list the note; verifying it from the outcomes "
+                "sidecar",
+                owed,
+            )
+            note_paths.append(owed)
 
     # One sidecar per DISPATCH, not per listed note: a skipped note never
     # calls the agent, so it must not burn a number and leave a gap that reads
