@@ -13,7 +13,7 @@ These are Jinja templates. Their text is rendered into a generated vault, so rea
 | Prompt | Source | Role | Dispatched by | sha256 |
 | --- | --- | --- | --- | --- |
 | [`scout-prompt`](scout-prompt.md) | `templates/prompts/scout-prompt.md.j2` | Topic discovery — produces `_pipeline/scout-report.json`. | `pipeline scout` / the cycle runner's scout step | `feb7e3caf1d01cfa` |
-| [`dfs-prompt`](dfs-prompt.md) | `templates/prompts/dfs-prompt.md.j2` | Depth-first research — writes notes, produces `_pipeline/research-report.json`. | `pipeline resume` / the cycle runner's research step | `700b29fa0d1b621c` |
+| [`dfs-prompt`](dfs-prompt.md) | `templates/prompts/dfs-prompt.md.j2` | Depth-first research — writes notes, produces `_pipeline/research-report.json`. | `pipeline resume` / the cycle runner's research step | `6d534954c10de0f7` |
 | [`command-ask`](command-ask.md) | `templates/commands/ask.md.j2` | Vault-grounded answering, with the Principle IX two-tier citation block. | `./vault ask` (interactive) | `62862d8da8d2c5ba` |
 | [`command-research`](command-research.md) | `templates/commands/research.md.j2` | Operator-facing research entry point. | `/research` inside a vault | `50313370f15ee70e` |
 | [`command-write`](command-write.md) | `templates/commands/write.md.j2` | Document generation, with the Principle IX two-tier citation requirement. | `./vault write` (see spec 077 § D2 — not currently runnable) | `5389c6f98c3ade52` |
@@ -55,7 +55,7 @@ These are already standalone, verbatim, tracked files. Copying them here would m
 | [`topic-classifier`](../../.agents/skills/topic-classifier/SKILL.md) | `.agents/skills/topic-classifier/SKILL.md` | `stages.topic_classifier` | `871c5ddd585aa528` |
 | [`topic-propose`](../../.agents/skills/topic-propose/SKILL.md) | `.agents/skills/topic-propose/SKILL.md` | `stages.topic_propose` | `f97b42dd86ae322d` |
 | [`vault-spec`](../../.agents/skills/vault-spec/SKILL.md) | `.agents/skills/vault-spec/SKILL.md` | `stages.vault_spec` | `ae51c236aceb1d77` |
-| [`verifier`](../../.agents/skills/verifier/SKILL.md) | `.agents/skills/verifier/SKILL.md` | `stages.verifier` | `f482fd2e03cc35b2` |
+| [`verifier`](../../.agents/skills/verifier/SKILL.md) | `.agents/skills/verifier/SKILL.md` | `stages.verifier` | `ecc8d8d432bf7772` |
 
 ## Deliberately not in the corpus
 
