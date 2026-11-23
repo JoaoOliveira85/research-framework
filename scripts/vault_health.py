@@ -79,8 +79,21 @@ from pathlib import Path
 
 import yaml
 
-from research_framework.pipeline import state_layout
-from research_framework.vault import note_currency as nc
+try:
+    from research_framework.pipeline import state_layout
+    from research_framework.vault import note_currency as nc
+except ImportError:  # pragma: no cover - exercised by the bare-interpreter test
+    # Run by an agent with whatever `python` is first on its PATH, this script
+    # worked with no package install on main. The checks that need the package
+    # (the vault's state paths, the currency scans) are skipped with a note, and
+    # --help and the plain wikilink/URL/template checks still work.
+    state_layout = None  # type: ignore[assignment]
+    nc = None  # type: ignore[assignment]
+
+NEEDS_PACKAGE = (
+    "research_framework is not importable by this interpreter, so the state-path "
+    "and currency checks are skipped; run this script with <vault>/.venv/bin/python"
+)
 
 # Wayback Machine "available" API. Returns ``{archived_snapshots: {closest: {url}}}``
 # when a snapshot exists, or an empty ``archived_snapshots`` dict when not.
@@ -101,7 +114,7 @@ CONTROL_FILE_PATHS = (
     # later run depends on lives there, and one untracked directory is the
     # whole failure. The research backlog's store is one of those files since
     # spec 084; its Markdown view is rendered and deliberately ignored.
-    state_layout.STATE_DIR,
+    state_layout.STATE_DIR if state_layout is not None else "_pipeline/state",
 )
 
 
@@ -617,6 +630,8 @@ def _absolute_archive_snapshot_url(location: str) -> str:
 
 
 def _archive_snapshots_path(vault: Path) -> Path:
+    if state_layout is None:
+        raise SystemExit(f"vault_health: {NEEDS_PACKAGE}")
     return state_layout.archive_snapshots_path(vault)
 
 
@@ -804,11 +819,11 @@ def _is_git_work_tree(vault: Path) -> bool:
 def scan_currency(vault: Path) -> list[CurrencyRow]:
     """Per coverage category: notes past review, and superseded or retracted
     ones (read-only; spec 087 FR-019). Empty when the vault has no targets."""
-    from research_framework.pipeline.coverage import currency_counts
-
     try:
+        from research_framework.pipeline.coverage import currency_counts
+
         counts = currency_counts(vault)
-    except (FileNotFoundError, OSError, RuntimeError):
+    except (ImportError, FileNotFoundError, OSError, RuntimeError):
         return []
     return [
         CurrencyRow(
@@ -823,15 +838,20 @@ def scan_currency(vault: Path) -> list[CurrencyRow]:
 
 
 def _max_update_attempts(vault: Path) -> int:
-    from research_framework.pipeline import backlog
-
+    try:
+        from research_framework.pipeline import backlog
+    except ImportError:
+        return 2
     return backlog.max_update_attempts(vault)
 
 
 def scan_set_aside_updates(vault: Path) -> list[SetAsideUpdate]:
     """Update entries set aside after ``pipeline.update_max_attempts`` failed
     attempts: they need a human, or new material (read-only)."""
-    from research_framework.pipeline import backlog
+    try:
+        from research_framework.pipeline import backlog
+    except ImportError:
+        return []
 
     return [
         SetAsideUpdate(
@@ -852,6 +872,8 @@ def scan_supersession_links(vault: Path) -> list[SupersessionLink]:
     a successor reported as pending for that cycle; this is the check that
     catches a link which never became symmetric (spec 087 FR-007).
     """
+    if nc is None:
+        return []
     notes = nc.corpus_notes_by_slug(vault)
     frontmatter: dict[str, dict] = {}
     for slug, path in notes.items():
@@ -1080,7 +1102,8 @@ def run(
     report_dest.parent.mkdir(parents=True, exist_ok=True)
     report_dest.write_text(render_report(report, vault), encoding="utf-8")
 
-    run_archive_snapshot_pass(vault, apply=apply, offline=offline)
+    if state_layout is not None:  # the snapshots live under the state directory
+        run_archive_snapshot_pass(vault, apply=apply, offline=offline)
 
     return report
 
@@ -1108,8 +1131,11 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     # Spec 083 FR-015/FR-016: `--apply` writes state (archive snapshots), so a
     # vault still in the pre-083 layout is refused; a plain check reports it.
+    if state_layout is None:
+        print(f"NOTICE: {NEEDS_PACKAGE}", file=sys.stderr)
     try:
-        state_layout.require_migrated(args.vault)
+        if state_layout is not None:
+            state_layout.require_migrated(args.vault)
     except state_layout.LegacyLayoutError as exc:
         if args.apply:
             print(f"ERROR: {exc}", file=sys.stderr)
