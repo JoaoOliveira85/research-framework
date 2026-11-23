@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from research_framework.cli.digest import _parse_args_range, cmd_digest
+from research_framework.pipeline import state_layout as L
 from research_framework.pipeline.digest import (
     DateRange,
     build_digest,
@@ -151,7 +152,7 @@ def test_drift_db_locked_omits_section(
     )
     markdown = render_fixture(digest_vault)
     assert "## Source Quality Drift" not in markdown
-    assert "sources.db locked" in markdown
+    assert "sources database locked" in markdown
 
 
 def test_drift_db_without_its_tables_omits_section(digest_vault: Path) -> None:
@@ -159,14 +160,15 @@ def test_drift_db_without_its_tables_omits_section(digest_vault: Path) -> None:
     both the drift section and the strongest-signals ranking, and no digest
     was written. Like a locked database, it now omits the drift section with
     a footer note, and the ranking runs without referencing deltas."""
-    db = digest_vault / "_pipeline" / "sources.db"
+    db = L.sources_db_path(digest_vault)
+    db.parent.mkdir(parents=True, exist_ok=True)
     db.unlink()
     sqlite3.connect(db).close()
 
     markdown = render_fixture(digest_vault)
 
     assert "## Source Quality Drift" not in markdown
-    assert "sources.db unreadable" in markdown
+    assert "sources database unreadable" in markdown
     assert "no such table: sources" in markdown
 
 

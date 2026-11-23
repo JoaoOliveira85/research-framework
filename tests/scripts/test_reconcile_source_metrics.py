@@ -21,6 +21,7 @@ import pytest
 import yaml
 
 from research_framework.pipeline import source_manager as sm
+from research_framework.pipeline import state_layout as L
 from research_framework.spec.schema import (
     BudgetConfig,
     CoverageTargets,
@@ -64,7 +65,7 @@ def _seed(vault: Path, sources: list[dict]) -> None:
 
 
 def _set_db(vault: Path, name: str, *, status: str, empty: int) -> None:
-    conn = sqlite3.connect(vault / "_pipeline" / "sources.db")
+    conn = sqlite3.connect(L.sources_db_path(vault))
     try:
         conn.execute(
             "UPDATE sources SET status=?, consecutive_empty_cycles=? WHERE name=?",
@@ -76,7 +77,7 @@ def _set_db(vault: Path, name: str, *, status: str, empty: int) -> None:
 
 
 def _row(vault: Path, name: str) -> tuple[str, int]:
-    conn = sqlite3.connect(vault / "_pipeline" / "sources.db")
+    conn = sqlite3.connect(L.sources_db_path(vault))
     try:
         status, empty = conn.execute(
             "SELECT status, consecutive_empty_cycles FROM sources WHERE name=?", (name,)

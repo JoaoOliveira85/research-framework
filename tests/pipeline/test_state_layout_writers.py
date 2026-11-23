@@ -145,3 +145,13 @@ def test_transient_schema_files_stay_out_of_state(tmp_path: Path) -> None:
     assert (cache / "facts-schema.regenerated.json").is_file()
     assert (cache / "facts-schema.drift.md").is_file()
     assert sorted(p.name for p in schema.parent.iterdir()) == [schema.name]
+
+
+def test_seed_creates_the_database_under_state(
+    sample_spec_path: Path, tmp_path: Path
+) -> None:
+    from research_framework.pipeline.source_manager import seed
+
+    seed(tmp_path, parse(sample_spec_path))
+    assert L.sources_db_path(tmp_path).is_file()
+    assert not (tmp_path / "_pipeline" / "sources.db").exists()

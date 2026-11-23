@@ -103,7 +103,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [ ] T005 Move `sources.db` to `L.sources_db_path` (`source_manager`,
+- [x] T005 Move `sources.db` to `L.sources_db_path` (`source_manager`,
       `orchestrator`, `digest/sections`, `reports/top_sources`,
       `scripts/source_ledger.py`, `scripts/reconcile_source_metrics.py`,
       `scripts/vault_audit.py`, the scaffold seed) and add

@@ -10,7 +10,7 @@ from the **current** ``data_vault/`` frontmatter (FR-003 predicate, shared with
   (c) leaves genuinely-uncited sources (``cited_now == 0``) untouched.
 
 ``--dry-run`` (default) prints a per-source diff and mutates nothing.
-``--apply`` writes **only** ``sources.db`` — never the note tree. A second
+``--apply`` writes **only** the sources database — never the note tree. A second
 ``--apply`` is a no-op (idempotent). On a vault that never ran the buggy code,
 the dry-run reports zero changes (no false positives).
 
@@ -24,11 +24,12 @@ import sqlite3
 import sys
 from pathlib import Path
 
+from research_framework.pipeline import state_layout
 from research_framework.pipeline.source_manager import _count_notes_referencing
 
 
 def _db_path(vault: Path) -> Path:
-    return vault / "_pipeline" / "sources.db"
+    return state_layout.sources_db_path(vault)
 
 
 def reconcile(vault: Path, *, apply: bool = False) -> list[dict]:
@@ -123,13 +124,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="Write the repairs to sources.db (default: dry-run).",
+        help="Write the repairs to the sources database (default: dry-run).",
     )
     args = parser.parse_args(argv)
 
     vault = Path(args.vault).expanduser().resolve()
     if not _db_path(vault).exists():
-        print(f"error: no sources.db under {vault}/_pipeline/", file=sys.stderr)
+        print(f"error: no sources database at {_db_path(vault)}", file=sys.stderr)
         return 2
 
     changes = reconcile(vault, apply=args.apply)

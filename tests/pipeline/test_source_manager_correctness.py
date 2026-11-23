@@ -23,6 +23,7 @@ import pytest
 import yaml
 
 from research_framework.pipeline import source_manager as sm
+from research_framework.pipeline import state_layout as L
 from research_framework.pipeline._helpers.cycle_state import CycleRuntimeState
 from research_framework.pipeline._helpers.source_signals import (
     notify_required_source_degraded,
@@ -67,7 +68,7 @@ def _write_note(vault: Path, filename: str, source_urls) -> None:
 
 
 def _notes_generated(vault: Path, cycle: int) -> dict[str, int]:
-    conn = sqlite3.connect(vault / "_pipeline" / "sources.db")
+    conn = sqlite3.connect(L.sources_db_path(vault))
     try:
         rows = conn.execute(
             "SELECT name, notes_generated FROM source_cycles WHERE cycle=?",
@@ -79,7 +80,7 @@ def _notes_generated(vault: Path, cycle: int) -> dict[str, int]:
 
 
 def _empty_cycles(vault: Path, name: str) -> int:
-    conn = sqlite3.connect(vault / "_pipeline" / "sources.db")
+    conn = sqlite3.connect(L.sources_db_path(vault))
     try:
         row = conn.execute(
             "SELECT consecutive_empty_cycles FROM sources WHERE name=?", (name,)

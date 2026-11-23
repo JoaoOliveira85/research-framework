@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from research_framework.pipeline import state_layout
 from research_framework.pipeline.digest.scope import CycleScope, DateRange
 
 
@@ -48,7 +49,7 @@ def build_top_discovered_sources(
     del date_range
     if not cycles:
         return []
-    db_path = vault_dir / "_pipeline" / "sources.db"
+    db_path = state_layout.sources_db_path(vault_dir)
     if not db_path.is_file():
         return []
     conn = _try_connect(db_path)

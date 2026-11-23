@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from research_framework.pipeline import state_layout as L
 from research_framework.spec.schema import (
     BudgetConfig,
     CoverageTargets,
@@ -49,7 +50,7 @@ def test_seed_creates_db_with_spec_sources(tmp_path: Path) -> None:
     spec = _minimal_spec()
     seed(tmp_path, spec)
 
-    db_path = tmp_path / "_pipeline" / "sources.db"
+    db_path = L.sources_db_path(tmp_path)
     assert db_path.exists()
 
     conn = sqlite3.connect(db_path)
@@ -75,7 +76,7 @@ def test_seed_is_idempotent(tmp_path: Path) -> None:
     seed(tmp_path, spec)
     seed(tmp_path, spec)  # second call
 
-    conn = sqlite3.connect(tmp_path / "_pipeline" / "sources.db")
+    conn = sqlite3.connect(L.sources_db_path(tmp_path))
     count = conn.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
     conn.close()
 
@@ -101,7 +102,7 @@ def test_append_discovered_adds_unlocked(tmp_path: Path) -> None:
         ],
     )
 
-    conn = sqlite3.connect(tmp_path / "_pipeline" / "sources.db")
+    conn = sqlite3.connect(L.sources_db_path(tmp_path))
     row = conn.execute(
         "SELECT name, locked FROM sources WHERE name='New Source'"
     ).fetchone()
@@ -131,7 +132,7 @@ def test_append_discovered_skips_duplicate(tmp_path: Path) -> None:
     append_discovered(tmp_path, new)
     append_discovered(tmp_path, new)  # duplicate
 
-    conn = sqlite3.connect(tmp_path / "_pipeline" / "sources.db")
+    conn = sqlite3.connect(L.sources_db_path(tmp_path))
     count = conn.execute(
         "SELECT COUNT(*) FROM sources WHERE name='Dup Source'"
     ).fetchone()[0]
@@ -148,7 +149,7 @@ def test_active_sources_excludes_archived(tmp_path: Path) -> None:
     seed(tmp_path, spec)
 
     # Manually archive one source
-    conn = sqlite3.connect(tmp_path / "_pipeline" / "sources.db")
+    conn = sqlite3.connect(L.sources_db_path(tmp_path))
     conn.execute("UPDATE sources SET status='archived' WHERE name='Source Alpha'")
     conn.commit()
     conn.close()
@@ -173,7 +174,7 @@ def test_record_cycle_upserts_source_cycles(tmp_path: Path) -> None:
     }
     record_cycle(tmp_path, 1, research_report)
 
-    conn = sqlite3.connect(tmp_path / "_pipeline" / "sources.db")
+    conn = sqlite3.connect(L.sources_db_path(tmp_path))
     rows = conn.execute("SELECT name, cycle FROM source_cycles").fetchall()
     conn.close()
 
@@ -302,7 +303,7 @@ def test_source_quality_summary_returns_aggregates(tmp_path: Path) -> None:
     seed(tmp_path, spec)
 
     # Manually inject source_cycles rows for more predictable totals
-    conn = sqlite3.connect(tmp_path / "_pipeline" / "sources.db")
+    conn = sqlite3.connect(L.sources_db_path(tmp_path))
     conn.execute(
         "INSERT INTO source_cycles(name, cycle, notes_generated) VALUES ('Solo', 1, 3)"
     )
@@ -328,7 +329,7 @@ def test_scaffold_creates_sources_db(tmp_path: Path) -> None:
     vault = tmp_path / "vault"
     scaffold(spec, vault)
 
-    db_path = vault / "_pipeline" / "sources.db"
+    db_path = L.sources_db_path(vault)
     assert db_path.exists()
 
     conn = sqlite3.connect(db_path)

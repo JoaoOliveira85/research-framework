@@ -46,11 +46,12 @@ _CANONICAL_VAULT_DIR = "/tmp/research_framework-test-vault"
 # Files whose rendered content is never stable across runs (SQLite side files)
 # and should be excluded from the manifest.
 _VAULT_ROOT = Path()
+_SOURCES_DB = state_layout.sources_db_path(_VAULT_ROOT).as_posix()
 
 _EXCLUDE_PATHS: frozenset[str] = frozenset(
     {
-        "_pipeline/sources.db-shm",
-        "_pipeline/sources.db-wal",
+        f"{_SOURCES_DB}-shm",
+        f"{_SOURCES_DB}-wal",
     }
 )
 
@@ -81,7 +82,7 @@ _USER_OWNED_PATTERNS: tuple[str, ...] = (
     "vault",  # path-specific shell script
     state_layout.coverage_targets_path(_VAULT_ROOT).as_posix(),  # runtime timestamps
     "_pipeline/spec-parse.json",  # per-vault parsed spec; framework MUST NOT overwrite
-    "_pipeline/sources.db",  # SQLite database (user data)
+    _SOURCES_DB,  # SQLite database (user data)
     "_pipeline/budget-log.md",  # append-only user log
     "_pipeline/research-backlog.md",  # user-managed backlog
     "settings.yaml",  # user vault configuration

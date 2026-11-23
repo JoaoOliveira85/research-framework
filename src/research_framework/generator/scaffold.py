@@ -198,7 +198,7 @@ def scaffold(
     # Write vault/vault script — unified entry point callable from cron/launchd/Shortcuts.
     _write_vault_script(vault_dir, spec)
 
-    # Seed sources.db with spec-declared sources (locked — never auto-archived).
+    # Seed the sources database with spec-declared sources (locked — never auto-archived).
     from ..pipeline.source_manager import seed as _seed_sources
 
     _seed_sources(vault_dir, spec)
@@ -318,7 +318,6 @@ def scaffold(
         json.dumps(
             {
                 "spec-parse.json": 1,
-                "sources.db": 1,
             },
             indent=2,
         )
@@ -329,7 +328,15 @@ def scaffold(
     # The state directory carries its own stamp: its files sit beside it, and
     # the template-version reader looks for a sibling JSON.
     (state_layout.state_dir(vault_dir) / ".tmpl-versions.json").write_text(
-        json.dumps({targets_path.name: 1}, indent=2) + "\n", encoding="utf-8"
+        json.dumps(
+            {
+                targets_path.name: 1,
+                state_layout.sources_db_path(vault_dir).name: 1,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
     )
 
     # Self-containment: copy the source spec + settings.yaml in so the vault

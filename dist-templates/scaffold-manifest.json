@@ -147,7 +147,7 @@
       "path": "_pipeline/.tmpl-versions.json",
       "kind": "json",
       "template_version": 1,
-      "rendered_sha256": "f496ad01a1fee550a8bf4483367645328262a4abf13bf6518593d8213e15e415",
+      "rendered_sha256": "19d87dee521e3d8674465b371f420ff1cf7e6e44c7515863ed6841c718d90128",
       "is_user_owned_after_first_write": true
     },
     {
@@ -179,13 +179,6 @@
       "is_user_owned_after_first_write": true
     },
     {
-      "path": "_pipeline/sources.db",
-      "kind": "other",
-      "template_version": 1,
-      "rendered_sha256": "e10a4e14ef9c13e3254b8cad43a4a5f7f2dcb0a72cb36cea582e57a4ce067710",
-      "is_user_owned_after_first_write": true
-    },
-    {
       "path": "_pipeline/spec-parse.json",
       "kind": "json",
       "template_version": 1,
@@ -196,7 +189,7 @@
       "path": "_pipeline/state/.tmpl-versions.json",
       "kind": "json",
       "template_version": 1,
-      "rendered_sha256": "2ccf6f9a70fcecce99cf129e20bf67e71af4e4fe797705b263ea4c97ff662762",
+      "rendered_sha256": "6a1d702e178eec27d314085f9ea98b55c4fe6115f86f72037ed1f18f69722a5c",
       "is_user_owned_after_first_write": true
     },
     {
@@ -204,6 +197,13 @@
       "kind": "json",
       "template_version": 1,
       "rendered_sha256": "812cd2df0b747920145f3dd3b4ea2ec1f4192fbd02614967e463847561cd69e0",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_pipeline/state/sources.db",
+      "kind": "other",
+      "template_version": 1,
+      "rendered_sha256": "e10a4e14ef9c13e3254b8cad43a4a5f7f2dcb0a72cb36cea582e57a4ce067710",
       "is_user_owned_after_first_write": true
     },
     {

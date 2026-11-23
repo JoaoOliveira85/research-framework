@@ -1613,8 +1613,8 @@ def _render_cycle_scout_prompt(
     existing = set(existing_vault_filenames(vault_dir))
     existing.update(_persistent_reject_titles(vault_dir))
 
-    # Enrich spec sources with active discovered sources from sources.db.
-    # Falls back to spec.data_sources unchanged when sources.db doesn't exist.
+    # Enrich spec sources with active discovered sources from the sources database.
+    # Falls back to spec.data_sources unchanged when the sources database doesn't exist.
     enriched_sources = merge_into_prompt_context(spec, vault_dir)
     enriched_spec = spec
     if enriched_sources is not spec.data_sources:
