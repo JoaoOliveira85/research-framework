@@ -683,6 +683,29 @@ class Transaction:
             entry.pop("outcome_cycle", None)
         return True
 
+    def reopen_update(self, stem: str, reason: str, cycle: int | None = None) -> bool:
+        """Reopen an update entry whose recorded outcome did not stand.
+
+        The verifier rejected the outcome the entry was closed with (spec 087
+        FR-013), so the note was restored and the work is still owed. The
+        outcome moves to ``outcome_history`` with the reason it was rejected.
+        Only an entry a writer resolved reopens; an operator's status is never
+        touched. Returns ``False`` when nothing changed.
+        """
+        if self._writer not in _UPDATE_CLOSERS:
+            raise ValueError(f"writer {self._writer!r} does not reopen updates")
+        entry = self._find(update_id(stem))
+        if entry is None or not self._reopen(entry):
+            return False
+        record: dict[str, Any] = {"outcome": entry.pop("outcome", None)}
+        entry_cycle = entry.pop("outcome_cycle", cycle)
+        if entry_cycle is not None:
+            record["cycle"] = entry_cycle
+        record["rejected"] = reason
+        entry.setdefault("outcome_history", []).append(record)
+        entry["updated"] = self._today
+        return True
+
     def resolve_covered(self, existing_stems: Iterable[str]) -> int:
         """Resolve open harvest/researcher topics whose note now exists."""
         stems = {title_key(s) for s in existing_stems}
@@ -872,6 +895,19 @@ def close_update(
         lambda tx: closed.append(tx.close_update(stem, outcome, cycle)),
     )
     return applied and bool(closed and closed[0])
+
+
+def reopen_update(
+    vault_dir: Path, stem: str, reason: str, *, cycle: int | None = None
+) -> bool:
+    """Reopen one update entry as the ``research`` writer; ``True`` if applied."""
+    reopened: list[bool] = []
+    applied = update(
+        vault_dir,
+        "research",
+        lambda tx: reopened.append(tx.reopen_update(stem, reason, cycle)),
+    )
+    return applied and bool(reopened and reopened[0])
 
 
 def resolve_covered(vault_dir: Path, existing_stems: Iterable[str]) -> bool:

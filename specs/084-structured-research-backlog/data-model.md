@@ -39,7 +39,7 @@ Anything else at the top level is preserved and ignored.
 | `relation`, `parent_note`, `scope_warn` | propose | Phase 2 tangent metadata |
 | `stem`, `kind` | quarantine sweep | `kind` ∈ `rewrite`, `retry` |
 | `stem`, `reason`, `prompted_by`, `as_of` | scout, review, research (`update` entries, 1.1) | `reason` ∈ `new_material`, `operator`, `review_due`, strongest first, only ever replaced by a stronger one; `prompted_by` accumulates source URLs, deduplicated; `as_of` is the note's date when last seen |
-| `outcome`, `outcome_cycle` | research (`close_update`, 1.1) | `outcome` ∈ `confirmed`, `revised`, `superseded`, `retracted`; a later sighting that reopens the entry moves them to `outcome_history` (`[{outcome, cycle?}]`, oldest first) |
+| `outcome`, `outcome_cycle` | research (`close_update`, 1.1) | `outcome` ∈ `confirmed`, `revised`, `superseded`, `retracted`; a later sighting that reopens the entry moves them to `outcome_history` (`[{outcome, cycle?, rejected?}]`, oldest first; `rejected` is the verifier's reason when the outcome was reopened by `reopen_update`, spec 087 FR-013) |
 | `updated` | every writer | date of the last module write to this entry |
 
 ### Status

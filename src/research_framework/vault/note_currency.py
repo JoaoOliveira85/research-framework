@@ -15,8 +15,10 @@ A note written before the fields existed carries neither. It reads as
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 AS_OF_FIELD = "as_of"
@@ -103,3 +105,37 @@ def is_due(
     if standing not in _REVIEWABLE or as_of is None:
         return False
     return as_of < today - timedelta(days=review_after_days)
+
+
+def ref_slug(name: object) -> str:
+    """Normalised note reference: ``[[Foo Bar]]``, ``dir/foo-bar.md`` -> ``foo-bar``."""
+    text = str(name).strip()
+    if text.startswith("[[") and text.endswith("]]"):
+        text = text[2:-2].split("|", 1)[0]
+    text = Path(text).name.lower().removesuffix(".md")
+    return re.sub(r"[\W_]+", "-", text).strip("-")
+
+
+def refs(value: Any) -> list[str]:
+    """Slugs of a ``supersedes`` / ``superseded_by`` value (a string or a list)."""
+    if value is None or value == "":
+        return []
+    items = value if isinstance(value, list) else [value]
+    return [s for s in (ref_slug(i) for i in items if isinstance(i, str)) if s]
+
+
+def corpus_notes_by_slug(vault_dir: Path) -> dict[str, Path]:
+    """Every corpus note keyed by its normalised stem (index files and templates
+    are not notes)."""
+    from research_framework.vault.corpus import corpus_dir
+
+    root = corpus_dir(vault_dir)
+    notes: dict[str, Path] = {}
+    if root.is_dir():
+        for path in sorted(root.rglob("*.md")):
+            if path.name in ("_index.md", "_concepts.md", "_graph.md"):
+                continue
+            if "_templates" in path.relative_to(root).parts:
+                continue
+            notes.setdefault(ref_slug(path.stem), path)
+    return notes

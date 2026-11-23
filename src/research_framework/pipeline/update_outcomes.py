@@ -27,14 +27,12 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
 from research_framework.vault import note_currency as nc
-from research_framework.vault.corpus import corpus_dir
 from research_framework.vault.frontmatter import (
     FrontmatterParseError,
     parse_frontmatter_str,
@@ -85,21 +83,8 @@ class BatchOutcomes:
     verdicts: list[Verdict] = field(default_factory=list)
 
 
-def _slug(name: str) -> str:
-    """Normalised note reference: ``[[Foo Bar]]``, ``dir/foo-bar.md`` -> ``foo-bar``."""
-    text = str(name).strip()
-    if text.startswith("[[") and text.endswith("]]"):
-        text = text[2:-2].split("|", 1)[0]
-    text = Path(text).name.lower().removesuffix(".md")
-    return re.sub(r"[\W_]+", "-", text).strip("-")
-
-
-def _refs(value: Any) -> list[str]:
-    """Slugs of a successor / predecessor field value (string or list)."""
-    if value is None or value == "":
-        return []
-    items = value if isinstance(value, list) else [value]
-    return [s for s in (_slug(i) for i in items if isinstance(i, str)) if s]
+_slug = nc.ref_slug
+_refs = nc.refs
 
 
 def _urls(fm: dict[str, Any]) -> set[str]:
@@ -135,15 +120,7 @@ def _comparable(fm: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _notes_by_slug(vault_dir: Path) -> dict[str, Path]:
-    root = corpus_dir(vault_dir)
-    notes: dict[str, Path] = {}
-    if root.is_dir():
-        for path in sorted(root.rglob("*.md")):
-            if path.name in _INDEX_FILES or "_templates" in path.parts:
-                continue
-            notes.setdefault(_slug(path.stem), path)
-    return notes
+_notes_by_slug = nc.corpus_notes_by_slug
 
 
 def _row_for(stem: str, rows: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -375,6 +352,52 @@ def apply_batch(
     return BatchOutcomes(gate=gate, verdicts=verdicts)
 
 
+def recorded_result(
+    vault_dir: Path, cycle: int, note_rel: str
+) -> dict[str, Any] | None:
+    """The cycle's recorded outcome for the note at ``note_rel``, if it had one."""
+    sidecar = _sidecar(vault_dir / "_pipeline" / "cycles", cycle)
+    for row in _read_json(sidecar).get("results", []):
+        if isinstance(row, dict) and row.get("path") == note_rel:
+            return row
+    return None
+
+
+def reject_outcome(vault_dir: Path, cycle: int, note_rel: str, reason: str) -> bool:
+    """The verifier rejected an update outcome UG-001 had passed (FR-013).
+
+    The note itself is put back from ``HEAD`` by the rejected-note sweep, the
+    same path a rejected rewrite of a committed note takes. What this does is
+    make the record say so: the result becomes ``failed`` with the reason, the
+    report's ``notes_updated`` is re-derived without it, and the backlog entry
+    that UG-001 closed is reopened, with the rejected outcome kept in its
+    history. Returns ``False`` when the note had no passing outcome this cycle.
+    """
+    cycles_dir = vault_dir / "_pipeline" / "cycles"
+    sidecar = _sidecar(cycles_dir, cycle)
+    doc = _read_json(sidecar)
+    results = [r for r in doc.get("results", []) if isinstance(r, dict)]
+    target = next(
+        (
+            r
+            for r in results
+            if r.get("path") == note_rel and r.get("status") == "passed"
+        ),
+        None,
+    )
+    if target is None:
+        return False
+    target["status"] = "failed"
+    target["reason"] = f"rejected by the verifier: {reason}"
+    write_json(sidecar, {"cycle": cycle, "results": results})
+    research_report = cycles_dir / f"cycle-{cycle:03d}-research.json"
+    _patch_report(research_report, _read_json(research_report), results)
+    backlog.reopen_update(
+        vault_dir, str(target["note"]), f"verifier: {reason}", cycle=cycle
+    )
+    return True
+
+
 def _patch_report(
     research_report: Path, report: dict[str, Any], results: list[dict[str, Any]]
 ) -> None:
@@ -397,6 +420,8 @@ def _patch_report(
 
 __all__ = [
     "BatchOutcomes",
+    "recorded_result",
+    "reject_outcome",
     "Verdict",
     "apply_batch",
     "evaluate",

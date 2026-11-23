@@ -17,11 +17,13 @@ from typing import Any
 import yaml
 
 from research_framework._assets import skill_instructions
+from research_framework.pipeline import update_outcomes
 from research_framework.pipeline.process_tree import (
     popen_session,
     terminate_process_tree,
 )
 from research_framework.pipeline.settings import SettingsError, load_vault_settings
+from research_framework.vault import note_currency as nc
 from research_framework.vault.frontmatter import (
     FrontmatterParseError,
     parse_frontmatter_str,
@@ -143,6 +145,177 @@ def deterministic_wikilink_violations(
             ),
         }
     ]
+
+
+CURRENCY_RULE_IDS = ("IX-currency-evidence", "IX-supersession-symmetry")
+"""Spec 087 rules a verdict is reached on without a model (FR-007, FR-013)."""
+
+_EVIDENCE_LEVELS = ("primary", "corroborated")
+
+
+def _head_standing(vault_dir: Path, note_rel: str) -> str | None:
+    """The note's ``currency`` at git HEAD, or ``None`` when it had none there."""
+    from research_framework.pipeline import vault_git
+    from research_framework.vault import note_currency as nc
+
+    head = vault_git.head_content(vault_dir, note_rel)
+    if head is None:
+        return None
+    try:
+        head_fm, _ = parse_frontmatter_str(head)
+    except FrontmatterParseError:
+        return None
+    return nc.effective(head_fm)[0]
+
+
+def _evidence_violation(
+    vault_dir: Path,
+    note_rel: str,
+    fm: dict[str, Any],
+    evidence_url: str | None,
+    standing: str,
+) -> dict[str, str] | None:
+    """IX-currency-evidence: why a changed ``superseded``/``retracted`` standing
+    is not supported, or ``None`` when its evidence stands."""
+    from research_framework.spec.parser import parse as parse_spec
+    from research_framework.vault.credibility import (
+        CredibilityUnresolved,
+        build_credibility_context,
+        citation_url,
+        effective_level,
+        iter_source_url_entries,
+    )
+
+    def violation(message: str) -> dict[str, str]:
+        return {
+            "rule_id": "IX-currency-evidence",
+            "location": f"note:{note_rel}",
+            "message": f"{standing} without supporting evidence: {message}",
+            "severity": "fail",
+        }
+
+    if not evidence_url:
+        return violation("the update outcome cites no evidence_url")
+    cited = next(
+        (
+            entry
+            for entry in iter_source_url_entries(fm)
+            if (citation_url(entry) or "").strip() == evidence_url.strip()
+        ),
+        None,
+    )
+    if cited is None:
+        return violation(f"{evidence_url} is not among the note's source_urls")
+    spec_path = vault_dir / "research.spec.md"
+    try:
+        ctx = build_credibility_context(parse_spec(spec_path), vault_dir)
+        level = effective_level(cited, fm, ctx)
+    except CredibilityUnresolved:
+        return violation(f"the credibility of {evidence_url} cannot be resolved")
+    except Exception as exc:  # no readable spec: nothing to resolve a level with
+        return violation(
+            f"the credibility of {evidence_url} cannot be resolved ({exc})"
+        )
+    if level.value not in _EVIDENCE_LEVELS:
+        return violation(
+            f"{evidence_url} is {level.value}; primary or corroborated is required"
+        )
+    return None
+
+
+def deterministic_currency_violations(
+    vault_dir: Path,
+    note_rel: str,
+    note_text: str,
+    *,
+    evidence_url: str | None = None,
+    pending: frozenset[str] = frozenset(),
+) -> list[dict[str, str]]:
+    """IX-currency-evidence and IX-supersession-symmetry (spec 087; no LLM).
+
+    * **IX-currency-evidence** (fail): a note whose ``currency`` is
+      ``superseded`` or ``retracted`` AND differs from its value at git HEAD must
+      cite the outcome's ``evidence_url`` among its ``source_urls``, and that
+      source must resolve to ``primary`` or ``corroborated``. A note whose
+      standing did not change is not judged.
+    * **IX-supersession-symmetry** (fail): a note naming X in its successor
+      field needs X on disk naming it back in ``supersedes``, and the reverse. A
+      partner that is not on disk but which ``pending`` (the cycle's reported
+      pending wikilinks) names is tolerated THIS cycle with a ``warn``; a link
+      that never becomes symmetric is caught by ``vault_health``'s Currency
+      section, which scans every note.
+    """
+    from research_framework.vault import note_currency as nc
+
+    try:
+        fm, _body = parse_frontmatter_str(note_text)
+    except FrontmatterParseError:
+        return []
+    if not fm:
+        return []
+    out: list[dict[str, str]] = []
+    standing = nc.effective(fm)[0]
+    if standing in (nc.SUPERSEDED, nc.RETRACTED) and standing != _head_standing(
+        vault_dir, note_rel
+    ):
+        found = _evidence_violation(vault_dir, note_rel, fm, evidence_url, standing)
+        if found:
+            out.append(found)
+    out.extend(_symmetry_violations(vault_dir, note_rel, fm, pending))
+    return out
+
+
+def _symmetry_violations(
+    vault_dir: Path, note_rel: str, fm: dict[str, Any], pending: frozenset[str]
+) -> list[dict[str, str]]:
+    from research_framework.vault import note_currency as nc
+
+    mine = nc.ref_slug(Path(note_rel).stem)
+    notes = nc.corpus_notes_by_slug(vault_dir)
+    out: list[dict[str, str]] = []
+    for field_name, back_field in (
+        (nc.SUPERSEDED_BY_FIELD, nc.SUPERSEDES_FIELD),
+        (nc.SUPERSEDES_FIELD, nc.SUPERSEDED_BY_FIELD),
+    ):
+        for ref in nc.refs(fm.get(field_name)):
+            location = f"note:{note_rel} {field_name}:{ref}"
+            partner = notes.get(ref)
+            if partner is None:
+                tolerated = ref in pending
+                out.append(
+                    {
+                        "rule_id": "IX-supersession-symmetry",
+                        "location": location,
+                        "message": (
+                            f"{field_name} names {ref!r}, which is not in the vault"
+                            + (
+                                "; it is reported pending, tolerated for this "
+                                "cycle only"
+                                if tolerated
+                                else ""
+                            )
+                        ),
+                        "severity": "warn" if tolerated else "fail",
+                    }
+                )
+                continue
+            try:
+                partner_fm, _ = parse_frontmatter_str(partner.read_text("utf-8"))
+            except (OSError, FrontmatterParseError):
+                partner_fm = {}
+            if mine not in nc.refs(partner_fm.get(back_field)):
+                out.append(
+                    {
+                        "rule_id": "IX-supersession-symmetry",
+                        "location": location,
+                        "message": (
+                            f"{field_name} names {ref!r}, but that note's "
+                            f"{back_field} does not name this one"
+                        ),
+                        "severity": "fail",
+                    }
+                )
+    return out
 
 
 def _merge_verifier_verdict(
@@ -291,6 +464,12 @@ def run_verifier_stage(
     # calls the agent, so it must not burn a number and leave a gap that reads
     # like a lost cost record.
     call_index = 0
+    pending = frozenset(
+        nc.ref_slug(w)
+        for key in ("new_wikilinks_discovered", "unresolved_wikilinks")
+        for w in (research_report.get(key) or [])
+        if isinstance(w, str)
+    )
     for note_rel in note_paths:
         note_file = vault_dir / note_rel
         if not note_file.exists():
@@ -316,17 +495,43 @@ def run_verifier_stage(
         shape_violations += deterministic_wikilink_violations(
             vault_dir, note_rel, note_text
         )
-        call_index += 1
-        verdict = _call_verifier(
-            vault_dir=vault_dir,
-            note_file=note_file,
-            note_rel=note_rel,
-            scripts_dir=scripts_dir,
-            timeout_s=timeout_s,
-            cycle_num=cycle_num,
-            call_index=call_index,
+        recorded = update_outcomes.recorded_result(vault_dir, cycle_num, note_rel)
+        currency_violations = deterministic_currency_violations(
+            vault_dir,
+            note_rel,
+            note_text,
+            evidence_url=(recorded or {}).get("evidence_url"),
+            pending=pending,
         )
+        shape_violations += currency_violations
+        if any(
+            v["rule_id"] in CURRENCY_RULE_IDS and v.get("severity", "fail") != "warn"
+            for v in currency_violations
+        ):
+            # Spec 087 FR-013: this verdict needs no model and nothing a model
+            # says can overturn it, so none is asked.
+            verdict = VerifierVerdict(note_path=note_rel, status="pending")
+        else:
+            call_index += 1
+            verdict = _call_verifier(
+                vault_dir=vault_dir,
+                note_file=note_file,
+                note_rel=note_rel,
+                scripts_dir=scripts_dir,
+                timeout_s=timeout_s,
+                cycle_num=cycle_num,
+                call_index=call_index,
+            )
         verdict = _merge_verifier_verdict(verdict, shape_violations)
+        if verdict.status == "rejected" and recorded is not None:
+            # An update outcome that did not stand: its note goes back to HEAD
+            # with the other rejected notes, and its entry is open again.
+            update_outcomes.reject_outcome(
+                vault_dir,
+                cycle_num,
+                note_rel,
+                "; ".join(v.get("message", "") for v in verdict.violations[:3]),
+            )
 
         try:
             _stamp_frontmatter(note_file, verdict.status, verdict.violations)

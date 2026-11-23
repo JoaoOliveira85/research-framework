@@ -212,7 +212,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
   **TDD discipline**: required.
 
-- [ ] T009 The verifier's `IX-currency-evidence` and
+- [x] T009 The verifier's `IX-currency-evidence` and
       `IX-supersession-symmetry` rules (FR-007, FR-013; plan § 10).
 
   ### Testing Requirements

@@ -190,3 +190,19 @@ def test_bad_arguments_and_writers_are_refused(tmp_path: Path) -> None:
         backlog.observe_update(tmp_path, "scout", stem="", reason="new_material")
     with pytest.raises(ValueError):
         backlog.update(tmp_path, "scout", lambda tx: tx.close_update("n", "revised"))
+
+
+def test_reopen_update_returns_a_rejected_outcome_to_history(tmp_path: Path) -> None:
+    backlog.observe_update(tmp_path, "review", stem="n", reason="review_due")
+    assert backlog.reopen_update(tmp_path, "n", "no evidence") is False  # open already
+    backlog.close_update(tmp_path, "n", "superseded", cycle=3)
+
+    assert backlog.reopen_update(tmp_path, "n", "no evidence", cycle=3) is True
+
+    entry = _entry(tmp_path, "n")
+    assert entry["status"] == "open"
+    assert "outcome" not in entry
+    assert entry["outcome_history"] == [
+        {"outcome": "superseded", "cycle": 3, "rejected": "no evidence"}
+    ]
+    assert [r.stem for r in backlog.update_topics(tmp_path)] == ["n"]
