@@ -19,6 +19,7 @@ import pytest
 from research_framework.cli.research_resume import _resolve_resume_cycle
 from research_framework.generator.scripts import copy_scripts
 from research_framework.pipeline import (
+    backlog,
     cycle_ledger,
     source_manager,
     state_layout,
@@ -89,7 +90,11 @@ def _observed(vault: Path, capsys: pytest.CaptureFixture[str]) -> dict[str, obje
         ),
         "lifetime_spend": _cumulative_sidecar_cost(vault, up_to=2),
         "scout_exclusions": _persistent_reject_titles(vault),
-        "backlog": (vault / "_pipeline" / "research-backlog.md").read_bytes(),
+        # Spec 084: the backlog is the tracked store; its Markdown view is
+        # ignored, so `git clean` removes it and the next reader renders it
+        # again from the store — to the same bytes.
+        "backlog": state_layout.research_backlog_path(vault).read_bytes(),
+        "backlog_view": backlog.ensure_view(vault).read_bytes(),
         "sources": sorted(
             (s["name"], s["url"]) for s in source_manager.active_sources(vault)
         ),
@@ -172,12 +177,16 @@ def test_only_state_is_tracked_under_pipeline(
     }
     state_prefix = f"{state_layout.STATE_DIR}/"
     sidecars = {t for t in on_disk if t.endswith(("-wal", "-shm"))}
-    # Tracked: everything under state/ (but not SQLite sidecars) plus the one
-    # transitional exception, the Markdown backlog (FR-019, until spec 084).
+    # Tracked: everything under state/ (but not SQLite sidecars), and nothing
+    # else. Spec 083's one transitional exception, the Markdown backlog, ended
+    # with spec 084: the store under state/ is tracked and the view is ignored.
     expected_tracked = {
         f for f in on_disk if f.startswith(state_prefix) and f not in sidecars
-    } | {"_pipeline/research-backlog.md"}
+    }
     assert tracked == expected_tracked
+    assert state_layout.research_backlog_path(vault).relative_to(vault).as_posix() in (
+        tracked
+    )
     # Every other _pipeline/ file is ignored, none is merely untracked.
     ignored = set(
         _git(
@@ -198,7 +207,7 @@ def test_only_state_is_tracked_under_pipeline(
     assert "_pipeline/cycles" not in " ".join(tracked)
 
     # The scaffolded .gitignore names no file under _pipeline/ (one directory
-    # re-include, two sidecar patterns, and the transitional backlog line).
+    # re-include and two sidecar patterns).
     lines = [
         ln.strip()
         for ln in (vault / ".gitignore").read_text().splitlines()
@@ -211,6 +220,5 @@ def test_only_state_is_tracked_under_pipeline(
             "!_pipeline/state/",
             "_pipeline/state/*.db-wal",
             "_pipeline/state/*.db-shm",
-            "!_pipeline/research-backlog.md",
         ]
     )
