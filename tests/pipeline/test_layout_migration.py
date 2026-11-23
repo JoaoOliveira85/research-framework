@@ -174,7 +174,11 @@ def test_the_shipped_gitignore_is_replaced_by_the_new_rendering(tmp_path: Path) 
 def test_customised_gitignore_gets_one_reinclude_or_a_named_winning_rule(
     tmp_path: Path,
 ) -> None:
-    custom = legacy_gitignore() + "# mine\n*.secret\n"
+    # The stanza itself was edited: only the missing re-includes are appended.
+    custom = (
+        legacy_gitignore().replace("_pipeline/*\n", "_pipeline/*\n!_pipeline/mine.md\n")
+        + "# mine\n*.secret\n"
+    )
     vault = build_legacy_vault(tmp_path / "a", gitignore=custom)
     result = layout_migration.migrate(vault)
     assert result.exit_code == 0
@@ -194,6 +198,31 @@ def test_customised_gitignore_gets_one_reinclude_or_a_named_winning_rule(
     assert _tree(vault2) == before  # nothing moved, ignore file restored
     assert "still ignored by" in "\n".join(result.messages)
     assert ".gitignore:" in "\n".join(result.messages)
+
+
+def test_the_shipped_stanza_inside_a_longer_file_is_replaced_in_place(
+    tmp_path: Path,
+) -> None:
+    """An operator who only ADDED lines keeps them, and gets the new stanza.
+
+    One live vault has the shipped file plus re-includes for its feed
+    catalogues. Appending to it would leave the stanza's per-file lines in
+    force.
+    """
+    extra_top = "# local notes\n"
+    extra_bottom = "!sources.yaml\n!modules/\nmodules/*\n!modules/rss/\n"
+    vault = build_legacy_vault(
+        tmp_path, gitignore=extra_top + legacy_gitignore() + extra_bottom
+    )
+    result = layout_migration.migrate(vault)
+    assert result.exit_code == 0
+    text = (vault / ".gitignore").read_text()
+    assert text == extra_top + _render_vault_gitignore("data_vault") + extra_bottom
+    assert "!_pipeline/coverage-targets.json" not in text
+    assert f"{S}/sources.db" in _ls(vault)
+    assert layout_migration.migrate(vault).messages == [
+        "already migrated: nothing to do"
+    ]
 
 
 def test_ledger_is_backfilled_from_cycles(tmp_path: Path) -> None:

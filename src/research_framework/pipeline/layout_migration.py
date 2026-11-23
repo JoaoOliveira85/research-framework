@@ -188,6 +188,17 @@ def _plan_gitignore(vault: Path) -> GitignoreChange | None:
         return GitignoreChange(
             shipped_new, "replace the _pipeline stanza with the shipped rendering"
         )
+    if _LEGACY_STANZA in text:
+        # The shipped stanza, untouched, inside a file the operator added lines
+        # to (a feed catalogue re-include, a secrets pattern). Replace the
+        # stanza where it stands and keep every other line byte for byte:
+        # appending the re-includes instead would leave the stanza's per-file
+        # lines behind, and they would keep un-ignoring files the layout has
+        # since moved or turned into ignored views.
+        return GitignoreChange(
+            text.replace(_LEGACY_STANZA, shipped_new[len(head) :], 1),
+            "replace the _pipeline stanza in place; the other lines are kept",
+        )
     present = {ln.strip() for ln in text.splitlines()}
     missing = [ln for ln in _REINCLUDE_LINES if ln not in present]
     if not missing:
