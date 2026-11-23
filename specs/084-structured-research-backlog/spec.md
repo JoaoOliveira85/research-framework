@@ -1,6 +1,6 @@
 # Feature Specification: The research backlog as structured state
 
-**Status**: planned — drafted 2026-10-28 from #18; clarified the same day
+**Status**: shipped(2026-11-23, PR #57) — released in 2.1.0. History: drafted 2026-10-28 from #18; clarified the same day
 (the owner took all four recommendations, § Clarifications); un-held on
 2026-11-22 and amended from its plan (FR-012, FR-020, § Clarifications
 Session 2026-11-22). Lands **after** `083-durable-state-layout` (#10), whose

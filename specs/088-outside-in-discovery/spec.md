@@ -1,6 +1,6 @@
 # Feature Specification: Outside-in discovery — a pass that starts from the field, not from the vault
 
-**Status**: planned — drafted and planned on 2026-11-23 from #52. Lands after
+**Status**: shipped(2026-11-23, PR #59) — released in 2.1.0. History: drafted and planned on 2026-11-23 from #52. Lands after
 `087-note-currency-and-updates`, whose cycle split and update queue it uses.
 
 **Spec**: `088-outside-in-discovery` · **Builds on**: `087` (the

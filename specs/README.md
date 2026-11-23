@@ -112,10 +112,10 @@ shipped-task ledger.
 | [`080-run-receipt`](080-run-receipt/spec.md) | The run receipt — `_pipeline/runs/<run_id>/` | planned |
 | [`081-triage-gate`](081-triage-gate/spec.md) | The triage gate | planned |
 | [`082-spec-driven-verify`](082-spec-driven-verify/spec.md) | Spec-driven verify — the checkers read the vault's own declaration | planned |
-| [`083-durable-state-layout`](083-durable-state-layout/spec.md) | Durable vault state lives in `_pipeline/state/` | planned |
-| [`084-structured-research-backlog`](084-structured-research-backlog/spec.md) | The research backlog as structured state | planned |
-| [`087-note-currency-and-updates`](087-note-currency-and-updates/spec.md) | Note currency and updates — an existing topic is researched again | planned |
-| [`088-outside-in-discovery`](088-outside-in-discovery/spec.md) | Outside-in discovery — a pass that starts from the field, not from the vault | planned |
+| [`083-durable-state-layout`](083-durable-state-layout/spec.md) | Durable vault state lives in `_pipeline/state/` | shipped(2026-11-23, PR #56) |
+| [`084-structured-research-backlog`](084-structured-research-backlog/spec.md) | The research backlog as structured state | shipped(2026-11-23, PR #57) |
+| [`087-note-currency-and-updates`](087-note-currency-and-updates/spec.md) | Note currency and updates — an existing topic is researched again | shipped(2026-11-23, PR #58) |
+| [`088-outside-in-discovery`](088-outside-in-discovery/spec.md) | Outside-in discovery — a pass that starts from the field, not from the vault | shipped(2026-11-23, PR #59) |
 
 ## Archived corpus
 

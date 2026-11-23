@@ -1,5 +1,7 @@
 # Tasks: The research backlog as structured state
 
+> **Ledger** — this spec shipped; the boxes below are a historical record, not a live gate (CONTRIBUTING.md § 2). The Status header in `spec.md` is the source of truth for what shipped.
+
 **Spec**: [`spec.md`](spec.md) · **Plan**: [`plan.md`](plan.md) · **Status of
 the spec**: `planned`. Task boxes are live: a `- [ ]` means genuinely not
 done. `083` T001–T012 are the precondition and land first.
@@ -8,7 +10,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
 ## Phase 1: The module, with no caller
 
-- [x] T001 The store: load, validate against
+- T001 The store: load, validate against
       `contracts/research-backlog.schema.json` (hand-rolled checks, no
       dependency), atomic save, `update(vault, writer, fn)`, id derivation,
       operator-status detection (`status_by` / `status_written`), unknown
@@ -44,7 +46,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
   **TDD discipline**: required.
 
-- [x] T002 Observations and queries: `observe_topic`, `observe_quarantine`,
+- T002 Observations and queries: `observe_topic`, `observe_quarantine`,
       `resolve_covered`, `resolve_quarantine`, `resolve_quarantine_stem`,
       `planner_topics`, `all_titles` (FR-007, FR-009, FR-010, FR-012,
       FR-013; `data-model.md` writer and reader maps; `research.md` R7).
@@ -76,7 +78,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
   **TDD discipline**: required.
 
-- [x] T003 The view: render per `contracts/backlog-view.contract.md`, the
+- T003 The view: render per `contracts/backlog-view.contract.md`, the
       digest footer, hand-edit detection with the single overwritten copy,
       render-if-missing (FR-011, FR-016…FR-018; `research.md` R4).
 
@@ -102,7 +104,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
 ## Phase 2: Writers and the reader move onto the module
 
-- [x] T004 `scripts/topic_harvest.py` records its follow-ups through `B`
+- T004 `scripts/topic_harvest.py` records its follow-ups through `B`
       and resolves covered topics; it no longer writes the Markdown file
       (FR-006, FR-009, FR-011).
 
@@ -121,7 +123,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
   **TDD discipline**: required.
 
-- [x] T005 `scripts/topic_propose.py` records accepted proposals through `B`
+- T005 `scripts/topic_propose.py` records accepted proposals through `B`
       and dedupes against `all_titles()` (FR-006, FR-013).
 
   ### Testing Requirements
@@ -135,7 +137,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
   **TDD discipline**: required.
 
-- [x] T006 The orchestrator's quarantine sweep and `./vault re-grade` use
+- T006 The orchestrator's quarantine sweep and `./vault re-grade` use
       `observe_quarantine` / `resolve_quarantine` / `resolve_quarantine_stem`;
       the source-exhausted and constrained-exit messages name the harvest
       manifest and the JSON file (FR-010, FR-014, FR-015).
@@ -163,7 +165,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
   **TDD discipline**: required.
 
-- [x] T007 The planner reads `planner_topics()`; `_parse_orphans` and its
+- T007 The planner reads `planner_topics()`; `_parse_orphans` and its
       regular expression are deleted (FR-012).
 
   ### Testing Requirements
@@ -181,7 +183,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
 ## Phase 3: Existing vaults and the surfaces that name the path
 
-- [x] T008 The converter (`research.md` R8) and the migration step
+- T008 The converter (`research.md` R8) and the migration step
       `convert_backlog_to_store` in `layout_migration.MIGRATION_STEPS`; the
       archive's registry row in `state_layout`; the unconverted-vault
       predicate in the legacy check (FR-020…FR-023).
@@ -219,7 +221,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
   **TDD discipline**: required.
 
-- [x] T009 Scaffold, `.gitignore`, health, manifest: the scaffold seeds an
+- T009 Scaffold, `.gitignore`, health, manifest: the scaffold seeds an
       empty store and its view; `083`'s transitional
       `!_pipeline/research-backlog.md` line is deleted; the spec-058 list
       and the scaffold manifest name the JSON file (FR-024).
@@ -239,7 +241,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
   **TDD discipline**: required.
 
-- [x] T010 The scout prompt's required-reading item describes the view's
+- T010 The scout prompt's required-reading item describes the view's
       sections; the prompt corpus and the fixtures carrying a rendered
       scout prompt are regenerated (FR-019; `research.md` R9).
 
@@ -254,7 +256,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
 ## Phase 4: Proof
 
-- [x] T011 The guard, the end-to-end case and the gates.
+- T011 The guard, the end-to-end case and the gates.
 
   ### Testing Requirements
 
