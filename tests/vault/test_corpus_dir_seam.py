@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from research_framework.pipeline import state_layout as L
 from research_framework.pipeline import wikilinks
 from research_framework.pipeline.coverage import (
     existing_vault_filenames,
@@ -165,7 +166,7 @@ class TestQuarantine:
 
         assert moved == 1
         assert not (vault / CORPUS / "01 - Concepts" / "Rejected.md").exists()
-        assert (vault / "_pipeline" / "quarantine" / "Rejected.md").exists()
+        assert (L.quarantine_dir(vault) / "Rejected.md").exists()
 
 
 class TestWikilinks:

@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from research_framework import __version__
+from research_framework.pipeline import state_layout
 from research_framework.processors.verify import _is_exempt
 from research_framework.spec.parsed import ParsedSpecError, load_parsed_spec
 from research_framework.spec.schema import SpecConfig
@@ -84,7 +85,6 @@ SKIP_REASONS: tuple[str, ...] = (
 )
 
 _INDEX_FILES = frozenset({"_index.md", "_concepts.md", "_graph.md"})
-_QUARANTINE_REL = Path("_pipeline") / "quarantine"
 
 
 class ClaimsExportError(Exception):
@@ -127,7 +127,7 @@ def export_claims(
 
     roots: list[tuple[Path, Path, str, bool]] = [(corpus, corpus, "", False)]
     if include_quarantined:
-        qdir = vault / _QUARANTINE_REL
+        qdir = state_layout.quarantine_dir(vault)
         if qdir.is_dir():
             roots.append((qdir, qdir, "quarantine/", True))
 

@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from research_framework.cli import main
+from research_framework.pipeline import state_layout as L
 from research_framework.vault.frontmatter import dump_frontmatter
 from tests._helpers.vault_factory import build_minimal_vault
 
@@ -29,7 +30,7 @@ def vault(tmp_path: Path) -> Path:
         ),
         encoding="utf-8",
     )
-    q = vault / "_pipeline" / "quarantine"
+    q = L.quarantine_dir(vault)
     q.mkdir(parents=True)
     (q / "bad.md").write_text(
         dump_frontmatter(

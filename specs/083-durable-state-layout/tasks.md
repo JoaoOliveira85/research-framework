@@ -120,7 +120,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [ ] T006 Move the quarantine directory to `L.quarantine_dir`
+- [x] T006 Move the quarantine directory to `L.quarantine_dir`
       (`orchestrator`, `cli/regrade.py`, `vault/claims_export.py`,
       `quality_report`, `run_report`, `spec_append`, `cli/export.py`,
       `cli/acceptance.py`, `scripts/validate_vault.py`, the shim template's

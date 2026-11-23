@@ -155,3 +155,20 @@ def test_seed_creates_the_database_under_state(
     seed(tmp_path, parse(sample_spec_path))
     assert L.sources_db_path(tmp_path).is_file()
     assert not (tmp_path / "_pipeline" / "sources.db").exists()
+
+
+def test_an_orphan_note_is_quarantined_under_state(tmp_path: Path) -> None:
+    from research_framework.pipeline.orchestrator import (
+        _reconcile_orphan_notes_at_cycle_start,
+    )
+
+    note = tmp_path / "data_vault" / "01 - Concepts" / "Orphan.md"
+    note.parent.mkdir(parents=True)
+    note.write_text(
+        "---\ntitle: Orphan\nlifecycle:\n  created_at_cycle: 2\n---\nBody.\n",
+        encoding="utf-8",
+    )
+    _reconcile_orphan_notes_at_cycle_start(tmp_path, 2)
+    assert not note.exists()
+    assert (L.quarantine_dir(tmp_path) / "Orphan.md").is_file()
+    assert not (tmp_path / "_pipeline" / "quarantine").exists()

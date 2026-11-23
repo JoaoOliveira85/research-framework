@@ -686,7 +686,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--include-quarantined",
         action="store_true",
         help=(
-            "Also export notes under _pipeline/quarantine/, flagged "
+            "Also export notes under _pipeline/state/quarantine/, flagged "
             "`quarantined: true` (excluded by default)"
         ),
     )

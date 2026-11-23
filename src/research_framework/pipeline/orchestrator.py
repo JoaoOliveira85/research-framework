@@ -138,7 +138,7 @@ def _free_quarantine_path(qdir: Path, note_path: Path) -> Path:
 
 
 def _quarantine_orphan_note(vault_dir: Path, note_path: Path) -> None:
-    qdir = vault_dir / "_pipeline" / "quarantine"
+    qdir = state_layout.quarantine_dir(vault_dir)
     qdir.mkdir(parents=True, exist_ok=True)
     dest = _free_quarantine_path(qdir, note_path)
     shutil.move(str(note_path), str(dest))
@@ -176,7 +176,7 @@ def _reconcile_orphan_notes_at_cycle_start(vault_dir: Path, cycle_num: int) -> N
         if sg.status == "FAIL":
             _LOG.info(
                 f"WARN: orphan note {p.name} failed SG-005 — moving to "
-                f"_pipeline/quarantine: {sg.message}"
+                f"_pipeline/state/quarantine: {sg.message}"
             )
             try:
                 _quarantine_orphan_note(vault_dir, p)
@@ -221,7 +221,7 @@ def _rebuild_indexes_best_effort(vault_dir: Path) -> None:
 
 def _quarantine_out_of_scope_notes(vault_dir: Path, spec) -> list[str]:
     """Move notes whose filename / category / title / body matches a `scope.out_of_scope`
-    token into `_pipeline/quarantine/`. Enforces SC-006 against agent disobedience.
+    token into `_pipeline/state/quarantine/`. Enforces SC-006 against agent disobedience.
     Returns the list of quarantined filenames (empty if none).
     """
     if spec is None:
@@ -236,7 +236,7 @@ def _quarantine_out_of_scope_notes(vault_dir: Path, spec) -> list[str]:
     corpus = corpus_dir(vault_dir)
     if not corpus.is_dir():
         return []
-    quarantine = vault_dir / "_pipeline" / "quarantine"
+    quarantine = state_layout.quarantine_dir(vault_dir)
     quarantined: list[str] = []
     for note in corpus.rglob("*.md"):
         if note.name.startswith("_"):
@@ -392,7 +392,7 @@ def _write_quarantine_backlog(
 
 def _quarantine_rejected_notes(vault_dir: Path) -> int:
     """Spec 062 FR1: move every still-``verifier_status: rejected`` note out of the
-    indexed/citable corpus into ``_pipeline/quarantine/`` on ANY exit.
+    indexed/citable corpus into ``_pipeline/state/quarantine/`` on ANY exit.
 
     Mirrors :func:`_quarantine_out_of_scope_notes`. The indexer/readers only scan
     ``data_vault/`` (steps/research.py), so a quarantined note becomes uncitable and
@@ -419,7 +419,7 @@ def _quarantine_rejected_notes(vault_dir: Path) -> int:
     corpus = corpus_dir(vault_dir)
     if not corpus.is_dir():
         return 0
-    quarantine = vault_dir / "_pipeline" / "quarantine"
+    quarantine = state_layout.quarantine_dir(vault_dir)
     quarantined = 0
     new_backlog_lines: list[str] = []
     for note in sorted(corpus.rglob("*.md")):
@@ -482,7 +482,7 @@ def _quarantine_rejected_notes(vault_dir: Path) -> int:
     if quarantined:
         _LOG.warning(
             "[orchestrator] %d verifier-rejected note(s) quarantined "
-            "(uncitable/unindexed); see _pipeline/quarantine/",
+            "(uncitable/unindexed); see _pipeline/state/quarantine/",
             quarantined,
         )
     # Reconcile on every sweep, not just when this run quarantined something —
@@ -992,14 +992,14 @@ def run_cycles(
 
         Issue #155: the verifier-rejected sweep MUST run BEFORE
         ``vault_commit.commit_cycle`` so the quarantine MOVE (delete from
-        ``data_vault/`` + add under ``_pipeline/quarantine/``) lands in the
+        ``data_vault/`` + add under ``_pipeline/state/quarantine/``) lands in the
         cycle commit atomically. Without this, a constrained / aborted /
         externally-killed exit leaves the deletes uncommitted in the working
         tree (the rc7 reference-vault GA-003 failure mode).
         """
         # Pre-commit safety net: sweep verifier-rejected notes into quarantine
         # so the upcoming commit captures the move (both the data_vault/ DELETE
-        # and the _pipeline/quarantine/ ADD) as one atomic cycle commit.
+        # and the _pipeline/state/quarantine/ ADD) as one atomic cycle commit.
         try:
             _quarantine_rejected_notes(vault_dir)
         except Exception as exc:  # pragma: no cover - defensive

@@ -50,7 +50,7 @@
       "required": ["claims", "quarantined", "notes_scanned", "skipped"],
       "properties": {
         "claims": { "type": "integer", "minimum": 0 },
-        "quarantined": { "type": "integer", "minimum": 0, "description": "Claims in this export that come from `_pipeline/quarantine/` (0 unless `--include-quarantined`)." },
+        "quarantined": { "type": "integer", "minimum": 0, "description": "Claims in this export that come from `_pipeline/state/quarantine/` (0 unless `--include-quarantined`)." },
         "notes_scanned": { "type": "integer", "minimum": 0 },
         "skipped": {
           "type": "object",

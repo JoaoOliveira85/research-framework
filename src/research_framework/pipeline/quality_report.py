@@ -210,7 +210,7 @@ def _notes_rejected_on_disk(vault_dir: Path, note_paths: list[str]) -> set[str]:
     ``accepted`` flag, so a batch that passed overall reported ``0 rejected``
     even when the per-note verifier had stamped notes inside it
     ``verifier_status: rejected`` — notes the orchestrator then swept into
-    ``_pipeline/quarantine/``. The live vault that surfaced this recorded
+    ``_pipeline/state/quarantine/``. The live vault that surfaced this recorded
     ``notes_written: 4, notes_accepted: 4, notes_rejected: 0`` for three
     consecutive cycles while 9 notes were being destroyed.
 
@@ -221,7 +221,7 @@ def _notes_rejected_on_disk(vault_dir: Path, note_paths: list[str]) -> set[str]:
     from research_framework.vault.frontmatter import parse_frontmatter
 
     rejected: set[str] = set()
-    quarantine = vault_dir / "_pipeline" / "quarantine"
+    quarantine = state_layout.quarantine_dir(vault_dir)
     for rel in note_paths:
         candidate = vault_dir / rel
         if not candidate.is_file():

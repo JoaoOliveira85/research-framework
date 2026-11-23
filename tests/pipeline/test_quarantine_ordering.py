@@ -254,6 +254,6 @@ def test_rejected_note_quarantine_lands_in_cycle_commit(
     assert "data_vault/Bad-Note.md" not in tree, (
         f"rejected note must NOT remain in indexed corpus after cycle commit: {tree}"
     )
-    assert "_pipeline/quarantine/Bad-Note.md" in tree, (
+    assert "_pipeline/state/quarantine/Bad-Note.md" in tree, (
         f"rejected note must be committed under quarantine/: {tree}"
     )
