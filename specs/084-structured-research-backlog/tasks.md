@@ -234,7 +234,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
   **TDD discipline**: required.
 
-- [ ] T010 The scout prompt's required-reading item describes the view's
+- [x] T010 The scout prompt's required-reading item describes the view's
       sections; the prompt corpus and the fixtures carrying a rendered
       scout prompt are regenerated (FR-019; `research.md` R9).
 
