@@ -27,7 +27,7 @@ the spec**: `planned`. Task boxes are live. `087` lands first.
 
   **TDD discipline**: required.
 
-- [ ] T002 Settings `pipeline.discovery` in the schema and every shipped
+- [x] T002 Settings `pipeline.discovery` in the schema and every shipped
       profile; `split_quota` returns three counts with a carried fractional
       credit (FR-007, FR-012; plan § 2, § 4).
 

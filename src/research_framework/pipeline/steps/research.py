@@ -109,7 +109,7 @@ def _phase(ctx: CycleContext) -> int:
             from ..currency import cycle_mode, cycle_split_shares, split_quota
             from ..research_plan import is_placeholder_topic
 
-            new_cap, update_cap = split_quota(
+            new_cap, update_cap, _ = split_quota(
                 int(plan.cycle_quota),
                 cycle_split_shares(vault_dir),
                 mode=cycle_mode(vault_dir),

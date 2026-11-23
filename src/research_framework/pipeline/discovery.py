@@ -11,6 +11,12 @@ The ledger lives at :func:`state_layout.discovery_ledger_path`. Per-cycle record
 are the source of truth: the per-area figures are recomputed from them on every
 write, so recording the same cycle twice replaces its record and nothing is
 counted twice.
+
+The ledger also carries the discovery share's fractional credit (spec 088
+Q1): a 10% share of a small quota rounds to zero topics, so each cycle adds
+``share x quota / 100`` and a whole unit buys one dispatch slot. The credit is
+keyed by cycle number (see :func:`accrue_credit`), so planning twice in one
+cycle adds it once.
 """
 
 from __future__ import annotations
@@ -22,6 +28,12 @@ from typing import Any
 from ..spec.schema import SpecConfig
 from . import state_layout
 from .atomic_write import write_json
+from .settings import (
+    CycleSplit,
+    DiscoverySettings,
+    SettingsError,
+    load_vault_settings,
+)
 
 SCHEMA_VERSION = 1
 
@@ -35,6 +47,22 @@ class DiscoveryLedgerError(RuntimeError):
         self.path = path
         self.reason = reason
         super().__init__(f"discovery ledger {path} is unreadable: {reason}")
+
+
+def discovery_settings(vault_dir: Path) -> DiscoverySettings:
+    """``pipeline.discovery`` of the vault; the defaults when unreadable."""
+    try:
+        return load_vault_settings(vault_dir).discovery
+    except SettingsError:
+        return DiscoverySettings()
+
+
+def discovery_share(vault_dir: Path) -> int:
+    """The ``pipeline.cycle_split`` discovery share (0 switches the pass off)."""
+    try:
+        return load_vault_settings(vault_dir).cycle_split.discovery
+    except SettingsError:
+        return CycleSplit().discovery
 
 
 def scope_areas(spec: SpecConfig) -> list[str]:
@@ -85,6 +113,15 @@ def load_ledger(vault_dir: Path) -> Ledger:
         isinstance(rec, dict) and _is_int(rec.get("cycle")) for rec in cycles
     ):
         raise DiscoveryLedgerError(path, "'cycles' is not a list of cycle records")
+    credit = doc.get("credit")
+    if credit is not None and not (
+        isinstance(credit, dict)
+        and _is_int(credit.get("cycle"))
+        and isinstance(credit.get("accrued"), int | float)
+        and not isinstance(credit.get("accrued"), bool)
+        and _is_int(credit.get("spent"))
+    ):
+        raise DiscoveryLedgerError(path, "'credit' is not {cycle, accrued, spent}")
     return doc
 
 
@@ -157,8 +194,53 @@ def record_cycle(
         "areas": _area_rows(cycles),
         "cycles": cycles,
     }
+    if "credit" in ledger:
+        doc["credit"] = ledger["credit"]
     write_json(state_layout.discovery_ledger_path(vault_dir), doc)
     return doc
+
+
+def _write_credit(vault_dir: Path, ledger: Ledger, credit: dict[str, Any]) -> None:
+    doc = {**ledger, "credit": credit}
+    write_json(state_layout.discovery_ledger_path(vault_dir), doc)
+
+
+def accrue_credit(vault_dir: Path, *, cycle: int, quota: int, share: int) -> float:
+    """The discovery credit available to ``cycle``, accrued once per cycle.
+
+    The ledger holds ``credit: {cycle, accrued, spent}``: the balance this
+    cycle started with plus its accrual (``accrued``), and what the cycle has
+    spent of it (``spent``). The first call for a ``cycle`` adds
+    ``share x quota / 100`` to the previous cycle's unspent balance, caps the
+    sum at one cycle's ``quota`` so credit cannot pile up, and writes it; any
+    later call for the same ``cycle`` (planning may run more than once) returns
+    the unspent balance as stored and adds nothing.
+    """
+    ledger = load_ledger(vault_dir)
+    credit = ledger.get("credit")
+    if credit is not None and credit["cycle"] == cycle:
+        return max(float(credit["accrued"]) - credit["spent"], 0.0)
+    carried = (
+        max(float(credit["accrued"]) - credit["spent"], 0.0)
+        if credit is not None and credit["cycle"] < cycle
+        else 0.0
+    )
+    accrued = min(carried + max(quota, 0) * max(share, 0) / 100, float(max(quota, 0)))
+    _write_credit(vault_dir, ledger, {"cycle": cycle, "accrued": accrued, "spent": 0})
+    return accrued
+
+
+def spend_credit(vault_dir: Path, *, cycle: int, spent: int) -> None:
+    """Record that ``cycle`` dispatched ``spent`` discovery topics.
+
+    Absolute, not additive: calling it twice for the same cycle with the same
+    count leaves the same ledger. A no-op when ``cycle`` has not accrued.
+    """
+    ledger = load_ledger(vault_dir)
+    credit = ledger.get("credit")
+    if credit is None or credit["cycle"] != cycle:
+        return
+    _write_credit(vault_dir, ledger, {**credit, "spent": max(int(spent), 0)})
 
 
 def choose_areas(ledger: Ledger, areas: list[str], n: int) -> list[str]:

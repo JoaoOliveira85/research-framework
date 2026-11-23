@@ -130,11 +130,13 @@ pipeline:
   budget_usd: 25.00
   backlog_promotion_threshold: 2
   # How each cycle's planned topics are shared (spec 087): new topics, updates
-  # to notes the vault already has, and discovery (no work of its own yet, so
-  # its share goes to new topics). Three integers >= 0 summing to 100. The
-  # spec's `research_mode` decides how it applies: `bootstrap` gives updates 0,
-  # `refresh` gives new topics 0, `expand` (the default) uses it as written. A
-  # share with no work falls to the others.
+  # to notes the vault already has, and discovery (topics found outside-in,
+  # spec 088; with no discovery topic waiting its share goes to new topics).
+  # Three integers >= 0 summing to 100; a discovery share of 0 switches the
+  # outside-in pass off. The spec's `research_mode` decides how it applies:
+  # `bootstrap` gives updates 0, `refresh` gives new topics 0 and no discovery
+  # topics, `expand` (the default) uses it as written. A share with no work
+  # falls to the others.
   cycle_split:
     new: 60
     updates: 30
@@ -143,6 +145,13 @@ pipeline:
   # or that the verifier rejected) an update entry is set aside instead of
   # retried every cycle. New material for the note gives it another try.
   update_max_attempts: 2
+  # The outside-in discovery pass (spec 088): each cycle the scout is asked what
+  # is new in `areas_per_cycle` of the spec's scope areas (least recently
+  # checked first), looking back `window_days` days. Both are integers >= 1.
+  # The pass runs only while the `cycle_split` discovery share is above 0.
+  discovery:
+    areas_per_cycle: 3
+    window_days: 180
 
   # ---------------------------------------------------------------------
   # Feature 017 — vault quality fix. See settings.yaml for the

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from collections.abc import Iterable, Mapping
 from datetime import date
 from pathlib import Path
@@ -192,18 +193,27 @@ def split_quota(
     mode: str,
     new_available: int,
     updates_available: int,
-) -> tuple[int, int]:
-    """Share a cycle's planned topic count between new topics and updates.
+    discovery_available: int = 0,
+    discovery_credit: float | None = None,
+) -> tuple[int, int, int]:
+    """Share a cycle's planned topic count: ``(new_n, update_n, discovery_n)``.
 
     ``shares`` is ``pipeline.cycle_split`` (``new``/``updates``/``discovery``,
-    attributes or mapping keys). Spec 087 FR-015..FR-017:
+    attributes or mapping keys). Spec 087 FR-015..FR-017 and spec 088 FR-007:
 
-    * Discovery has no work of its own yet, so its share always goes to new
-      topics.
-    * ``mode`` applies first: ``bootstrap`` gives updates 0, ``refresh`` gives
-      new topics 0, ``expand`` (and anything else) uses the shares as written.
-    * The two shares are rounded together (largest remainder) so they sum to
-      ``quota``.
+    * ``discovery_n`` is the cap on discovery topics dispatched. It is
+      ``min(floor(credit), discovery_available, quota)``, where ``credit`` is
+      ``discovery_credit`` (the ledger's carried fractional credit,
+      :func:`.discovery.accrue_credit`) or, when none is given, this cycle's
+      share of the quota. It is 0 when no discovery topic is waiting, when the
+      discovery share is 0, and under ``refresh``; the share then goes to new
+      topics, exactly as it did before discovery had work of its own.
+    * The rest of the quota is shared between new topics and updates: ``mode``
+      applies first (``bootstrap`` gives updates 0, ``refresh`` gives new
+      topics 0, ``expand`` and anything else uses the shares as written), and
+      the two are rounded together (largest remainder) so they sum to the rest.
+      A discovery share that did not dispatch anything counts as a new-topic
+      share; one that did does not.
     * A share with no work falls to the other: with fewer open update entries
       than the update count the rest goes to new topics, and with fewer new
       topics than the new count the rest goes to updates. A mode's zero is
@@ -213,7 +223,19 @@ def split_quota(
     quota = max(0, int(quota))
     new_available = max(0, int(new_available))
     updates_available = max(0, int(updates_available))
-    new_weight = _share(shares, "new") + _share(shares, "discovery")
+    discovery_available = max(0, int(discovery_available))
+    discovery_share = _share(shares, "discovery")
+    discovery_n = 0
+    if mode != "refresh" and discovery_share and discovery_available and quota:
+        credit = (
+            quota * discovery_share / 100
+            if discovery_credit is None
+            else float(discovery_credit)
+        )
+        discovery_n = min(math.floor(credit + 1e-9), discovery_available, quota)
+        discovery_n = max(discovery_n, 0)
+    quota -= discovery_n
+    new_weight = _share(shares, "new") + (0 if discovery_n else discovery_share)
     update_weight = _share(shares, "updates")
     if mode == "bootstrap":
         update_weight = 0
@@ -221,7 +243,7 @@ def split_quota(
         new_weight = 0
     total = new_weight + update_weight
     if quota == 0 or total == 0:
-        return 0, 0
+        return 0, 0, discovery_n
     raw_updates = quota * update_weight / total
     update_n = int(raw_updates)
     new_n = int(quota * new_weight / total)
@@ -241,7 +263,7 @@ def split_quota(
         spare = new_n - new_available
         new_n = new_available
         update_n += min(spare, updates_available - update_n) if update_weight else 0
-    return new_n, update_n
+    return new_n, update_n, discovery_n
 
 
 def note_path(vault_dir: Path, spec: SpecConfig, stem: str) -> Path | None:
@@ -320,7 +342,7 @@ def plan_updates(
     refs = backlog.update_topics(vault_dir)
     if not updates_supported(vault_dir)[0]:
         refs = []  # the share falls to new topics, as for any empty share
-    new_n, update_n = split_quota(
+    new_n, update_n, _discovery_n = split_quota(
         quota,
         cycle_split_shares(vault_dir),
         mode=cycle_mode(vault_dir, spec),
@@ -352,7 +374,7 @@ def plan_updates(
                 prompted_by=ref.prompted_by,
             )
         )
-    new_n, update_n = split_quota(
+    new_n, update_n, _discovery_n = split_quota(
         quota,
         cycle_split_shares(vault_dir),
         mode=cycle_mode(vault_dir, spec),

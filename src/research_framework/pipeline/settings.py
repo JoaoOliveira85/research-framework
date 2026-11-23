@@ -41,6 +41,7 @@ _PIPELINE_TYPED_KEYS = frozenset(
         "backlog_promotion_threshold",
         "cycle_split",
         "update_max_attempts",
+        "discovery",
     }
 )
 # Stages whose source-module manifest may supply a `default_tier` when the
@@ -140,13 +141,23 @@ class CycleSplit:
     """``pipeline.cycle_split`` (spec 087 FR-015): how a cycle's planned topics
     are shared between new topics, updates to existing notes, and discovery.
 
-    Three non-negative integers summing to 100. Discovery has no work of its own
-    yet, so its share goes to new topics (:func:`..currency.split_quota`).
+    Three non-negative integers summing to 100. The discovery share caps the
+    discovery topics dispatched (spec 088); with none waiting it goes to new
+    topics (:func:`..currency.split_quota`), and 0 switches the pass off.
     """
 
     new: int = 60
     updates: int = 30
     discovery: int = 10
+
+
+@dataclass(frozen=True)
+class DiscoverySettings:
+    """``pipeline.discovery`` (spec 088 FR-001, FR-012): how many scope areas a
+    cycle's scout is asked about, and how far back it looks."""
+
+    areas_per_cycle: int = 3
+    window_days: int = 180
 
 
 @dataclass(frozen=True)
@@ -258,6 +269,8 @@ class VaultSettings:
     # pipeline.update_max_attempts (spec 087): failed attempts after which an
     # update entry is set aside instead of retried.
     update_max_attempts: int = 2
+    # pipeline.discovery (spec 088); 3 areas, 180 days when absent.
+    discovery: DiscoverySettings = field(default_factory=DiscoverySettings)
     stages: dict[str, StageSettings] = field(default_factory=dict)
     dimensions: list[str] = field(default_factory=list)
     default_agent: DefaultAgent = "claude"
@@ -403,6 +416,8 @@ def load_vault_settings(vault_dir: Path) -> VaultSettings:
             pipeline.get("cycle_split"), vault_dir=vault_dir
         )
 
+        discovery = _parse_discovery(pipeline.get("discovery"), vault_dir=vault_dir)
+
         update_max_attempts = _require_positive_int(
             pipeline.get("update_max_attempts", DEFAULT_UPDATE_MAX_ATTEMPTS),
             key="pipeline.update_max_attempts",
@@ -484,6 +499,7 @@ def load_vault_settings(vault_dir: Path) -> VaultSettings:
         cycles_per_run=cycles_per_run,
         cycle_split=cycle_split,
         update_max_attempts=update_max_attempts,
+        discovery=discovery,
         budget_usd=budget_usd,
         backlog_promotion_threshold=backlog_promotion_threshold,
         stages=stages,
@@ -916,6 +932,45 @@ def _parse_cycle_split(raw: object, *, vault_dir: Path) -> CycleSplit:
             key=key,
         )
     return CycleSplit(**shares)
+
+
+def _parse_discovery(raw: object, *, vault_dir: Path) -> DiscoverySettings:
+    """Parse ``pipeline.discovery``. Absent => 3 areas per cycle, 180 days.
+
+    Strict like ``cycle_split``: a typo (``area_per_cycle:``) or a value of 0
+    is an error naming the key. A key left out of a present mapping keeps its
+    default.
+    """
+    key = "pipeline.discovery"
+    if raw is None:
+        return DiscoverySettings()
+    if not isinstance(raw, dict):
+        raise SettingsError(
+            f"{key} must be a mapping with areas_per_cycle and window_days, "
+            f"got {raw!r}",
+            vault_dir=vault_dir,
+            key=key,
+        )
+    names = ("areas_per_cycle", "window_days")
+    unknown = sorted(str(k) for k in raw if k not in names)
+    if unknown:
+        raise SettingsError(
+            f"{key} has unknown key(s): {', '.join(unknown)} "
+            "(known: areas_per_cycle, window_days)",
+            vault_dir=vault_dir,
+            key=key,
+        )
+    defaults = DiscoverySettings()
+    values = {
+        name: _require_positive_int(
+            raw.get(name, getattr(defaults, name)),
+            key=f"{key}.{name}",
+            vault_dir=vault_dir,
+            label=f"{key}.{name} must be an integer >= 1",
+        )
+        for name in names
+    }
+    return DiscoverySettings(**values)
 
 
 def _parse_coverage_growth(raw: object, *, vault_dir: Path) -> float:
@@ -1505,6 +1560,7 @@ _PIPELINE_FIELDS = frozenset(
         "cycles_per_run",  # issue #33
         "cycle_split",  # spec 087
         "update_max_attempts",  # spec 087
+        "discovery",  # spec 088
         "budget_usd",
         "backlog_promotion_threshold",
         "coverage_growth",
@@ -1589,6 +1645,7 @@ def _build_schema() -> dict[str, Any]:
     schema["pipeline"] = {
         **dict.fromkeys(sorted(_PIPELINE_FIELDS)),
         "cycle_split": {"new": None, "updates": None, "discovery": None},
+        "discovery": {"areas_per_cycle": None, "window_days": None},
         # Read from the raw file by the batch scheduler / source signals.
         "note_writer_batch_size": None,
         "max_batches_per_cycle": None,

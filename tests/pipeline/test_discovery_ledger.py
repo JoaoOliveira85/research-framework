@@ -119,3 +119,44 @@ def test_an_unparseable_ledger_raises_a_typed_error_naming_the_file(
     with pytest.raises(discovery.DiscoveryLedgerError):
         _record(tmp_path, 1, ["a"], [])
     assert path.read_text(encoding="utf-8") == text
+
+
+def test_credit_accrues_once_per_cycle_and_carries_what_is_unspent(
+    tmp_path: Path,
+) -> None:
+    # 10% of a quota of 3 is 0.3 a cycle
+    first = discovery.accrue_credit(tmp_path, cycle=1, quota=3, share=10)
+    again = discovery.accrue_credit(tmp_path, cycle=1, quota=3, share=10)
+    assert first == again == pytest.approx(0.3)  # planning twice adds it once
+    assert discovery.accrue_credit(tmp_path, cycle=2, quota=3, share=10) == (
+        pytest.approx(0.6)
+    )
+    assert discovery.accrue_credit(tmp_path, cycle=2, quota=3, share=10) == (
+        pytest.approx(0.6)
+    )
+    # spending is absolute for the cycle, and the unspent part carries on
+    discovery.accrue_credit(tmp_path, cycle=3, quota=10, share=50)  # 0.6 + 5 = 5.6
+    discovery.spend_credit(tmp_path, cycle=3, spent=2)
+    discovery.spend_credit(tmp_path, cycle=3, spent=2)
+    assert discovery.accrue_credit(tmp_path, cycle=3, quota=10, share=50) == (
+        pytest.approx(3.6)
+    )
+    assert discovery.accrue_credit(tmp_path, cycle=4, quota=10, share=50) == (
+        pytest.approx(8.6)
+    )
+
+
+def test_credit_is_capped_at_one_cycles_quota(tmp_path: Path) -> None:
+    for cycle in range(1, 8):
+        credit = discovery.accrue_credit(tmp_path, cycle=cycle, quota=4, share=100)
+    assert credit == 4.0
+
+
+def test_record_cycle_keeps_the_credit_and_spend_is_a_noop_before_accrual(
+    tmp_path: Path,
+) -> None:
+    discovery.spend_credit(tmp_path, cycle=1, spent=1)
+    assert "credit" not in discovery.load_ledger(tmp_path)
+    discovery.accrue_credit(tmp_path, cycle=1, quota=3, share=10)
+    _record(tmp_path, 1, ["a"], [])
+    assert discovery.load_ledger(tmp_path)["credit"]["cycle"] == 1
