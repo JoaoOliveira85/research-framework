@@ -174,7 +174,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [ ] T009 `vault_commit`: stage `_pipeline/state/` with every cycle and
+- [x] T009 `vault_commit`: stage `_pipeline/state/` with every cycle and
       command commit (checkpointing `sources.db` first), and make
       `begin_run` commit pending state on the base branch as
       `vault: pending state` before it branches (FR-008, D-4; plan § 5).

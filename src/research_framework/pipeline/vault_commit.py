@@ -54,7 +54,7 @@ from pathlib import Path
 from typing import Any
 
 from ..vault.frontmatter import split_frontmatter
-from . import branch_retention
+from . import branch_retention, state_layout
 from .atomic_write import write_json
 
 try:
@@ -326,12 +326,20 @@ _PORCELAIN_IGNORED_PREFIXES = (
 )
 
 
-def _is_dirty(vault_dir: Path, ignore_pipeline: bool = False) -> bool:
+_STATE_PREFIX = f"{state_layout.STATE_DIR}/"
+
+
+def _is_dirty(
+    vault_dir: Path, ignore_pipeline: bool = False, *, mask_state: bool = False
+) -> bool:
     """Return True if the working tree has uncommitted changes.
 
     ``ignore_pipeline=True`` masks the ``_pipeline/`` directory because
-    sidecars are expected to mutate as soon as we start running things.
-    Used by ``begin_run`` to gate a research run.
+    sidecars are expected to mutate as soon as we start running things. It does
+    NOT mask ``_pipeline/state/`` (spec 083 D4): state is tracked, so an edit to
+    it is a real change. ``begin_run`` passes ``mask_state=True`` only for its
+    refusal check, because it commits pending state on its own rather than
+    refusing the run.
     """
     result = _git(vault_dir, "status", "--porcelain")
     lines = [ln for ln in result.stdout.splitlines() if ln.strip()]
@@ -341,6 +349,8 @@ def _is_dirty(vault_dir: Path, ignore_pipeline: bool = False) -> bool:
         # Porcelain format: "XY <path>" where X+Y are status flags.
         path = ln[3:] if len(ln) > 3 else ln
         path = path.strip().strip('"')
+        if path.startswith(_STATE_PREFIX) and not mask_state:
+            return True
         if path.startswith(_PORCELAIN_IGNORED_PREFIXES):
             continue
         return True
@@ -628,7 +638,10 @@ def begin_run(
     """
     cfg = _load_settings(vault_dir)
     if not cfg["enabled"]:
-        _LOG.info("vault_commit: invariant disabled in settings; skipping")
+        _LOG.info(
+            "vault_commit: invariant disabled in settings; skipping "
+            "(pending _pipeline/state/ changes are not committed)"
+        )
         return None
     if not _ensure_repo(vault_dir):
         return None
@@ -680,13 +693,19 @@ def begin_run(
             f"vault_commit: expected to start from '{base_branch}' but "
             f"current branch is '{current}'. Switch back or pass --resume."
         )
-    if _is_dirty(vault_dir, ignore_pipeline=True):
+    if _is_dirty(vault_dir, ignore_pipeline=True, mask_state=True):
         raise VaultCommitDirtyError(
             f"vault_commit: '{base_branch}' has uncommitted changes. "
             "Commit or stash them before running the framework — the "
             "auto-commit invariant must not co-mingle your manual edits "
             "with framework-generated content. See Principle X."
         )
+
+    # Spec 083 D-4: an operator's uncommitted edit to state gets its own
+    # reversible commit on the base branch, before the run branch exists, so it
+    # is never folded into the first cycle commit. The rest of _pipeline/ stays
+    # masked: scratch neither blocks the run nor is committed.
+    _commit_pending_state(vault_dir)
 
     # Issue #307 / D10: retention is checked when a vault session starts —
     # after the dirty-main hard stop, so a refused session has no side
@@ -711,6 +730,48 @@ def begin_run(
         ctx.push_policy,
     )
     return ctx
+
+
+def _commit_pending_state(vault_dir: Path) -> None:
+    """Commit uncommitted ``_pipeline/state/`` changes as ``vault: pending state``."""
+    pending = _git(
+        vault_dir, "status", "--porcelain", "--", state_layout.STATE_DIR, check=False
+    )
+    if not pending.stdout.strip():
+        return
+    result = _stage_and_commit(
+        vault_dir,
+        message=_render_message(
+            "vault-output",
+            "pending state",
+            "Uncommitted changes under _pipeline/state/ found when a research "
+            "run started; committed on the base branch before it branched "
+            "(spec 083 D-4).",
+        ),
+        sidecar_label="pending-state",
+        paths=[state_layout.STATE_DIR],
+    )
+    if not result.ok:
+        raise VaultCommitDirtyError(
+            "vault_commit: could not commit pending changes under "
+            f"{state_layout.STATE_DIR}/ before the run ({result.error}). "
+            "Commit or stash them, then run again."
+        )
+    _LOG.info("vault_commit: committed pending state as %s", result.sha)
+
+
+def _checkpoint_sources_db(vault_dir: Path) -> None:
+    """Fold the sources database's WAL in before a commit can stage it.
+
+    Git ignores the ``-wal`` / ``-shm`` sidecars, so rows still in the WAL would
+    be committed as missing (spec 083 plan section 4). Best-effort.
+    """
+    try:
+        from . import source_manager
+
+        source_manager.checkpoint(vault_dir)
+    except Exception as exc:
+        _LOG.warning("vault_commit: sources.db checkpoint failed: %s", exc)
 
 
 _CYCLE_SUBJECT_RE = re.compile(r"^research: cycle (\d+)\b")
@@ -1106,8 +1167,14 @@ def _stage_and_commit(
     ctx: RunContext | None = None,
     sidecar_label: str = "vault",
     amend: bool = False,
+    paths: list[str] | None = None,
 ) -> CommitResult:
     """Shared "git add -A + git commit" helper used by every public hook.
+
+    ``_pipeline/state/`` is tracked, so ``git add -A`` stages what a command
+    wrote there (spec 083 FR-008); the sources database is checkpointed first
+    so no row stays in its ignored WAL. ``paths`` limits staging and the commit
+    to those pathspecs (the run-start pending-state commit).
 
     Why ``git add -A``? The framework writes to many directories
     (``data_vault/``, ``_pipeline/``, ``modules/``); a commit hook that
@@ -1118,15 +1185,17 @@ def _stage_and_commit(
     commit (re-using ``message``) instead of creating a new one — the per-cycle
     commit idempotency path.
     """
+    pathspec = ["--", *paths] if paths else []
+    _checkpoint_sources_db(vault_dir)
     try:
-        _git(vault_dir, "add", "-A")
+        _git(vault_dir, "add", "-A", *pathspec)
     except subprocess.CalledProcessError as exc:
         err = _short_err(exc)
         _emit_sidecar(vault_dir, sidecar_label, stage="stage", error=err)
         return CommitResult(ok=False, error=f"git add failed: {err}")
 
     # Detect empty diff *after* staging so this is reliable.
-    status = _git(vault_dir, "diff", "--cached", "--quiet", check=False)
+    status = _git(vault_dir, "diff", "--cached", "--quiet", *pathspec, check=False)
     if status.returncode == 0:
         if message.startswith("framework: snapshot before update"):
             try:
@@ -1153,6 +1222,7 @@ def _stage_and_commit(
     commit_args = ["commit", "-m", message]
     if amend:
         commit_args.insert(1, "--amend")
+    commit_args.extend(pathspec)
     try:
         _git(vault_dir, *commit_args)
     except subprocess.CalledProcessError as exc:
