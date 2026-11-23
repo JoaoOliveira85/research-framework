@@ -291,7 +291,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
 ## Phase 4: Keeping it true
 
-- [ ] T013 The guard `scripts/guards/state_paths.py`, wired into
+- [x] T013 The guard `scripts/guards/state_paths.py`, wired into
       `scripts/guards/run_all.py` (FR-005; plan § 9).
 
   ### Testing Requirements
