@@ -37,7 +37,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
   **TDD discipline**: required.
 
-- [ ] T002 `NoteTypeConfig.review_after_days`: dataclass, `to_dict` /
+- [x] T002 `NoteTypeConfig.review_after_days`: dataclass, `to_dict` /
       `from_dict`, `spec/simple.py::_expand_note_types`, a positive-integer
       check in `spec/validator.py`, `PARSER_VERSION` bump (FR-009; plan § 5).
 

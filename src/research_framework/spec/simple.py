@@ -567,6 +567,7 @@ def _expand_note_types(
                     template_version=str(
                         entry.get("template_version", "1.0.0") or "1.0.0"
                     ),
+                    review_after_days=entry.get("review_after_days"),
                 )
             )
     return result

@@ -110,6 +110,11 @@ class NoteTypeConfig:
     authoritative_role: str = ""  # "behaviour" | "intent" | "domain"
     authority_section: str = ""
     complementary_section: str = ""
+    # spec 087 FR-009: days after a note's ``as_of`` that it is due for review.
+    # None = no interval, the note is never due. The raw value is kept as
+    # declared so ``spec/validator.py`` can refuse a bad one with a
+    # field-level message instead of ``from_dict`` guessing at a coercion.
+    review_after_days: int | None = None
 
     def resolved_source_policy(self) -> str:
         if self.source_policy:
@@ -117,7 +122,7 @@ class NoteTypeConfig:
         return "hard" if self.name in HARD_NOTE_TYPES else "soft"
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "name": self.name,
             "description": self.description,
             "folder": self.folder,
@@ -130,6 +135,11 @@ class NoteTypeConfig:
             "authority_section": self.authority_section,
             "complementary_section": self.complementary_section,
         }
+        # Round-trip rule: omit the default (None) so specs and caches written
+        # before the key existed round-trip unchanged.
+        if self.review_after_days is not None:
+            out["review_after_days"] = self.review_after_days
+        return out
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Self:
@@ -147,6 +157,7 @@ class NoteTypeConfig:
             authoritative_role=d.get("authoritative_role", "") or "",
             authority_section=d.get("authority_section", "") or "",
             complementary_section=d.get("complementary_section", "") or "",
+            review_after_days=d.get("review_after_days"),
         )
 
 
