@@ -52,6 +52,10 @@
       "items": { "$ref": "cycle-quality-report.schema.json#/$defs/gate_result" }
     },
     "accepted": { "type": "boolean" },
+    "kind": {
+      "enum": ["new", "update"],
+      "description": "Spec 087: present only on an update batch (the topics are stand-in rows, one per assigned note); absent means a new-topic batch."
+    },
     "correction_directive_in": {
       "type": "string",
       "description": "Empty string if no correction directive was injected; otherwise a quoted markdown block from the previous batch's gate FAIL."
@@ -67,7 +71,7 @@
         "category": { "type": "string", "pattern": "^[a-z][a-z0-9_-]*$" },
         "priority_score": { "type": "number", "minimum": 0, "maximum": 1 },
         "source_hints": { "type": "array", "items": { "type": "string" } },
-        "provenance": { "enum": ["spec_gap", "harvest_orphan", "auto_promoted"] },
+        "provenance": { "enum": ["spec_gap", "harvest_orphan", "auto_promoted", "update"] },
         "citation_count": { "type": "integer", "minimum": 0 }
       }
     }

@@ -51,6 +51,9 @@ UPDATE_BLOCK_RE = re.compile(
     re.DOTALL,
 )
 
+SCOUT_UPDATES_ENV = "FAKE_AGENT_SCOUT_UPDATES"
+"""A JSON list of ``topics_found.updates`` rows the procedural scout reports."""
+
 DEFAULT_TIMESTAMP_FMT = "2026-05-17T00:00:{cycle:02d}Z"
 DEFAULT_TEMPLATE_VERSION = "1.0"
 
@@ -392,6 +395,10 @@ def write_scout(
         "unresolved_wikilinks": [],
         "budget_consumed_usd": 0.0,
     }
+    # Spec 087: rows the scout reports about notes the vault already has.
+    raw_updates = (os.environ.get(SCOUT_UPDATES_ENV) or "").strip()
+    if raw_updates:
+        report["topics_found"]["updates"] = json.loads(raw_updates)
 
     cycles_dir = vault_dir / "_pipeline" / "cycles"
     out = cycles_dir / f"cycle-{cycle:03d}-scout.json"
@@ -632,6 +639,8 @@ def _write_research_report(
     spec_parse: dict,
     notes_created: list[str],
     skipped: list[dict],
+    update_outcomes: list[dict] | None = None,
+    notes_updated: list[str] | None = None,
 ) -> None:
     """Write a fully-formed v2 research report (atomic).
 
@@ -660,7 +669,14 @@ def _write_research_report(
         "sources_consulted": _sources_consulted_block(spec_parse),
         "topics_found": {"new": [], "existing": [], "total": 0},
         "notes_created": prev_notes,
-        "notes_updated": list(doc.get("notes_updated") or []),
+        "notes_updated": [
+            *(doc.get("notes_updated") or []),
+            *(
+                n
+                for n in (notes_updated or [])
+                if n not in (doc.get("notes_updated") or [])
+            ),
+        ],
         "budget_consumed_usd": 0.0,
         "cost_estimate_usd": 0.0,
         "cumulative_cost_usd": 0.0,
@@ -669,6 +685,13 @@ def _write_research_report(
         if skipped
         else list(doc.get("skipped_topics") or []),
     }
+    merged_outcomes = {
+        str(r.get("note")): r
+        for r in [*(doc.get("update_outcomes") or []), *(update_outcomes or [])]
+        if isinstance(r, dict)
+    }
+    if merged_outcomes:
+        out["update_outcomes"] = list(merged_outcomes.values())
     _atomic_write(research_report, json.dumps(out, indent=2) + "\n")
 
 
@@ -686,25 +709,157 @@ def _parse_update_topics(prompt_text: str) -> list[dict] | None:
     return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
 
 
+UPDATE_SCENARIO_ENV = "FAKE_AGENT_UPDATE_SCENARIO"
+"""Which outcome the fake reports for every note of an update batch (spec 087).
+
+The honest ones do what they say; each ``*_lie`` reports the same outcome
+without doing the work UG-001 checks for, and ``no_outcome`` reports nothing.
+"""
+UPDATE_SCENARIOS = (
+    "confirmed",
+    "revised",
+    "superseded",
+    "retracted",
+    "confirmed_lie",
+    "revised_lie",
+    "superseded_lie",
+    "retracted_lie",
+    "no_outcome",
+)
+
+
+def _edit_frontmatter(text: str, updates: dict[str, str]) -> str:
+    """Set single-line ``key: value`` frontmatter entries, leaving every other
+    byte of the note alone (a block value of the same key is replaced)."""
+    lines = text.split("\n")
+    if not lines or lines[0] != "---":
+        raise ValueError("fake_agent: note has no frontmatter")
+    close = next(i for i in range(1, len(lines)) if lines[i] == "---")
+    for key, value in updates.items():
+        start = next(
+            (i for i in range(1, close) if lines[i].startswith(f"{key}:")), None
+        )
+        if start is None:
+            lines.insert(close, f"{key}: {value}")
+            close += 1
+            continue
+        end = start + 1
+        while end < close and lines[end].startswith((" ", "-")):
+            end += 1
+        lines[start:end] = [f"{key}: {value}"]
+        close -= (end - start) - 1
+    return "\n".join(lines)
+
+
+def _today_iso() -> str:
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC).date().isoformat()
+
+
+def _frontmatter_of(text: str) -> dict:
+    parts = text.split("\n---", 2)
+    loaded = yaml.safe_load(parts[0].removeprefix("---\n")) if len(parts) > 1 else {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
 def process_update_batch(
     vault_dir: Path, notes: list[dict], cycle: int, *, spec_parse: dict
 ) -> list[Path]:
-    """Handle an update batch: the default fake does not touch the notes.
+    """Handle an update batch under ``FAKE_AGENT_UPDATE_SCENARIO`` (default
+    ``confirmed``): edit each assigned note in place and report its outcome.
 
-    (Spec 087 T008 adds a scenario per outcome. Writing no new file is exactly
-    what an update batch that finds nothing changed does.)
+    Returns the NEW files written (only ``superseded`` writes one: the successor).
     """
+    scenario = (os.environ.get(UPDATE_SCENARIO_ENV) or "confirmed").strip()
+    if scenario not in UPDATE_SCENARIOS:
+        raise ValueError(
+            f"unknown {UPDATE_SCENARIO_ENV} {scenario!r}; "
+            f"valid: {list(UPDATE_SCENARIOS)}"
+        )
+    base = scenario.removesuffix("_lie")
+    lie = scenario.endswith("_lie")
+    today = _today_iso()
+    rows: list[dict] = []
+    created: list[Path] = []
+    updated: list[str] = []
+    for note in notes:
+        rel = str(note.get("path") or "")
+        stem = str(note.get("note") or Path(rel).stem)
+        path = vault_dir / rel
+        if scenario == "no_outcome" or not rel or not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        fm = _frontmatter_of(text)
+        evidence = f"https://synthetic.test/evidence/{stem}"
+        row: dict = {
+            "note": stem,
+            "outcome": base,
+            "sources_consulted": [f"https://synthetic.test/update/{stem}"],
+            "evidence_url": None,
+            "superseded_by": None,
+            "change": "nothing changed" if base == "confirmed" else f"{base} by fake",
+        }
+        edits: dict[str, str] = {"as_of": today}
+        if base == "confirmed":
+            if lie:
+                text += "\nA sentence the fake agent slipped in while confirming.\n"
+        elif base == "revised":
+            text += "\nRevised by the fake agent in light of newer sources.\n"
+            if not lie:
+                urls = list(fm.get("source_urls") or [])
+                urls.append(f"https://synthetic.test/new-source/{stem}")
+                edits["source_urls"] = json.dumps(urls)
+        elif base == "superseded":
+            edits["currency"] = "superseded"
+            row["evidence_url"] = evidence
+            if not lie:
+                successor = f"{stem}-successor"
+                row["superseded_by"] = successor
+                edits["superseded_by"] = json.dumps([successor])
+                succ_path = path.with_name(f"{successor}.md")
+                succ_path.write_text(
+                    "---\n"
+                    f"type: {fm.get('type', 'concept')}\n"
+                    f"template_version: {DEFAULT_TEMPLATE_VERSION}\n"
+                    f"coverage_category: {fm.get('coverage_category', '')}\n"
+                    f"summary: Successor of {stem}, written by the fake agent.\n"
+                    f"source_urls: [{evidence}]\n"
+                    "related: []\n"
+                    f"as_of: {today}\n"
+                    "currency: current\n"
+                    f"supersedes: [{stem}]\n"
+                    f"lifecycle: {{created_at_cycle: {cycle}}}\n"
+                    "---\n\n"
+                    + _word_pad(f"# {successor}\n\nReplaces {stem}.", 60)
+                    + "\n",
+                    encoding="utf-8",
+                )
+                created.append(succ_path)
+        elif base == "retracted":
+            edits["currency"] = "retracted"
+            row["evidence_url"] = evidence
+            if not lie:
+                edits["retraction_reason"] = json.dumps(
+                    f"The central claim is shown to be wrong by {evidence}."
+                )
+        path.write_text(_edit_frontmatter(text, edits), encoding="utf-8")
+        rows.append(row)
+        if base != "confirmed" or lie:
+            updated.append(rel)
     research_report = (
-        vault_dir / "_pipeline" / "cycles" / (f"cycle-{cycle:03d}-research.json")
+        vault_dir / "_pipeline" / "cycles" / f"cycle-{cycle:03d}-research.json"
     )
     _write_research_report(
         research_report,
         cycle=cycle,
         spec_parse=spec_parse,
-        notes_created=[],
+        notes_created=[p.relative_to(vault_dir).as_posix() for p in created],
         skipped=[],
+        update_outcomes=rows,
+        notes_updated=updated,
     )
-    return []
+    return created
 
 
 def process_batch(

@@ -19,7 +19,7 @@ from research_framework.pipeline.research_plan import (
     UpdateTopic,
 )
 from research_framework.spec.schema import NoteTypeConfig, SpecConfig
-from tests._helpers.vault_factory import build_minimal_vault
+from tests._helpers.vault_factory import build_minimal_vault, commit_vault
 
 
 def _plan(**kwargs: Any) -> ResearchPlan:
@@ -229,6 +229,8 @@ def _vault_with_due_notes(tmp_path: Path, *, mode: str = "expand") -> tuple[Path
             "---\n\n" + ("body " * 50) + "\n",
             encoding="utf-8",
         )
+    # UG-001 judges an update batch against HEAD
+    commit_vault(vault)
     return vault, spec
 
 
@@ -248,8 +250,13 @@ def test_ten_due_notes_and_a_share_of_three_dispatch_exactly_three_oldest_first(
 
     run_single_cycle(vault, cycle_num=1, budget_cap=10.0, max_cycles=1, spec=spec)
 
-    assert len(backlog.update_topics(vault)) == 10  # the sweep queued all ten
-    update_prompts = [p for p in _rendered_prompts(vault) if "## Update topics" in p]
+    # the sweep queued all ten; the three worked ones (confirmed) are closed
+    assert len(backlog.update_topics(vault)) == 7
+    update_prompts = [
+        p
+        for p in _rendered_prompts(vault)
+        if "\n## Update topics (JSON)\n" in p  # the block, not the DFS prose
+    ]
     assert len(update_prompts) == 1
     block = re.search(
         r"## Update topics \(JSON\)\s*```json\n(.*?)\n```",
@@ -259,7 +266,9 @@ def test_ten_due_notes_and_a_share_of_three_dispatch_exactly_three_oldest_first(
     assert block is not None
     stems = [row["note"] for row in json.loads(block.group(1))]
     assert stems == ["due-note-10", "due-note-09", "due-note-08"]
-    new_prompts = [p for p in _rendered_prompts(vault) if "## Batch topics" in p]
+    new_prompts = [
+        p for p in _rendered_prompts(vault) if "\n## Batch topics (JSON)\n" in p
+    ]
     assert new_prompts, "new-topic batches still run"
     plan = (vault / "_pipeline" / "research-plan.md").read_text(encoding="utf-8")
     assert "update_quota: 3" in plan

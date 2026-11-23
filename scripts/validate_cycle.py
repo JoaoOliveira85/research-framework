@@ -498,6 +498,46 @@ def _updates_shape_errors(report: dict) -> list[str]:
     return errors
 
 
+_UPDATE_OUTCOMES = ("confirmed", "revised", "superseded", "retracted")
+
+
+def _update_outcomes_shape_errors(report: dict) -> list[str]:
+    """``update_outcomes`` is optional; when present each row names an assigned
+    note and one outcome (spec 087 FR-012). Whether the outcome *holds* is the
+    pipeline's UG-001 gate, not this shape check."""
+    if "update_outcomes" not in report:
+        return []
+    rows = report["update_outcomes"]
+    if not isinstance(rows, list):
+        return ["update_outcomes must be a list"]
+    errors: list[str] = []
+    for index, row in enumerate(rows):
+        where = f"update_outcomes[{index}]"
+        if not isinstance(row, dict):
+            errors.append(f"{where} must be an object")
+            continue
+        note = row.get("note")
+        if not (isinstance(note, str) and note.strip()):
+            errors.append(f"{where} needs a non-empty 'note'")
+        if row.get("outcome") not in _UPDATE_OUTCOMES:
+            errors.append(
+                f"{where}.outcome must be one of {', '.join(_UPDATE_OUTCOMES)} "
+                f"(got {row.get('outcome')!r})"
+            )
+        consulted = row.get("sources_consulted")
+        if consulted is not None and not (
+            isinstance(consulted, list) and all(isinstance(s, str) for s in consulted)
+        ):
+            errors.append(f"{where}.sources_consulted must be a list of strings")
+        for key, value in row.items():
+            if key in ("note", "outcome", "sources_consulted"):
+                continue
+            # evidence_url, the successor field, change: a string or null
+            if value is not None and not isinstance(value, str):
+                errors.append(f"{where}.{key} must be a string or null")
+    return errors
+
+
 def validate_report_structure(report: dict) -> list[str]:
     errors: list[str] = []
     for field in REQUIRED_REPORT_FIELDS:
@@ -507,6 +547,7 @@ def validate_report_structure(report: dict) -> list[str]:
     if phase not in ("scout", "research"):
         errors.append(f"invalid phase: {phase!r} (must be 'scout' or 'research')")
     errors.extend(_updates_shape_errors(report))
+    errors.extend(_update_outcomes_shape_errors(report))
     return errors
 
 
@@ -966,6 +1007,7 @@ def validate_report_structure_v2(report: dict) -> list[str]:
             + " must be present"
         )
     errors.extend(_updates_shape_errors(report))
+    errors.extend(_update_outcomes_shape_errors(report))
     return errors
 
 

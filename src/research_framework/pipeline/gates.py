@@ -35,8 +35,9 @@ GateStatus = Literal["PASS", "WARN", "FAIL", "NA"]
 from WARN; see SG-003 / CG-003 abstraction-gate behaviour when the spec
 declares no ``forbidden_filename_prefixes`` (R-007)."""
 
-_GATE_ID_PATTERN = re.compile(r"^[CS]G-\d{3}$")
-"""Match ``CG-001``..``CG-999`` and ``SG-001``..``SG-999``. Three-digit
+_GATE_ID_PATTERN = re.compile(r"^[CSU]G-\d{3}$")
+"""Match ``CG-001``..``CG-999``, ``SG-001``..``SG-999`` and the update gate
+``UG-001``..``UG-999`` (spec 087). Three-digit
 zero-padded suffix matches ``contracts/cycle-quality-report.schema.json``."""
 
 
@@ -51,7 +52,7 @@ class GateResult:
 
     Invariants enforced in :meth:`__post_init__`:
 
-    - ``gate_id`` matches ``^[CS]G-\\d{3}$``.
+    - ``gate_id`` matches ``^[CSU]G-\\d{3}$``.
     - ``status`` is one of PASS / WARN / FAIL / NA.
     - ``status == "FAIL"`` requires non-empty ``correction_hint``.
 
@@ -119,7 +120,7 @@ def run_gate(
     drift compound exactly the way the trial run failed.
 
     The synthetic FAIL uses ``gate_id`` derived from the callable's name
-    when it follows the ``[CS]G_NNN_*`` convention; otherwise falls back
+    when it follows the ``[CSU]G_NNN_*`` convention; otherwise falls back
     to ``CG-000`` (the orchestrator-side wrapper that can't recover the
     real ID at this layer).
     """
@@ -151,13 +152,13 @@ def _infer_gate_id(callable_obj: Callable[..., Any]) -> str:
     """Best-effort gate-id extraction from a callable's name.
 
     Convention: gates are named like ``CG001_min_cycle_yield`` or
-    ``SG003_topic_abstraction_check``. We pull out the leading ``[CS]G``
+    ``SG003_topic_abstraction_check``. We pull out the leading ``[CSU]G``
     plus three digits and reformat to the ``CG-NNN`` shape required by
     the contract. Fallback ``CG-000`` is reserved for orchestrator-side
     failures where no real gate produced the result.
     """
     name = getattr(callable_obj, "__name__", "")
-    m = re.match(r"^([CS]G)(\d{3})", name)
+    m = re.match(r"^([CSU]G)(\d{3})", name)
     if m:
         return f"{m.group(1)}-{m.group(2)}"
     return "CG-000"

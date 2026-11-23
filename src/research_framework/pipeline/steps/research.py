@@ -285,6 +285,21 @@ def _phase(ctx: CycleContext) -> int:
                 if fraud is not None:
                     sg_results.append(fraud)
 
+            if is_update:
+                # Spec 087 FR-012: the writer proposes an outcome per assigned
+                # note; UG-001 decides it against HEAD, restores the notes that
+                # fail and closes the entries that pass.
+                from .. import update_outcomes
+
+                judged = update_outcomes.apply_batch(
+                    vault_dir,
+                    cycles_dir,
+                    research_report,
+                    cycle_num,
+                    assignment.updates,
+                )
+                sg_results.append(judged.gate)
+
             ts1 = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
             batch_result = BatchResult(
                 cycle_number=cycle_num,
@@ -311,7 +326,10 @@ def _phase(ctx: CycleContext) -> int:
                 updates_worked += len(assignment.updates)
             else:
                 cumulative_notes += len(note_names)
-            if batch_result.accepted:
+            if batch_result.accepted or is_update:
+                # An update batch's failures are handled by restoring its notes
+                # and leaving their entries open; there is no correction pass
+                # whose text could say "write notes, do not edit existing ones".
                 correction_text = ""
             else:
                 failing = [g for g in sg_results if g.status == "FAIL"]
@@ -321,7 +339,6 @@ def _phase(ctx: CycleContext) -> int:
                         failing,
                         cycle=cycle_num,
                         batch=assignment.batch_number,
-                        update_batch=is_update,
                     )
 
         research_report.parent.mkdir(parents=True, exist_ok=True)

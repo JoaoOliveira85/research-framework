@@ -7,13 +7,13 @@
 | **Source** | `templates/prompts/dfs-prompt.md.j2` |
 | **Role** | Depth-first research — writes notes, produces `_pipeline/research-report.json`. |
 | **Dispatched by** | `pipeline resume` / the cycle runner's research step |
-| **Source sha256** | `fd6ee4885391932c` |
+| **Source sha256** | `700b29fa0d1b621c` |
 
 Reproduced verbatim, including its placeholders. A vault gets this text with the placeholders filled at scaffold or dispatch time.
 
 ````
 ---
-_template_version: 2
+_template_version: 3
 ---
 You are running DFS research cycle {CYCLE_NUM} of a recursive research pass on the
 {{ spec.name }} vault.
@@ -119,6 +119,49 @@ back to archive.org next time.
 - **{{ ds.name }}** ({{ ds.type }})
 {% endfor %}
 
+### Update batches (when `## Update topics (JSON)` is appended)
+
+An UPDATE batch revisits notes the vault already has. The list under
+`## Update topics (JSON)` is your whole assignment: each entry names a note
+(`path`), why it is queued (`reason`: `new_material`, `review_due` or
+`operator`), the date it was last checked (`as_of`) and, for `new_material`, the
+sources that prompted it (`prompted_by`). Write no new note for any of them, edit
+no other existing note, and do not propose new topics.
+
+For EACH assigned note:
+
+1. **Search for what has changed since its `as_of`** — new results,
+   contradictions, deprecations, successors. Start from the PROBLEM the note
+   addresses (what a reader needs it for), not only from its title: a renamed or
+   replaced idea does not show up under the old name. Read the note first, then
+   check the sources in `prompted_by`, then search beyond them.
+2. **End in exactly one outcome**, and edit the note in place to match it:
+   - `confirmed` — you searched and nothing material changed. Change NOTHING in
+     the note except setting `as_of` to today's date. List what you consulted in
+     `sources_consulted` (at least one).
+   - `revised` — the note is still the right note but its content needed to
+     change (new facts, corrected claims, a newer release). Revise the body in
+     place, keep what is still right, add the new source(s) to `source_urls`, set
+     `as_of` to today. A note whose idea was renamed or absorbed into a broader
+     one is `revised`, NOT `superseded`.
+   - `superseded` — another note now replaces this one as the answer to the
+     problem. Set `currency: superseded` and `superseded_by` (the successor's
+     note name) in this note, add this note's name to the successor's
+     `supersedes`, and set `as_of` to today. The successor must exist (write it
+     if it does not, and report it in `notes_created`). `evidence_url` is the
+     source that shows the replacement.
+   - `retracted` — the note's central claim is shown to be wrong. Set
+     `currency: retracted` and `retraction_reason` (one sentence saying why, with
+     the source) in the note's frontmatter, and set `as_of` to today.
+     `evidence_url` is the source that shows it.
+3. An update you cannot complete: report no outcome for it and leave the note
+   exactly as it was. It stays queued.
+
+Every outcome sets the note's `as_of` to today. Report one entry per assigned
+note in `update_outcomes` (see Output): a missing or unsupported outcome restores
+the note and leaves it queued. `notes_updated` is derived by the framework from
+the outcomes; a `confirmed` outcome is not new content and counts as none.
+
 ### Naming
 
 Filenames MUST match the scout's `proposed_filenames` entry (convention: `{{ spec.naming_convention }}`).
@@ -133,6 +176,8 @@ Same schema as the scout report but with:
 - `phase`: `"research"`
 - `notes_created`: filenames of notes written this phase
 - `notes_updated`: filenames of existing notes deepened this phase
+- `update_outcomes`: one entry per assigned note of an UPDATE batch (see "Update
+  batches" above); `[]` for a batch of new topics
 - `skipped_topics`: one entry per assigned topic you did not complete (see
   "Skipped topics" above); `[]` when you completed them all
 - `topics_found.new`: normally empty after research (only populate if genuinely new
@@ -167,6 +212,16 @@ Same schema as the scout report but with:
   },
   "notes_created": ["<path/to/Note Name.md>", "..."],
   "notes_updated": [],
+  "update_outcomes": [
+    {
+      "note": "<assigned note name>",
+      "outcome": "confirmed" | "revised" | "superseded" | "retracted",
+      "sources_consulted": ["<URL or source consulted>"],
+      "evidence_url": "<URL supporting a superseded/retracted outcome, else null>",
+      "superseded_by": "<successor note name for superseded, else null>",
+      "change": "<one line: what changed, or 'nothing changed'>"
+    }
+  ],
   "skipped_topics": [],
   "new_wikilinks_discovered": [],
   "cost_estimate_usd": <float>,

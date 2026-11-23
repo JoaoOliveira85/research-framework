@@ -278,7 +278,6 @@ def _correction_prompt_text(
     *,
     cycle: int,
     batch: int | None,
-    update_batch: bool = False,
 ) -> str:
     from research_framework.pipeline.correction import (
         CorrectionDirective,
@@ -300,9 +299,7 @@ def _correction_prompt_text(
         first_sg005 = next(g for g in failing_gates if g.gate_id == "SG-005")
         hint = (first_sg005.correction_hint or "").strip()
         prelude = hint or (
-            "SG-005 correction: complete the frontmatter of the assigned notes."
-            if update_batch
-            else "SG-005 correction: write notes for the assigned topics "
+            "SG-005 correction: write notes for the assigned topics "
             "(do not edit existing notes to inflate the count)."
         )
         block = prelude + "\n\n" + block

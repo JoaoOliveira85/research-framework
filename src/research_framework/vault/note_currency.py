@@ -23,6 +23,8 @@ AS_OF_FIELD = "as_of"
 CURRENCY_FIELD = "currency"
 SUPERSEDES_FIELD = "supersedes"
 SUPERSEDED_BY_FIELD = "superseded_by"
+# Why a note was retracted: required on a `retracted` note (spec 087 FR-012).
+RETRACTION_REASON_FIELD = "retraction_reason"
 
 EMERGING = "emerging"
 CURRENT = "current"

@@ -181,7 +181,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
   **TDD discipline**: required.
 
-- [ ] T008 The writer's update contract and the outcome gate: the DFS prompt's
+- [x] T008 The writer's update contract and the outcome gate: the DFS prompt's
       update instructions (challenge from the problem the note addresses),
       `update_outcomes` in the research report, `UG-001` against `HEAD`,
       restore on failure, `close_update`, `notes_updated` derived, a

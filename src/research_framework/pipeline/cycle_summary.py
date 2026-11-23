@@ -306,6 +306,28 @@ def _collect_health_inputs(
     }
 
 
+def _update_outcome_lines(results: object) -> list[str]:
+    """Spec 087: how the cycle's update batches ended, by outcome, and why any
+    failed (the failing notes were restored and their entries left open)."""
+    if not isinstance(results, list) or not results:
+        return []
+    counts: dict[str, int] = {}
+    failures: list[str] = []
+    for row in results:
+        if not isinstance(row, dict):
+            continue
+        if row.get("status") == "passed":
+            key = str(row.get("outcome") or "unknown")
+            counts[key] = counts.get(key, 0) + 1
+        else:
+            counts["failed"] = counts.get("failed", 0) + 1
+            failures.append(f"  - `{row.get('note')}`: {row.get('reason')}")
+    if not counts:
+        return []
+    line = ", ".join(f"{name} {n}" for name, n in sorted(counts.items()))
+    return [f"- Update outcomes: **{line}**", *failures[:10]]
+
+
 def write_summary(
     vault_dir: Path,
     cycle_num: int,
@@ -374,6 +396,7 @@ def write_summary(
                     out.append(f"  - … ({len(notes_updated) - 10} more)")
         else:
             out.append("- _no notes created or updated this cycle_")
+        out.extend(_update_outcome_lines(research.get("update_outcome_results")))
         if topics_new:
             out.append(f"- New scout topics: **{len(topics_new)}**")
         if topics_existing:

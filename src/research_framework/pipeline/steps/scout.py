@@ -531,9 +531,44 @@ def _phase(ctx: CycleContext) -> int:
             )
             if queued:
                 _LOG.info(f"[currency] {queued} note(s) queued for update by the scout")
+                _refresh_plan_update_queue(
+                    pipeline_dir, cycles_dir, cycle_3, vault_dir, spec_for_gates
+                )
     except Exception as exc:
         _LOG.warning(f"[currency] WARN: recording scout updates failed: {exc}")
     return __exit
+
+
+def _refresh_plan_update_queue(
+    pipeline_dir: Path, cycles_dir: Path, cycle_3: str, vault_dir: Path, spec
+) -> None:
+    """Rewrite the plan's update queue now that the scout has queued updates.
+
+    The plan was generated before the scout ran, so notes the scout just found
+    new material for are not in it. Same-cycle dispatch (spec 087 US1) reads the
+    plan, so the queue and the split are recomputed against the backlog as it
+    stands, and the plan is written back (it is also what the operator reads).
+    """
+    plan_md_path = pipeline_dir / "research-plan.md"
+    if not plan_md_path.is_file():
+        return
+    from ..atomic_write import write_text as _aw_text
+    from ..currency import plan_updates
+    from ..research_plan import ResearchPlan as _RP
+
+    text = plan_md_path.read_text(encoding="utf-8")
+    plan = _RP.from_markdown(text)
+    plan = dataclasses.replace(
+        plan, priority_queue=sc._parse_priority_queue_from_plan_md(text)
+    )
+    queue, new_quota, update_quota = plan_updates(
+        vault_dir, spec, plan.cycle_quota, len(plan.priority_queue)
+    )
+    plan = dataclasses.replace(
+        plan, update_queue=queue, new_quota=new_quota, update_quota=update_quota
+    )
+    _aw_text(plan_md_path, plan.to_markdown())
+    _aw_text(cycles_dir / f"cycle-{cycle_3}-research-plan.md", plan.to_markdown())
 
 
 def run_scout(ctx: CycleContext) -> ScoutResult:
