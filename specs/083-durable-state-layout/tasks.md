@@ -250,7 +250,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [ ] T011 Run the migration from `vault_update.sync_vault_scripts`, so a
+- [x] T011 Run the migration from `vault_update.sync_vault_scripts`, so a
       shim rendered by the previous release migrates the vault (FR-010).
 
   ### Testing Requirements
