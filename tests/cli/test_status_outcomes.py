@@ -54,6 +54,7 @@ def test_status_shows_the_last_cycles_outcomes(
         "superseded": 1,
         "retracted": 0,
         "failed": 1,
+        "older_defects": 0,
     }
 
     assert main(["status", "--vault", str(vault)]) == 0

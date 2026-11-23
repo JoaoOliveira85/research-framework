@@ -251,10 +251,12 @@ def _update_outcomes(vault_dir: Path) -> dict[str, object] | None:
     if not isinstance(results, list) or not results:
         return None
     counts: dict[str, object] = {"cycle": cycle_num}
-    counts.update({kind: 0 for kind in _OUTCOME_KINDS}, failed=0)
+    counts.update({kind: 0 for kind in _OUTCOME_KINDS}, failed=0, older_defects=0)
     for row in results:
         if not isinstance(row, dict):
             continue
+        if row.get("pre_existing"):
+            counts["older_defects"] = int(counts["older_defects"]) + 1  # type: ignore[call-overload]
         if row.get("status") != "passed":
             counts["failed"] = int(counts["failed"]) + 1  # type: ignore[call-overload]
         elif row.get("outcome") in _OUTCOME_KINDS:
@@ -276,6 +278,9 @@ def _set_aside_count(vault_dir: Path) -> int:
 def _outcomes_line(outcomes: dict[str, object]) -> str:
     kinds = (*_OUTCOME_KINDS, "failed")
     body = ", ".join(f"{kind} {outcomes[kind]}" for kind in kinds)
+    older = int(outcomes.get("older_defects") or 0)  # type: ignore[call-overload]
+    if older:
+        body += f", {older} note(s) carry older defects"
     return f"  update outcomes (cycle {outcomes['cycle']}): {body}"
 
 

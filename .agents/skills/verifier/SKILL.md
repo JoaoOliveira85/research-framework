@@ -16,6 +16,7 @@ output:
   verdict: '"accept" | "reject"'
   violations: list[object]           # {rule_id, location, message}
   suggested_fix: "str | null"
+  pre_existing: list[object]         # optional, update batches only; see below
 ---
 
 # Role
@@ -67,6 +68,13 @@ Check, in order:
   "suggested_fix": "<short>"
 }
 ```
+
+When the prompt says the note is an UPDATE to an existing note, it carries the
+diff against the committed version. Then reject only for what the update added
+or changed (and for an outcome its evidence does not support); a defect the
+committed version already had is not a reason to reject. List it under an
+optional `"pre_existing"` array of the same `{rule_id, location, message}`
+objects, and leave it out of `"violations"`.
 
 # Examples
 

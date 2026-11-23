@@ -325,6 +325,9 @@ def _update_outcome_lines(results: object) -> list[str]:
     if not counts:
         return []
     line = ", ".join(f"{name} {n}" for name, n in sorted(counts.items()))
+    older = sum(1 for r in results if isinstance(r, dict) and r.get("pre_existing"))
+    if older:
+        line += f", {older} note(s) carry older defects"
     return [f"- Update outcomes: **{line}**", *failures[:10]]
 
 

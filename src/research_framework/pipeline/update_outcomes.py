@@ -369,6 +369,32 @@ def recorded_result(
     return None
 
 
+def record_pre_existing(
+    vault_dir: Path, cycle: int, note_rel: str, items: list[dict[str, str]]
+) -> bool:
+    """Record the flaws an update's note already had (``[{rule, detail}]``).
+
+    An update is judged by what it changed (spec 087): a flaw the committed
+    version carried does not reject it, but it is not lost: it is kept on the
+    note's result in the sidecar and counted in the cycle summary and
+    ``./vault status``. Returns ``False`` when the note had no result.
+    """
+    cycles_dir = vault_dir / "_pipeline" / "cycles"
+    sidecar = _sidecar(cycles_dir, cycle)
+    results = [r for r in _read_json(sidecar).get("results", []) if isinstance(r, dict)]
+    target = next((r for r in results if r.get("path") == note_rel), None)
+    if target is None:
+        return False
+    target["pre_existing"] = [
+        {"rule": str(i.get("rule", "")), "detail": str(i.get("detail", ""))}
+        for i in items
+    ]
+    write_json(sidecar, {"cycle": cycle, "results": results})
+    research_report = cycles_dir / f"cycle-{cycle:03d}-research.json"
+    _patch_report(research_report, _read_json(research_report), results)
+    return True
+
+
 def reject_outcome(vault_dir: Path, cycle: int, note_rel: str, reason: str) -> bool:
     """The verifier rejected an update outcome UG-001 had passed (FR-013).
 
@@ -427,6 +453,7 @@ def _patch_report(
 __all__ = [
     "BatchOutcomes",
     "recorded_result",
+    "record_pre_existing",
     "reject_outcome",
     "Verdict",
     "apply_batch",

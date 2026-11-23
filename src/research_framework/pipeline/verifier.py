@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import difflib
 import json
 import logging
 import re
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -38,6 +40,9 @@ class VerifierVerdict:
     status: str  # "verified" | "pending" | "rejected"
     violations: list[dict] = field(default_factory=list)
     suggested_fix: str | None = None
+    # Spec 087: flaws the note already had before the update being judged. They
+    # do not reject it; they are recorded (update-outcomes sidecar) and counted.
+    pre_existing: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -56,6 +61,7 @@ class VerifierSummary:
                     "status": v.status,
                     "violations": v.violations,
                     "suggested_fix": v.suggested_fix,
+                    **({"pre_existing": v.pre_existing} if v.pre_existing else {}),
                 }
                 for v in self.verdicts
             ],
@@ -139,12 +145,59 @@ def deterministic_wikilink_violations(
         {
             "rule_id": "IX-wikilink-title-corruption",
             "location": f"note:{note_rel} first-wikilink:[[{first}]]",
+            "subject": first.strip().lower(),
             "message": (
                 f"first body wikilink [[{first}]] renames this note's own title "
                 f"'{title}' (acronym {upper}) to '{resolved}'"
             ),
         }
     ]
+
+
+def violation_key(violation: dict[str, Any]) -> tuple[str, str]:
+    """Which flaw a violation is, for telling an old one from a new one.
+
+    The key is the rule and its SUBJECT, the thing the rule fired about:
+
+    * ``IX-credibility-*`` / ``IX-citation-malformed``: the cited URL;
+    * ``IX-wikilink-title-corruption``: the offending first wikilink's text;
+    * anything else (model-reported rules, too): the message, whitespace and case
+      folded.
+
+    The location is not part of the key (a note's path and a line move);
+    multiplicity is: see :func:`split_pre_existing`.
+    """
+    subject = violation.get("subject") or violation.get("message") or ""
+    return (
+        str(violation.get("rule_id") or ""),
+        " ".join(str(subject).split()).lower(),
+    )
+
+
+def split_pre_existing(
+    current: list[dict[str, Any]], committed: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """``(new, pre_existing)``: a violation is pre-existing when the committed
+    version fires the same rule about the same subject, once per occurrence it
+    had. A second occurrence, a new subject or a different rule is new."""
+    allowance = Counter(violation_key(v) for v in committed)
+    new: list[dict[str, Any]] = []
+    old: list[dict[str, Any]] = []
+    for v in current:
+        key = violation_key(v)
+        if allowance[key] > 0:
+            allowance[key] -= 1
+            old.append(v)
+        else:
+            new.append(v)
+    return new, old
+
+
+def _pre_existing_record(violation: dict[str, Any]) -> dict[str, str]:
+    rule = str(violation.get("rule_id") or "model")
+    detail = str(violation.get("message") or violation.get("subject") or "")
+    where = str(violation.get("location") or "")
+    return {"rule": rule, "detail": f"{detail} ({where})" if where else detail}
 
 
 CURRENCY_RULE_IDS = ("IX-currency-evidence", "IX-supersession-symmetry")
@@ -319,6 +372,15 @@ def _symmetry_violations(
 
 
 def _merge_verifier_verdict(
+    agent_verdict: VerifierVerdict,
+    shape_violations: list[dict[str, str]],
+) -> VerifierVerdict:
+    merged_verdict = _merge_shape(agent_verdict, shape_violations)
+    merged_verdict.pre_existing = list(agent_verdict.pre_existing)
+    return merged_verdict
+
+
+def _merge_shape(
     agent_verdict: VerifierVerdict,
     shape_violations: list[dict[str, str]],
 ) -> VerifierVerdict:
@@ -504,6 +566,22 @@ def run_verifier_stage(
             pending=pending,
         )
         shape_violations += currency_violations
+        # Spec 087: an update is judged by what it changed. For a note an update
+        # batch worked, a flaw the committed version already had (same rule, same
+        # subject) does not reject it; it is recorded instead.
+        committed_text: str | None = None
+        pre_existing: list[dict[str, Any]] = []
+        if recorded is not None:
+            from research_framework.pipeline import vault_git
+
+            committed_text = vault_git.head_content(vault_dir, note_rel)
+        if committed_text is not None:
+            old = deterministic_credibility_violations(
+                vault_dir, note_rel, committed_text
+            ) + deterministic_wikilink_violations(vault_dir, note_rel, committed_text)
+            judged = [v for v in shape_violations if v not in currency_violations]
+            judged, pre_existing = split_pre_existing(judged, old)
+            shape_violations = judged + currency_violations
         if any(
             v["rule_id"] in CURRENCY_RULE_IDS and v.get("severity", "fail") != "warn"
             for v in currency_violations
@@ -521,8 +599,17 @@ def run_verifier_stage(
                 timeout_s=timeout_s,
                 cycle_num=cycle_num,
                 call_index=call_index,
+                committed_text=committed_text,
             )
         verdict = _merge_verifier_verdict(verdict, shape_violations)
+        if committed_text is not None:
+            verdict.pre_existing = [
+                _pre_existing_record(v) for v in pre_existing + verdict.pre_existing
+            ]
+            if verdict.pre_existing:
+                update_outcomes.record_pre_existing(
+                    vault_dir, cycle_num, note_rel, verdict.pre_existing
+                )
         if verdict.status == "rejected" and recorded is not None:
             # An update outcome that did not stand: its note goes back to HEAD
             # with the other rejected notes, and its entry is open again.
@@ -699,12 +786,40 @@ def _verifier_inputs(vault_dir: Path, note_text: str) -> dict[str, Any]:
     }
 
 
+def _update_context(committed_text: str, note_content: str) -> str:
+    """The prompt section for a note an UPDATE revised (spec 087): the diff
+    against the committed version, and the rule that only what the update
+    added or changed can be rejected."""
+    diff = list(
+        difflib.unified_diff(
+            committed_text.splitlines(),
+            note_content.splitlines(),
+            "committed",
+            "revised",
+            lineterm="",
+            n=2,
+        )
+    )
+    shown = "\n".join(diff[:400]) + ("\n… (diff truncated)" if len(diff) > 400 else "")
+    return (
+        "## This note is an UPDATE to an existing note\n\n"
+        "It was revised in place; the committed version is the baseline. The change:\n\n"
+        f"```diff\n{shown or '(no textual change)'}\n```\n\n"
+        "Judge the UPDATE. Reject only for what the update added or changed, and "
+        "for an outcome its evidence does not support. A defect that was already in "
+        "the committed version (an old wikilink, an old citation without a "
+        "credibility level, a truncated token) is NOT a reason to reject: list it "
+        'under `"pre_existing"` in your verdict, never in `"violations"`.\n\n'
+    )
+
+
 def _build_verifier_prompt(
     note_content: str,
     *,
     note_type: str,
     source_policy: str,
     code_url_patterns: Sequence[str],
+    committed_text: str | None = None,
 ) -> str:
     """Wrap the note in the verifier's full instructions and their inputs.
 
@@ -740,14 +855,25 @@ def _build_verifier_prompt(
         '    {"rule_id": "<id>", "location": "<line or section>", "message": "<short>"}\n'
         "  ],\n"
         '  "suggested_fix": "<short string or null>"\n'
-        "}\n"
+        + (
+            ',  "pre_existing": [{"rule_id": "<id>", "location": "<where>", '
+            '"message": "<short>"}]\n'
+            if committed_text is not None
+            else ""
+        )
+        + "}\n"
         "```\n\n"
         "If you must include reasoning, place the JSON inside a "
         "`` ```json `` code fence \u2014 the framework will extract it. Default "
         "to `reject` when uncertain and name the rule that triggered the "
         "concern.\n\n"
         "---\n\n"
-        "## Note under review\n\n"
+        + (
+            _update_context(committed_text, note_content)
+            if committed_text is not None
+            else ""
+        )
+        + "## Note under review\n\n"
         f"{note_content}\n"
     )
 
@@ -780,6 +906,7 @@ def _call_verifier(
     timeout_s: int,
     cycle_num: int,
     call_index: int,
+    committed_text: str | None = None,
 ) -> VerifierVerdict:
     """Invoke agent_call.py for a single note and return a VerifierVerdict.
 
@@ -797,7 +924,11 @@ def _call_verifier(
     none of it. The fake agent hides this in tests because it costs $0.
     """
     note_text = note_file.read_text(encoding="utf-8")
-    prompt = _build_verifier_prompt(note_text, **_verifier_inputs(vault_dir, note_text))
+    prompt = _build_verifier_prompt(
+        note_text,
+        committed_text=committed_text,
+        **_verifier_inputs(vault_dir, note_text),
+    )
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".md", delete=False, encoding="utf-8"
     ) as prompt_f:
@@ -858,6 +989,13 @@ def _call_verifier(
     if data is None:
         return VerifierVerdict(note_path=note_rel, status="pending")
 
+    return _verdict_from_data(note_rel, data)
+
+
+def _verdict_from_data(note_rel: str, data: dict[str, Any]) -> VerifierVerdict:
+    """The verifier's JSON object as a verdict. ``pre_existing`` (spec 087, the
+    flaws an update did not introduce) is optional and tolerated when absent or
+    malformed."""
     verdict_str = data.get("verdict", "")
     violations_raw = data.get("violations")
     # `null` (or any non-list) is "no violations listed", not a reason to
@@ -871,6 +1009,12 @@ def _call_verifier(
             violations.append(v)
         else:
             violations.append({"message": str(v)})
+    older_raw = data.get("pre_existing")
+    older: list[dict] = (
+        [v if isinstance(v, dict) else {"message": str(v)} for v in older_raw]
+        if isinstance(older_raw, list)
+        else []
+    )
 
     if verdict_str == "accept":
         return VerifierVerdict(
@@ -878,6 +1022,7 @@ def _call_verifier(
             status="verified",
             violations=[],
             suggested_fix=data.get("suggested_fix"),
+            pre_existing=older,
         )
     elif verdict_str == "reject":
         return VerifierVerdict(
@@ -885,6 +1030,7 @@ def _call_verifier(
             status="rejected",
             violations=violations,
             suggested_fix=data.get("suggested_fix"),
+            pre_existing=older,
         )
     else:
         return VerifierVerdict(note_path=note_rel, status="pending")

@@ -114,6 +114,7 @@ def test_an_expand_cycle_with_no_new_topics_still_works_its_updates(
 ) -> None:
     monkeypatch.setenv("FAKE_AGENT_SCENARIO", "happy")
     monkeypatch.setenv(fake_agent.SCOUT_NEW_ENV, "0")
+    monkeypatch.setenv("FAKE_AGENT_VERIFIER_SCENARIO", "accept")
     monkeypatch.setenv(fake_agent.UPDATE_SCENARIO_ENV, "revised")
     vault, spec, _ = _vault(tmp_path, mode="expand")
     _healthy(vault)
@@ -194,3 +195,74 @@ def test_update_only_cycles_stop_when_no_update_holds(
     assert len(cycles) == 1, "no second cycle on entries that could not be settled"
     entry = _entry(vault)
     assert entry["status"] == "open" and entry["attempts"] == 1
+
+
+def test_an_update_to_a_note_with_an_old_defect_stands_and_counts_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The committed note already carries a citation with an invalid
+    credibility level. The update adds no flaw, so it stands:
+    the run exits 0, the entry resolves and the summary counts the older defect
+    (spec 087, defect 4)."""
+    monkeypatch.setenv("FAKE_AGENT_SCENARIO", "happy")
+    monkeypatch.setenv(fake_agent.SCOUT_NEW_ENV, "0")
+    monkeypatch.setenv("FAKE_AGENT_VERIFIER_SCENARIO", "accept")
+    monkeypatch.setenv(fake_agent.UPDATE_SCENARIO_ENV, "revised")
+    monkeypatch.setenv(
+        fake_agent.SCOUT_UPDATES_ENV,
+        json.dumps(
+            [
+                {
+                    "note": "kafka-retries.md",
+                    "source_urls": ["https://example.org/kafka-4"],
+                    "summary": "4.0 changes the default",
+                }
+            ]
+        ),
+    )
+    vault, spec, _ = _vault(tmp_path, mode="refresh")
+    settings = vault / "settings.yaml"  # the verifier judges the update
+    settings.write_text(settings.read_text().replace("enabled: false", "enabled: true"))
+    _healthy(vault)
+    note = vault / REL
+    note.write_text(
+        note.read_text(encoding="utf-8").replace(
+            "source_urls: [https://example.org/original]",
+            "source_urls: [{url: https://example.org/original, credibility: bogus}]",
+        ),
+        encoding="utf-8",
+    )
+    _git(vault, "add", "-A", "-f")
+    _git(
+        vault,
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@e.invalid",
+        "commit",
+        "-qm",
+        "base",
+    )
+
+    rc = run_cycles(
+        spec,
+        vault,
+        budget=BudgetResolution(
+            max_cycles=3,
+            max_cycles_source="settings",
+            max_usd=10.0,
+            max_usd_source="settings",
+        ),
+    )
+
+    assert rc == 0
+    entry = _entry(vault)
+    assert (entry["status"], entry["outcome"]) == ("resolved", "revised")
+    report = json.loads(
+        (vault / "_pipeline/cycles/cycle-001-research.json").read_text()
+    )
+    (row,) = report["update_outcome_results"]
+    assert row["status"] == "passed"
+    assert [p["rule"] for p in row["pre_existing"]] == ["IX-credibility-malformed"]
+    summary = (vault / "_pipeline/cycles/cycle-001-summary.md").read_text("utf-8")
+    assert "1 note(s) carry older defects" in summary

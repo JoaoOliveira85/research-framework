@@ -7,13 +7,13 @@
 | **Source** | `templates/prompts/dfs-prompt.md.j2` |
 | **Role** | Depth-first research — writes notes, produces `_pipeline/research-report.json`. |
 | **Dispatched by** | `pipeline resume` / the cycle runner's research step |
-| **Source sha256** | `700b29fa0d1b621c` |
+| **Source sha256** | `6d534954c10de0f7` |
 
 Reproduced verbatim, including its placeholders. A vault gets this text with the placeholders filled at scaffold or dispatch time.
 
 ````
 ---
-_template_version: 3
+_template_version: 4
 ---
 You are running DFS research cycle {CYCLE_NUM} of a recursive research pass on the
 {{ spec.name }} vault.
@@ -154,6 +154,17 @@ For EACH assigned note:
      `currency: retracted` and `retraction_reason` (one sentence saying why, with
      the source) in the note's frontmatter, and set `as_of` to today.
      `evidence_url` is the source that shows it.
+   **Older flaws in a note you revise.** The verifier judges an update by what
+   it changed, so a flaw the note already had does not reject it. Still, while
+   you revise, repair what is mechanical in the parts you touch or can plainly
+   see: a wikilink that points the note's own acronym at another note, a
+   truncated token (`AC`, `AE`), a citation of a source you re-read that lacks
+   its credibility level. A repair is NOT an outcome by itself: only the changes
+   a `revised` outcome reports count as content. When the only thing a note
+   needs is such a repair, report `confirmed` and leave the note exactly as it
+   was (a `confirmed` note's body and frontmatter may not change besides
+   `as_of`); the defect is recorded as an older one and is left for a later pass.
+
 3. An update you cannot complete: report no outcome for it and leave the note
    exactly as it was. It stays queued.
 
