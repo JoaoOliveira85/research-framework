@@ -121,7 +121,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
   **TDD discipline**: required.
 
-- [ ] T005 `scripts/topic_propose.py` records accepted proposals through `B`
+- [x] T005 `scripts/topic_propose.py` records accepted proposals through `B`
       and dedupes against `all_titles()` (FR-006, FR-013).
 
   ### Testing Requirements

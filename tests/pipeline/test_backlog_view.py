@@ -356,7 +356,6 @@ def test_a_skipped_write_does_not_touch_the_view(tmp_path: Path) -> None:
 # quarantine sweep, T007 planner, T008 re-grade, T009 scaffold). The list must
 # end empty; ``test_the_allowlist_has_no_stale_entries`` fails on a leftover.
 _NOT_YET_MIGRATED = {
-    "scripts/topic_propose.py",
     "src/research_framework/pipeline/orchestrator.py",
     "src/research_framework/pipeline/research_plan.py",
     "src/research_framework/cli/regrade.py",
