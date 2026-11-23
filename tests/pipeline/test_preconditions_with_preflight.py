@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from research_framework.pipeline import state_layout as L
 from research_framework.pipeline.preconditions import check
 
 _real_subprocess_run = subprocess.run
@@ -16,7 +17,9 @@ def _write_passing_preconditions_1_to_5(vault: Path) -> None:
     """Minimal layout so checks 1–5 succeed without hitting the real repo validator."""
     pl = vault / "_pipeline"
     pl.mkdir(parents=True)
-    pl.joinpath("coverage-targets.json").write_text("{}", encoding="utf-8")
+    targets = L.coverage_targets_path(vault)
+    targets.parent.mkdir(parents=True, exist_ok=True)
+    targets.write_text("{}", encoding="utf-8")
     pl.joinpath("budget-log.md").write_text("# budget\n", encoding="utf-8")
     vault.joinpath("CLAUDE.md").write_text(
         "# x\nnaming convention: test\n", encoding="utf-8"

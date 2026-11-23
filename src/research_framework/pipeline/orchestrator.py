@@ -25,7 +25,15 @@ if TYPE_CHECKING:
     from ..cli._budget_resolve import BudgetResolution
 
 from ..spec.schema import SpecConfig
-from . import plan_narrator, quality_report, research_plan, vault_commit, vault_git
+from . import (
+    cycle_ledger,
+    plan_narrator,
+    quality_report,
+    research_plan,
+    state_layout,
+    vault_commit,
+    vault_git,
+)
 from .abort_diagnosis import diagnose_cycle_abort
 from .archived import (  # noqa: F401 - is_archived re-exported (spec 071)
     ARCHIVED_EXIT,
@@ -131,7 +139,7 @@ def _free_quarantine_path(qdir: Path, note_path: Path) -> Path:
 
 
 def _quarantine_orphan_note(vault_dir: Path, note_path: Path) -> None:
-    qdir = vault_dir / "_pipeline" / "quarantine"
+    qdir = state_layout.quarantine_dir(vault_dir)
     qdir.mkdir(parents=True, exist_ok=True)
     dest = _free_quarantine_path(qdir, note_path)
     shutil.move(str(note_path), str(dest))
@@ -169,7 +177,7 @@ def _reconcile_orphan_notes_at_cycle_start(vault_dir: Path, cycle_num: int) -> N
         if sg.status == "FAIL":
             _LOG.info(
                 f"WARN: orphan note {p.name} failed SG-005 — moving to "
-                f"_pipeline/quarantine: {sg.message}"
+                f"_pipeline/state/quarantine: {sg.message}"
             )
             try:
                 _quarantine_orphan_note(vault_dir, p)
@@ -214,7 +222,7 @@ def _rebuild_indexes_best_effort(vault_dir: Path) -> None:
 
 def _quarantine_out_of_scope_notes(vault_dir: Path, spec) -> list[str]:
     """Move notes whose filename / category / title / body matches a `scope.out_of_scope`
-    token into `_pipeline/quarantine/`. Enforces SC-006 against agent disobedience.
+    token into `_pipeline/state/quarantine/`. Enforces SC-006 against agent disobedience.
     Returns the list of quarantined filenames (empty if none).
     """
     if spec is None:
@@ -229,7 +237,7 @@ def _quarantine_out_of_scope_notes(vault_dir: Path, spec) -> list[str]:
     corpus = corpus_dir(vault_dir)
     if not corpus.is_dir():
         return []
-    quarantine = vault_dir / "_pipeline" / "quarantine"
+    quarantine = state_layout.quarantine_dir(vault_dir)
     quarantined: list[str] = []
     for note in corpus.rglob("*.md"):
         if note.name.startswith("_"):
@@ -385,7 +393,7 @@ def _write_quarantine_backlog(
 
 def _quarantine_rejected_notes(vault_dir: Path) -> int:
     """Spec 062 FR1: move every still-``verifier_status: rejected`` note out of the
-    indexed/citable corpus into ``_pipeline/quarantine/`` on ANY exit.
+    indexed/citable corpus into ``_pipeline/state/quarantine/`` on ANY exit.
 
     Mirrors :func:`_quarantine_out_of_scope_notes`. The indexer/readers only scan
     ``data_vault/`` (steps/research.py), so a quarantined note becomes uncitable and
@@ -412,7 +420,7 @@ def _quarantine_rejected_notes(vault_dir: Path) -> int:
     corpus = corpus_dir(vault_dir)
     if not corpus.is_dir():
         return 0
-    quarantine = vault_dir / "_pipeline" / "quarantine"
+    quarantine = state_layout.quarantine_dir(vault_dir)
     quarantined = 0
     new_backlog_lines: list[str] = []
     for note in sorted(corpus.rglob("*.md")):
@@ -475,7 +483,7 @@ def _quarantine_rejected_notes(vault_dir: Path) -> int:
     if quarantined:
         _LOG.warning(
             "[orchestrator] %d verifier-rejected note(s) quarantined "
-            "(uncitable/unindexed); see _pipeline/quarantine/",
+            "(uncitable/unindexed); see _pipeline/state/quarantine/",
             quarantined,
         )
     # Reconcile on every sweep, not just when this run quarantined something —
@@ -754,7 +762,7 @@ def run_single_cycle(
     # terminate after still writing notes this cycle, and those notes count
     # toward coverage + the auto-resume decision. ABORT (rc==2) is skipped
     # because the cycle report is unreliable then. Skip CG-aborted intermediate
-    # attempts (017 Q3): they must not roll back coverage-targets / notes.
+    # attempts (017 Q3): they must not roll back coverage targets / notes.
     cycle_report: dict | None = None
     if not aborted and returncode in (0, 1):
         report_file = _cycle_research_report_path(vault_dir, cycle_num)
@@ -779,6 +787,10 @@ def run_single_cycle(
             _append_budget_log(vault_dir, cycle_num, cycle_report)
         except Exception as e:
             _LOG.warning(f"WARN: failed to append budget log: {e}")
+        try:
+            cycle_ledger.close_cycle(vault_dir, cycle_num)
+        except Exception as e:
+            _LOG.warning(f"WARN: failed to append cycle ledger row: {e}")
 
     _quarantine_out_of_scope_notes(vault_dir, spec)
     _rebuild_indexes_best_effort(vault_dir)
@@ -838,6 +850,12 @@ def mark_cycle_aborted(vault_dir: Path, cycle: int, *, reason: str) -> None:
         )
     except OSError as exc:  # pragma: no cover - advisory
         _LOG.warning("[orchestrator] could not write abort marker: %s", exc)
+    # Spec 083 SC-001: what an abandoned cycle spent must survive a clean of
+    # cycles/, or the lifetime cap forgets it. Best-effort, like the marker.
+    try:
+        cycle_ledger.record_aborted(vault_dir, cycle)
+    except Exception as exc:
+        _LOG.warning("[orchestrator] could not record aborted cycle spend: %s", exc)
 
 
 def clear_cycle_aborted(vault_dir: Path, cycle: int) -> None:
@@ -884,7 +902,7 @@ def run_cycles(
     - **Abort** (rc=2): structural error inside ``run_single_cycle`` (e.g.
       scout JSON malformed). Stops immediately.
 
-    Auto-promotion of high-citation orphans into ``coverage-targets.json``
+    Auto-promotion of high-citation orphans into the coverage targets
     is owned by ``scripts/topic_harvest.py`` (called as Step 7 of the
     cycle runner). By the time ``run_single_cycle`` returns, the
     coverage targets already reflect the latest emergent topology, so the
@@ -985,14 +1003,14 @@ def run_cycles(
 
         Issue #155: the verifier-rejected sweep MUST run BEFORE
         ``vault_commit.commit_cycle`` so the quarantine MOVE (delete from
-        ``data_vault/`` + add under ``_pipeline/quarantine/``) lands in the
+        ``data_vault/`` + add under ``_pipeline/state/quarantine/``) lands in the
         cycle commit atomically. Without this, a constrained / aborted /
         externally-killed exit leaves the deletes uncommitted in the working
         tree (the rc7 reference-vault GA-003 failure mode).
         """
         # Pre-commit safety net: sweep verifier-rejected notes into quarantine
         # so the upcoming commit captures the move (both the data_vault/ DELETE
-        # and the _pipeline/quarantine/ ADD) as one atomic cycle commit.
+        # and the _pipeline/state/quarantine/ ADD) as one atomic cycle commit.
         try:
             _quarantine_rejected_notes(vault_dir)
         except Exception as exc:  # pragma: no cover - defensive
@@ -1532,7 +1550,7 @@ def _phase2_promoted_titles(vault_dir: Path, *, before_cycle: int) -> list[str]:
 
 
 def _persistent_reject_titles(vault_dir: Path) -> list[str]:
-    """Read ``_pipeline/propose-rejects.md`` and return titles to exclude.
+    """Read the persistent propose rejects and return titles to exclude.
 
     Format written by ``scripts/topic_propose.py`` is::
 
@@ -1544,7 +1562,7 @@ def _persistent_reject_titles(vault_dir: Path) -> list[str]:
     """
     import re as _re
 
-    path = vault_dir / "_pipeline" / "propose-rejects.md"
+    path = state_layout.propose_rejects_path(vault_dir)
     if not path.is_file():
         return []
     try:
@@ -1606,8 +1624,8 @@ def _render_cycle_scout_prompt(
     existing = set(existing_vault_filenames(vault_dir))
     existing.update(_persistent_reject_titles(vault_dir))
 
-    # Enrich spec sources with active discovered sources from sources.db.
-    # Falls back to spec.data_sources unchanged when sources.db doesn't exist.
+    # Enrich spec sources with active discovered sources from the sources database.
+    # Falls back to spec.data_sources unchanged when the sources database doesn't exist.
     enriched_sources = merge_into_prompt_context(spec, vault_dir)
     enriched_spec = spec
     if enriched_sources is not spec.data_sources:
@@ -1640,23 +1658,7 @@ def _sum_sidecar_costs(vault_dir: Path, cycle_num: int) -> float | None:
     ``dispatch()``'s filesystem allocator — this function sums them without
     special-casing retries.
     """
-    agent_calls = (
-        vault_dir / "_pipeline" / "cycles" / f"cycle-{cycle_num:03d}" / "agent-calls"
-    )
-    if not agent_calls.is_dir():
-        return None
-    sidecars = sorted(agent_calls.glob("*.json"))
-    if not sidecars:
-        return None
-    total = 0.0
-    for path in sidecars:
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception as e:
-            _LOG.warning(f"WARN: cost sidecar {path} unreadable: {e}")
-            continue
-        total += float(data.get("cost_usd") or 0.0)
-    return total
+    return cycle_ledger.sum_sidecar_costs(vault_dir, cycle_num)
 
 
 def _append_budget_log(vault_dir: Path, cycle_num: int, report: dict) -> None:
@@ -1713,10 +1715,5 @@ def _append_budget_log(vault_dir: Path, cycle_num: int, report: dict) -> None:
 
 
 def _cumulative_sidecar_cost(vault_dir: Path, *, up_to: int) -> float:
-    """Sum every sidecar cost for cycles ``1..up_to`` (inclusive)."""
-    total = 0.0
-    for cycle in range(1, up_to + 1):
-        cycle_total = _sum_sidecar_costs(vault_dir, cycle)
-        if cycle_total is not None:
-            total += cycle_total
-    return total
+    """Lifetime spend over cycles ``1..up_to``: the ledger, then the scan for the rest."""
+    return cycle_ledger.lifetime_cost(vault_dir, up_to=up_to)

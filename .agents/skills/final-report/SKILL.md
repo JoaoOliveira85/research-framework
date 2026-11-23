@@ -27,7 +27,7 @@ it still doesn't.
 # Constraints
 
 - MUST NOT claim acceptance criteria are met unless verifiable from vault
-  scripts (`coverage-targets.json`, `validate_vault.py` output).
+  scripts (`_pipeline/state/coverage-targets.json`, `validate_vault.py` output).
 
 # Output format
 

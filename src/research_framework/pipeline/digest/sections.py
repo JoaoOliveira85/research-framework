@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from research_framework.pipeline import state_layout
 from research_framework.spec.simple import load as load_spec
 from research_framework.vault.corpus import corpus_dir
 from research_framework.vault.frontmatter import parse_frontmatter
@@ -112,11 +113,10 @@ def _notes_in_range(
 
 def _load_coverage_targets(vault_dir: Path) -> tuple[list[dict[str, Any]], list[str]]:
     warnings: list[str] = []
-    for rel in (
-        Path("coverage-targets.json"),
-        Path("_pipeline") / "coverage-targets.json",
-    ):
-        path = vault_dir / rel
+    state_path = state_layout.coverage_targets_path(vault_dir)
+    # A digest fixture keeps a bare copy at the vault root; real vaults keep
+    # the state file only.
+    for path in (vault_dir / state_path.name, state_path):
         if not path.is_file():
             continue
         data = _load_json(path)
@@ -124,7 +124,7 @@ def _load_coverage_targets(vault_dir: Path) -> tuple[list[dict[str, Any]], list[
             continue
         if "cycle_number" not in data:
             warnings.append(
-                "[schema-migrated] coverage-targets.json missing cycle_number — "
+                "[schema-migrated] coverage targets missing cycle_number — "
                 "best-effort parse"
             )
         return [c for c in data["categories"] if isinstance(c, dict)], warnings
@@ -132,7 +132,7 @@ def _load_coverage_targets(vault_dir: Path) -> tuple[list[dict[str, Any]], list[
 
 
 def _referencing_deltas(vault_dir: Path, cycles: list[CycleScope]) -> dict[str, int]:
-    db_path = vault_dir / "_pipeline" / "sources.db"
+    db_path = state_layout.sources_db_path(vault_dir)
     if not db_path.is_file() or not cycles:
         return {}
     first, last = min(c.number for c in cycles), max(c.number for c in cycles)
@@ -155,7 +155,7 @@ def _referencing_deltas(vault_dir: Path, cycles: list[CycleScope]) -> dict[str, 
         return deltas
     except sqlite3.Error:
         # No tables yet, or not a database: rank without deltas, as when
-        # there is no sources.db.
+        # there is no sources database.
         return {}
     finally:
         conn.close()
@@ -198,13 +198,13 @@ def build_source_drift(
     date_range: DateRange,
 ) -> tuple[list[dict[str, Any]], list[str], bool]:
     warnings: list[str] = []
-    db_path = vault_dir / "_pipeline" / "sources.db"
+    db_path = state_layout.sources_db_path(vault_dir)
     if not db_path.is_file() or not cycles:
         return [], warnings, False
 
     conn = _try_connect_sources_db(db_path)
     if conn is None:
-        warnings.append("sources.db locked — Source Quality Drift omitted")
+        warnings.append("sources database locked — Source Quality Drift omitted")
         return [], warnings, True
 
     numbers = sorted(c.number for c in cycles)
@@ -284,7 +284,9 @@ def build_source_drift(
     except sqlite3.Error as exc:
         # No tables yet, or not a database: omit the section, as for a locked
         # one, rather than render "no drift" from data never read.
-        warnings.append(f"sources.db unreadable ({exc}) — Source Quality Drift omitted")
+        warnings.append(
+            f"sources database unreadable ({exc}) — Source Quality Drift omitted"
+        )
         return [], warnings, True
     finally:
         conn.close()

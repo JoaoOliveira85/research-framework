@@ -14,6 +14,7 @@ import pytest
 import yaml
 
 from research_framework.cli.regrade import RegradeOutcome, run_regrade
+from research_framework.pipeline import state_layout as L
 from research_framework.vault.frontmatter import parse_frontmatter
 
 _SPEC = textwrap.dedent(
@@ -66,7 +67,7 @@ _COVERAGE_TARGETS = {
 
 def _build_vault(tmp_path: Path, *, policy: str = "warn", git: bool = True) -> Path:
     vault = tmp_path / "vault"
-    (vault / "_pipeline" / "quarantine").mkdir(parents=True, exist_ok=True)
+    (L.quarantine_dir(vault)).mkdir(parents=True, exist_ok=True)
     (vault / "data_vault" / "01 - Concepts").mkdir(parents=True, exist_ok=True)
     (vault / "research.spec.md").write_text(_SPEC, encoding="utf-8")
     settings = {"pipeline": {"max_cycles": 5, "budget_usd": 10.0}}
@@ -75,7 +76,9 @@ def _build_vault(tmp_path: Path, *, policy: str = "warn", git: bool = True) -> P
     (vault / "settings.yaml").write_text(yaml.safe_dump(settings), encoding="utf-8")
     import json
 
-    (vault / "_pipeline" / "coverage-targets.json").write_text(
+    L.coverage_targets_path(vault).parent.mkdir(parents=True, exist_ok=True)
+    L.coverage_targets_path(vault).parent.mkdir(parents=True, exist_ok=True)
+    (L.coverage_targets_path(vault)).write_text(
         json.dumps(_COVERAGE_TARGETS), encoding="utf-8"
     )
     if git:
@@ -105,7 +108,7 @@ def _quarantine(
         "verifier_notes": notes,
         "source_urls": [{"url": url}],
     }
-    p = vault / "_pipeline" / "quarantine" / f"{name}.md"
+    p = L.quarantine_dir(vault) / f"{name}.md"
     p.write_text(
         "---\n" + yaml.safe_dump(fm, sort_keys=False) + "---\nBody.\n", encoding="utf-8"
     )
@@ -194,7 +197,7 @@ def _quarantine_with_slug_url(vault: Path, name: str, notes: list[str]) -> Path:
         "verifier_notes": notes,
         "verifier_status": "rejected",
     }
-    p = vault / "_pipeline" / "quarantine" / f"{name}.md"
+    p = L.quarantine_dir(vault) / f"{name}.md"
     p.write_text(
         "---\n" + yaml.safe_dump(fm, sort_keys=False) + "---\nBody.\n",
         encoding="utf-8",

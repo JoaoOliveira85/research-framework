@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from research_framework.pipeline import state_layout as L
 from research_framework.pipeline.digest.scope import DateRange, enumerate_cycles
 from research_framework.pipeline.reports.top_sources import build_top_discovered_sources
 
@@ -16,7 +17,8 @@ pytest_plugins = ["tests.pipeline.reports.helpers"]
 def _tiebreaker_vault(tmp_path: Path) -> Path:
     vault = tmp_path / "vault"
     (vault / "_pipeline").mkdir(parents=True)
-    db = vault / "_pipeline" / "sources.db"
+    db = L.sources_db_path(vault)
+    db.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db)
     conn.executescript(
         """
@@ -80,7 +82,7 @@ def test_top_sources_empty_when_no_db(tmp_path) -> None:
 
 
 def test_top_sources_zero_rows_message_in_report(reports_vault) -> None:
-    db = reports_vault / "_pipeline" / "sources.db"
+    db = L.sources_db_path(reports_vault)
     conn = sqlite3.connect(db)
     conn.execute("DELETE FROM sources")
     conn.commit()

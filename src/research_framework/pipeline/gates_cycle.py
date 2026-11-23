@@ -335,7 +335,7 @@ def CG005_cumulative_coverage_trajectory(
             metric_value=0.0,
             threshold=0.7,
             message="empty coverage snapshot — cannot project trajectory",
-            correction_hint="Coverage targets not loaded; verify coverage-targets.json.",
+            correction_hint="Coverage targets not loaded; verify the coverage targets file.",
         )
     fills: list[float] = []
     for _k, v in coverage_snapshot.items():

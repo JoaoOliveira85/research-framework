@@ -175,6 +175,11 @@ case "${CMD}" in
     # (pipeline.vault_commit.commit_regrade), so no _vault_autocommit wrap.
     exec "${VENV_PYTHON}" -m research_framework.cli re-grade --vault "${VAULT_DIR}" "$@"
     ;;
+  migrate-layout)
+    # spec 083: move a pre-083 vault's durable state under _pipeline/state/.
+    # The verb commits its own migration commit, so no _vault_autocommit wrap.
+    exec "${VENV_PYTHON}" -m research_framework.cli migrate-layout --vault "${VAULT_DIR}" "$@"
+    ;;
   update)
     # Hardened upgrade flow (spec 027): archive-first version resolution,
     # short-circuit, dirty-tree guard, labelled pre-snapshot, install, health.
@@ -496,6 +501,7 @@ Commands:
   acceptance Framework-generic acceptance gates — ./vault acceptance
   wikilinks  Repair acronym-wikilink corruption (dry-run; --fix) — ./vault wikilinks
   re-grade   Re-grade quarantined notes vs the credibility model — ./vault re-grade
+  migrate-layout  Move state under _pipeline/state/ — ./vault migrate-layout [--dry-run]
   update     Pull latest framework from GitHub + re-run install.sh — ./vault update
   coverage   Show coverage target status
   reindex    Rebuild vault index files

@@ -182,7 +182,7 @@ def gate_rejected_notes(vault: Path) -> GateResult:
         "FAIL",
         count,
         0,
-        detail + " — they belong in _pipeline/quarantine/ (spec 062 FR1).",
+        detail + " — they belong in _pipeline/state/quarantine/ (spec 062 FR1).",
         offenders,
     )
 

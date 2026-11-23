@@ -36,7 +36,8 @@ Sub-checks
 
 4. **Control-file git tracking** (spec 058) — for the four critical control
    files (``research.spec.md``, ``settings.yaml``,
-   ``_pipeline/research-backlog.md``, ``_pipeline/coverage-targets.json``),
+   ``_pipeline/research-backlog.md``, the coverage targets under
+   ``_pipeline/state/``),
    warn when a *present* file is untracked or git-ignored in a git-backed
    vault. Advisory only — never counted in ``unresolved_count`` and never
    flips the exit code; silent on non-git vaults.
@@ -73,6 +74,8 @@ from pathlib import Path
 
 import yaml
 
+from research_framework.pipeline import state_layout
+
 # Wayback Machine "available" API. Returns ``{archived_snapshots: {closest: {url}}}``
 # when a snapshot exists, or an empty ``archived_snapshots`` dict when not.
 _WAYBACK_AVAILABLE = "https://archive.org/wayback/available?url="
@@ -89,7 +92,10 @@ CONTROL_FILE_PATHS = (
     "research.spec.md",
     "settings.yaml",
     "_pipeline/research-backlog.md",
-    "_pipeline/coverage-targets.json",
+    # Spec 083 FR-017: the state directory, not individual files — everything a
+    # later run depends on lives there, and one untracked directory is the
+    # whole failure.
+    state_layout.STATE_DIR,
 )
 
 
@@ -566,7 +572,7 @@ def _absolute_archive_snapshot_url(location: str) -> str:
 
 
 def _archive_snapshots_path(vault: Path) -> Path:
-    return vault / "_pipeline" / "archive-snapshots.json"
+    return state_layout.archive_snapshots_path(vault)
 
 
 def _load_archive_snapshots(vault: Path) -> dict:
@@ -930,6 +936,20 @@ def main(argv: Iterable[str] | None = None) -> int:
         help="Override report output path (default: {vault}/_pipeline/health-report.md).",
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
+
+    # Spec 083 FR-015/FR-016: `--apply` writes state (archive snapshots), so a
+    # vault still in the pre-083 layout is refused; a plain check reports it.
+    try:
+        state_layout.require_migrated(args.vault)
+    except state_layout.LegacyLayoutError as exc:
+        if args.apply:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        print(
+            "NOTICE: legacy `_pipeline/` layout — run "
+            f"`{state_layout.MIGRATION_COMMAND}`",
+            file=sys.stderr,
+        )
 
     try:
         report = run(

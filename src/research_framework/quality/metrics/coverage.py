@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from research_framework.pipeline import state_layout
 from research_framework.spec.simple import load as load_spec
 from research_framework.vault.frontmatter import (
     FrontmatterParseError,
@@ -25,13 +26,11 @@ def compute_coverage_metric(
     fixture: Fixture, cycle_outputs: list[CycleOutput]
 ) -> dict[str, Any]:
     """Return ``{coverage_pct, notes_per_category, spec_drift}`` for *fixture*."""
-    # Prefer the live runtime snapshot under ``_pipeline/`` because the
-    # cycle_runner mutates ``met_count`` there after every cycle. The root
-    # ``coverage-targets.json`` is the immutable spec contract (hashed for
+    # Prefer the live runtime snapshot under ``_pipeline/state/`` because the
+    # cycle_runner mutates ``met_count`` there after every cycle. The fixture's
+    # root-level targets file is the immutable spec contract (hashed for
     # baseline integrity) and may lag behind the actual vault state.
-    pipeline_targets = (
-        fixture.coverage_targets_path.parent / "_pipeline" / "coverage-targets.json"
-    )
+    pipeline_targets = state_layout.coverage_targets_path(fixture.vault_dir)
     targets_source = (
         pipeline_targets
         if pipeline_targets.is_file()

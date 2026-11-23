@@ -20,7 +20,7 @@ from ._budget_resolve import (
     require_bounded_run,
     resolve_cycle_budget_from_path,
 )
-from ._common import _run_phase1_gate, refuse_if_archived
+from ._common import _run_phase1_gate, refuse_if_archived, refuse_if_legacy_layout
 from .research_cycles import _regenerate_plan_only
 from .research_phase3 import _prepopulate_pipeline, _run_phase3
 from .research_resume import _resume
@@ -101,6 +101,16 @@ def _cmd_generate(args: argparse.Namespace) -> int:
             "in 0.3.0",
             file=sys.stderr,
         )
+
+    # Spec 083 FR-015: a run writes state; a vault still in the pre-083 layout
+    # is migrated first, never half-read.
+    _vault_arg = getattr(args, "vault_dir", None) or getattr(args, "output", None)
+    if (
+        _vault_arg is not None
+        and (legacy_rc := refuse_if_legacy_layout(Path(_vault_arg).expanduser()))
+        is not None
+    ):
+        return legacy_rc
 
     if args.spec is None:
         print(

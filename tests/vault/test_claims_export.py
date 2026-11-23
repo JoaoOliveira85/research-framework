@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from research_framework.pipeline import state_layout as L
 from research_framework.vault.claims_export import (
     SCHEMA_VERSION,
     ClaimsExportError,
@@ -279,7 +280,7 @@ class TestPlumbingIsSkippedByTheFrameworksOwnRules:
 
 class TestQuarantine:
     def _quarantine(self, vault: Path) -> None:
-        q = vault / "_pipeline" / "quarantine"
+        q = L.quarantine_dir(vault)
         q.mkdir(parents=True, exist_ok=True)
         (q / "rejected.md").write_text(
             dump_frontmatter(
@@ -303,7 +304,10 @@ class TestQuarantine:
         assert by_title["Real"]["quarantined"] is False
         assert by_title["Rejected"]["quarantined"] is True
         assert by_title["Rejected"]["id"] == "quarantine/rejected"
-        assert by_title["Rejected"]["note_path"] == "_pipeline/quarantine/rejected.md"
+        assert (
+            by_title["Rejected"]["note_path"]
+            == "_pipeline/state/quarantine/rejected.md"
+        )
         assert by_title["Rejected"]["verifier_status"] == "rejected"
         assert doc["counts"]["quarantined"] == 1
 

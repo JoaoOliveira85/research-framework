@@ -147,7 +147,7 @@
       "path": "_pipeline/.tmpl-versions.json",
       "kind": "json",
       "template_version": 1,
-      "rendered_sha256": "edd3a7cc374cc1bb6005f288914c181c736888764eae9cfc26e10683d50ccbc4",
+      "rendered_sha256": "19d87dee521e3d8674465b371f420ff1cf7e6e44c7515863ed6841c718d90128",
       "is_user_owned_after_first_write": true
     },
     {
@@ -155,13 +155,6 @@
       "kind": "markdown",
       "template_version": 1,
       "rendered_sha256": "a06d387991a25d922ef6673f5e2836876eed2e4587dc109d3ffe5e18bd7a6796",
-      "is_user_owned_after_first_write": true
-    },
-    {
-      "path": "_pipeline/coverage-targets.json",
-      "kind": "json",
-      "template_version": 1,
-      "rendered_sha256": "812cd2df0b747920145f3dd3b4ea2ec1f4192fbd02614967e463847561cd69e0",
       "is_user_owned_after_first_write": true
     },
     {
@@ -186,17 +179,31 @@
       "is_user_owned_after_first_write": true
     },
     {
-      "path": "_pipeline/sources.db",
-      "kind": "other",
-      "template_version": 1,
-      "rendered_sha256": "e10a4e14ef9c13e3254b8cad43a4a5f7f2dcb0a72cb36cea582e57a4ce067710",
-      "is_user_owned_after_first_write": true
-    },
-    {
       "path": "_pipeline/spec-parse.json",
       "kind": "json",
       "template_version": 1,
       "rendered_sha256": "a026ab3b3eccd6fe87b24bea071b113b171f816b6fd451bc24b9908b8a0706c5",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_pipeline/state/.tmpl-versions.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "6a1d702e178eec27d314085f9ea98b55c4fe6115f86f72037ed1f18f69722a5c",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_pipeline/state/coverage-targets.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "812cd2df0b747920145f3dd3b4ea2ec1f4192fbd02614967e463847561cd69e0",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_pipeline/state/sources.db",
+      "kind": "other",
+      "template_version": 1,
+      "rendered_sha256": "e10a4e14ef9c13e3254b8cad43a4a5f7f2dcb0a72cb36cea582e57a4ce067710",
       "is_user_owned_after_first_write": true
     },
     {

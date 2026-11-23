@@ -15,13 +15,15 @@ from pathlib import Path
 
 import pytest
 
+from research_framework.pipeline import state_layout as L
 from research_framework.pipeline.coverage import grow_targets_if_met, load_targets
 
 
 def _vault(tmp_path: Path, cats: list[tuple[str, int, int]]) -> Path:
     v = tmp_path / "v"
     (v / "_pipeline").mkdir(parents=True)
-    (v / "_pipeline" / "coverage-targets.json").write_text(
+    L.coverage_targets_path(v).parent.mkdir(parents=True, exist_ok=True)
+    (L.coverage_targets_path(v)).write_text(
         json.dumps(
             {
                 "categories": [
@@ -58,7 +60,8 @@ def test_growth_compounds_across_rounds(tmp_path):
     # the vault fills the new bar, then grows again from 15, not from 10
     cats = load_targets(v)
     cats.categories[0].met_count = 15
-    (v / "_pipeline" / "coverage-targets.json").write_text(
+    L.coverage_targets_path(v).parent.mkdir(parents=True, exist_ok=True)
+    (L.coverage_targets_path(v)).write_text(
         json.dumps(cats.to_dict()), encoding="utf-8"
     )
     grow_targets_if_met(v, growth=1.5)
@@ -136,7 +139,8 @@ def test_the_bar_cannot_outrun_what_gets_written(tmp_path):
     for _ in range(4):
         cats = load_targets(v)
         cats.categories[0].met_count = target  # the round was actually completed
-        (v / "_pipeline" / "coverage-targets.json").write_text(
+        L.coverage_targets_path(v).parent.mkdir(parents=True, exist_ok=True)
+        (L.coverage_targets_path(v)).write_text(
             json.dumps(cats.to_dict()), encoding="utf-8"
         )
         _, _, target = grow_targets_if_met(v, growth=1.4, cap=10)

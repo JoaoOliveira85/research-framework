@@ -1,6 +1,6 @@
 """``./vault re-grade`` verb (spec 066 FR4).
 
-Re-evaluate every quarantined note (``_pipeline/quarantine/*.md``) against the
+Re-evaluate every quarantined note (``_pipeline/state/quarantine/*.md``) against the
 *current* credibility model (post-066 catalog + vault override + policy) and
 reinstate any that were rejected **only** on credibility and now resolve clean.
 Deterministic — zero LLM dispatch (Q4/FR4): the verdict source is the note's own
@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from research_framework.pipeline import state_layout
 
 _LOG = logging.getLogger(__name__)
 
@@ -62,7 +64,7 @@ def _is_credibility_note(message: str) -> bool:
 
 
 def _quarantine_dir(vault_dir: Path) -> Path:
-    return vault_dir / "_pipeline" / "quarantine"
+    return state_layout.quarantine_dir(vault_dir)
 
 
 def _quarantined_notes(vault_dir: Path, only: list[str] | None) -> list[Path]:
@@ -419,6 +421,11 @@ def _cmd_regrade(args: argparse.Namespace) -> int:
     if not vault_dir.is_dir():
         print(f"error: vault not found: {vault_dir}", file=sys.stderr)
         return 2
+    # Spec 083 FR-015: re-grade reads and writes the quarantine under state/.
+    from ._common import refuse_if_legacy_layout
+
+    if (legacy_rc := refuse_if_legacy_layout(vault_dir)) is not None:
+        return legacy_rc
     return run_regrade(
         vault_dir,
         dry_run=bool(getattr(args, "dry_run", False)),

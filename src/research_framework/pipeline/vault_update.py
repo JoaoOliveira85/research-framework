@@ -272,6 +272,40 @@ def sync_agent_notice(vault: Path) -> list[Path]:
         return []
 
 
+class LayoutMigrationFailed(RuntimeError):
+    """``./vault update`` could not migrate the vault's ``_pipeline/`` layout.
+
+    Raised by :func:`sync_vault_scripts` AFTER the scripts have been synced, so
+    the caller (the shim's heredoc) sees a failing exit while a fix shipped in
+    the wheel still reaches the vault.
+    """
+
+
+def migrate_layout_for_update(vault: Path) -> str | None:
+    """Run the spec-083 layout migration; return a failure message or ``None``.
+
+    The migration lands as its own ``framework: migrate _pipeline layout``
+    commit, before the shim's ``framework: upgrade to …`` commit. A vault
+    already migrated is a no-op. A failure is logged at ERROR.
+    """
+    from . import layout_migration
+
+    try:
+        result = layout_migration.migrate(vault)
+    except Exception as exc:  # noqa: BLE001 - reported, then re-raised by the caller
+        message = f"layout migration crashed: {exc}"
+        _LOG.error("update: %s", message)
+        return message
+    if result.exit_code != 0:
+        message = "\n".join(result.messages) or "layout migration refused"
+        _LOG.error("update: could not migrate the _pipeline layout:\n%s", message)
+        return message
+    for line in result.messages:
+        if not line.startswith("already migrated"):
+            _LOG.info("update: %s", line)
+    return None
+
+
 def sync_vault_scripts(vault: Path, *, source: Path | None = None) -> list[str]:
     """Refresh vault-local ``scripts/`` from the installed package. Returns the
     basenames actually changed.
@@ -292,6 +326,12 @@ def sync_vault_scripts(vault: Path, *, source: Path | None = None) -> list[str]:
     alone, and nothing is ever deleted. Best-effort by design: scripts are a
     regenerable artifact and must never fail an upgrade.
 
+    Before the scripts, it migrates a pre-083 vault's state under
+    ``_pipeline/state/`` (spec 083 FR-010): this hook is the one a shim
+    rendered by the previous release already calls. A failed migration is
+    reported at ERROR and raised as :class:`LayoutMigrationFailed` once the
+    scripts and prompts are synced.
+
     It then runs :func:`refresh_vault_prompts`, whose vault-relative paths are
     appended to the returned list (#12). This is the one post-upgrade hook
     every existing vault's ``./vault update`` already calls, so it is where a
@@ -299,7 +339,11 @@ def sync_vault_scripts(vault: Path, *, source: Path | None = None) -> list[str]:
     hook in the shim template would reach only vaults whose shim is
     regenerated. ``RV_SKIP_SCRIPT_SYNC`` skips the scripts, not the prompts.
     """
-    return _sync_scripts(vault, source) + refresh_vault_prompts(vault)
+    failure = migrate_layout_for_update(vault)
+    changed = _sync_scripts(vault, source) + refresh_vault_prompts(vault)
+    if failure is not None:
+        raise LayoutMigrationFailed(failure)
+    return changed
 
 
 def _sync_scripts(vault: Path, source: Path | None) -> list[str]:

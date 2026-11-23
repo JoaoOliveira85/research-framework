@@ -11,6 +11,7 @@ from .ask import _cmd_ask
 from .audit import _cmd_coverage, _cmd_validate
 from .digest import cmd_digest
 from .export import _cmd_export
+from .migrate_layout import cmd_migrate_layout
 from .pause import _cmd_pause
 from .quality import _cmd_quality_baseline_update, _cmd_quality_fixture_init
 from .refresh_sources import cmd_refresh_sources
@@ -182,7 +183,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Skip scaffolding and Phase 2/3: load <vault>/research.spec.md, infer the "
-            "next cycle from _pipeline/coverage-targets.json (cycle_number+1, or 1 if "
+            "next cycle from the coverage targets under _pipeline/state/ (cycle_number+1, or 1 if "
             "missing), write _pipeline/research-plan.md and the archived copy under "
             "_pipeline/cycles/, then run the plan narrator. Ignores --resume, --dry-run, "
             "--cycle, and other generate flags that affect Phase 2."
@@ -686,7 +687,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--include-quarantined",
         action="store_true",
         help=(
-            "Also export notes under _pipeline/quarantine/, flagged "
+            "Also export notes under _pipeline/state/quarantine/, flagged "
             "`quarantined: true` (excluded by default)"
         ),
     )
@@ -712,5 +713,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ak.add_argument("question", nargs="+", help="The question to ask the vault")
     ak.set_defaults(func=_cmd_ask)
+
+    ml = sub.add_parser(
+        "migrate-layout",
+        help=(
+            "Move a pre-083 vault's durable state under _pipeline/state/ "
+            "(one commit; idempotent)"
+        ),
+    )
+    ml.add_argument("--vault", type=Path, required=True, help="Vault directory")
+    ml.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print every move and the .gitignore change; touch nothing",
+    )
+    ml.add_argument(
+        "--force",
+        action="store_true",
+        help="Migrate even though the working tree has uncommitted changes",
+    )
+    ml.set_defaults(func=cmd_migrate_layout)
 
     return parser

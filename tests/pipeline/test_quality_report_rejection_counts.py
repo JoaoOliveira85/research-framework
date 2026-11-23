@@ -116,7 +116,7 @@ def test_disk_scan_finds_notes_already_swept_to_quarantine(tmp_path: Path) -> No
     """A prior sweep must not make the rejection invisible again."""
     vault = tmp_path / "vault"
     rel = "data_vault/01 - Practitioners/person_c.md"
-    _write_note(vault, "_pipeline/quarantine/person_c.md", "rejected")
+    _write_note(vault, "_pipeline/state/quarantine/person_c.md", "rejected")
 
     assert _notes_rejected_on_disk(vault, [rel]) == {rel}
 

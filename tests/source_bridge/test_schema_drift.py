@@ -20,6 +20,7 @@ from research_framework.pipeline.source_bridge.schema_gen import (
 def _seed_manual(vault: Path, spec_hash: str) -> None:
     mod_dir = vault / "_pipeline" / "sources" / "code"
     mod_dir.mkdir(parents=True, exist_ok=True)
+    facts_schema_path(vault, "code").parent.mkdir(parents=True, exist_ok=True)
     facts_schema_path(vault, "code").write_text(
         json.dumps({"manually_edited": True, "type": "object"}) + "\n",
         encoding="utf-8",

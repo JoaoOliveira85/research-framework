@@ -3,10 +3,10 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import re
 import sys
 from pathlib import Path
 
+from ..pipeline import cycle_ledger
 from ..pipeline.settings import strict_settings_refusal
 from ..spec.schema import SpecValidationError
 from ._budget_resolve import (
@@ -27,8 +27,6 @@ def _resume_vault_dir(args: argparse.Namespace) -> Path:
 
 
 _LOG = logging.getLogger(__name__)
-
-_QUALITY_REPORT_RX = re.compile(r"^cycle-(\d+)-quality-report\.json$")
 
 
 def _highest_completed_cycle(vault_dir: Path) -> int | None:
@@ -62,23 +60,8 @@ def _highest_completed_cycle(vault_dir: Path) -> int | None:
     Discovered during the feeds-vault revival follow-up (post-mortem
     2026-05-30, "Follow-up" section).
     """
-    cycles_dir = vault_dir / "_pipeline" / "cycles"
-    if not cycles_dir.is_dir():
-        return None
-    highest = 0
-    for child in cycles_dir.iterdir():
-        if not (child.is_file() and child.suffix == ".json"):
-            continue
-        m = _QUALITY_REPORT_RX.match(child.name)
-        if m is None:
-            continue
-        try:
-            n = int(m.group(1))
-        except ValueError:
-            continue
-        if n > highest and not _cycle_aborted(cycles_dir, n):
-            highest = n
-    return highest if highest > 0 else None
+    # Spec 083: the ledger lists what closed; the scan adds what it lacks.
+    return cycle_ledger.highest_completed_cycle(vault_dir)
 
 
 def _cycle_aborted(cycles_dir: Path, cycle: int) -> bool:
@@ -87,7 +70,7 @@ def _cycle_aborted(cycles_dir: Path, cycle: int) -> bool:
     An aborted cycle still writes its quality report, so the report alone
     cannot distinguish "completed" from "died on the way out".
     """
-    return (cycles_dir / f"cycle-{cycle:03d}-aborted.json").is_file()
+    return cycle_ledger.cycle_aborted(cycles_dir, cycle)
 
 
 def _resolve_resume_cycle(args: argparse.Namespace) -> int:
@@ -211,7 +194,11 @@ def _resume(args: argparse.Namespace) -> int:
     # (issue #239). Nothing in `_resolve_resume_cycle` depends on the budget,
     # so the two only ever had this order by accident.
     if args.cycle is None:
-        args.cycle = _resolve_resume_cycle(args)
+        try:
+            args.cycle = _resolve_resume_cycle(args)
+        except cycle_ledger.CycleLedgerError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
 
     # Spec 061: resolve the per-cycle budget from the baked settings.yaml +
     # the (last-word) CLI flags — the SAME ladder as generate, so resume can

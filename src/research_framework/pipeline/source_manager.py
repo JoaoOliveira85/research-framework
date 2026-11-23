@@ -1,4 +1,4 @@
-"""Manage _pipeline/sources.db — adaptive source discovery and quality tracking."""
+"""Manage the sources database under _pipeline/state/ — adaptive source discovery and quality tracking."""
 
 from __future__ import annotations
 
@@ -11,13 +11,12 @@ from urllib.parse import urlsplit, urlunsplit
 
 import yaml
 
+from research_framework.pipeline import state_layout
 from research_framework.pipeline.settings import SettingsError, load_vault_settings
 
 from ..spec.schema import DataSourceConfig, SpecConfig
 
 _LOG = logging.getLogger(__name__)
-
-DB_FILENAME = "_pipeline/sources.db"
 
 _CREATE_SOURCES = """
 CREATE TABLE IF NOT EXISTS sources (
@@ -46,12 +45,13 @@ CREATE TABLE IF NOT EXISTS source_cycles (
 
 
 def _db_path(vault_dir: Path) -> Path:
-    return vault_dir / "_pipeline" / "sources.db"
+    return state_layout.sources_db_path(vault_dir)
 
 
 def _connect(vault_dir: Path) -> sqlite3.Connection:
     """Open/create the DB with WAL mode for safe concurrent reads."""
     db = _db_path(vault_dir)
+    db.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
@@ -62,12 +62,11 @@ def _connect(vault_dir: Path) -> sqlite3.Connection:
 
 
 def seed(vault_dir: Path, spec: SpecConfig) -> None:
-    """Create sources.db and insert spec.data_sources with locked=1.
+    """Create the sources database and insert spec.data_sources with locked=1.
 
     Idempotent: safe to call on an existing vault (skips existing rows).
     Called by scaffold.py at generation time.
     """
-    (vault_dir / "_pipeline").mkdir(parents=True, exist_ok=True)
     conn = _connect(vault_dir)
     with conn:
         for ds in spec.data_sources:
@@ -364,7 +363,7 @@ def merge_into_prompt_context(
     sources (locked=0, low priority, appended after spec sources).
 
     Returns a unified list for scout prompt rendering.
-    If sources.db doesn't exist, returns spec.data_sources unchanged.
+    If the sources database doesn't exist, returns spec.data_sources unchanged.
     """
     db = _db_path(vault_dir)
     if not db.exists():
@@ -457,7 +456,7 @@ def source_quality_summary(vault_dir: Path) -> list[dict[str, Any]]:
       total_notes_generated, total_topics_covered, total_tags_generated,
       peak_notes_referencing, cycles_active, last_useful_cycle
 
-    If sources.db doesn't exist, returns [].
+    If the sources database doesn't exist, returns [].
     """
     db = _db_path(vault_dir)
     if not db.exists():
@@ -480,5 +479,20 @@ def source_quality_summary(vault_dir: Path) -> list[dict[str, Any]]:
             ORDER BY s.name
             """).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def checkpoint(vault_dir: Path) -> None:
+    """Fold the WAL into the database file and truncate it (spec 083 plan § 4).
+
+    The database is a tracked file, so a commit that stages it must not leave
+    rows in the ``-wal`` sidecar, which git ignores. No-op without a database.
+    """
+    if not _db_path(vault_dir).exists():
+        return
+    conn = sqlite3.connect(_db_path(vault_dir))
+    try:
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     finally:
         conn.close()

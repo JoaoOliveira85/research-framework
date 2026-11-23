@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from research_framework import __version__
+from research_framework.pipeline import state_layout
 from research_framework.pipeline.atomic_write import write_json
 from research_framework.pipeline.coverage import (
     YieldTarget,
@@ -209,7 +210,7 @@ def _notes_rejected_on_disk(vault_dir: Path, note_paths: list[str]) -> set[str]:
     ``accepted`` flag, so a batch that passed overall reported ``0 rejected``
     even when the per-note verifier had stamped notes inside it
     ``verifier_status: rejected`` — notes the orchestrator then swept into
-    ``_pipeline/quarantine/``. The live vault that surfaced this recorded
+    ``_pipeline/state/quarantine/``. The live vault that surfaced this recorded
     ``notes_written: 4, notes_accepted: 4, notes_rejected: 0`` for three
     consecutive cycles while 9 notes were being destroyed.
 
@@ -220,7 +221,7 @@ def _notes_rejected_on_disk(vault_dir: Path, note_paths: list[str]) -> set[str]:
     from research_framework.vault.frontmatter import parse_frontmatter
 
     rejected: set[str] = set()
-    quarantine = vault_dir / "_pipeline" / "quarantine"
+    quarantine = state_layout.quarantine_dir(vault_dir)
     for rel in note_paths:
         candidate = vault_dir / rel
         if not candidate.is_file():
@@ -454,7 +455,7 @@ def write_report(vault_dir: Path, cycle_number: int) -> Path:
 
     Reads the cycle's per-batch SG-gate envelopes from
     ``<vault>/_pipeline/cycles/cycle-NNN-batch-*.json`` plus the cumulative
-    coverage targets at ``<vault>/_pipeline/coverage-targets.json``, then
+    coverage targets at the coverage targets under ``<vault>/_pipeline/state/``, then
     writes a single normalised JSON report to
     ``<vault>/_pipeline/cycles/cycle-NNN-quality-report.json`` describing:
 
@@ -467,7 +468,7 @@ def write_report(vault_dir: Path, cycle_number: int) -> Path:
 
     Idempotent for a given ``(vault_dir, cycle_number)`` pair: re-running
     overwrites the report file. Bootstraps a default
-    ``coverage-targets.json`` if one is missing.
+    the coverage targets file if one is missing.
 
     Returns:
         The :class:`pathlib.Path` of the written quality report. Callers
@@ -475,7 +476,7 @@ def write_report(vault_dir: Path, cycle_number: int) -> Path:
         cycle's final ``exit_code`` and ``abort_reason``.
 
     Side effects:
-        * Writes (or creates) ``_pipeline/coverage-targets.json`` on first run.
+        * Writes (or creates) the coverage targets on first run.
         * Writes the quality report file.
         * Does NOT raise on missing batch envelopes — produces a report with
           zeros so the cycle-runner's exit path remains deterministic.
@@ -484,7 +485,7 @@ def write_report(vault_dir: Path, cycle_number: int) -> Path:
     """
     spec = _load_spec_config(vault_dir)
     targets = _load_targets_flexible(vault_dir, spec)
-    ct_path = vault_dir / "_pipeline" / "coverage-targets.json"
+    ct_path = state_layout.coverage_targets_path(vault_dir)
     if not ct_path.is_file():
         ct_path.parent.mkdir(parents=True, exist_ok=True)
         save_targets(vault_dir, targets)

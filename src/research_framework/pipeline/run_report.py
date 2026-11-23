@@ -325,7 +325,7 @@ def write_run_report(
                 out.append(
                     f"**Verifier**: {rejected_unresolved} note(s) ended the run "
                     f"rejected and were quarantined "
-                    f"(see `_pipeline/quarantine/`).\n"
+                    f"(see `_pipeline/state/quarantine/`).\n"
                 )
             else:
                 out.append(

@@ -22,7 +22,7 @@ the one place a marker this build cannot parse may be deleted —
 would drop whichever cap stopped the run), which left an unreadable marker
 with no sanctioned way out at all.
 
-Clearing an approval pause records NO decision. ``approval-decisions.json`` is
+Clearing an approval pause records NO decision. the approval decision log (under ``_pipeline/state/``) is
 the record of verdicts an operator reached (approval-marker.contract.md §6.1);
 walking away from a gate is not a verdict, and writing ``approved: false`` for
 it would put a decision in the cycle report that nobody made.

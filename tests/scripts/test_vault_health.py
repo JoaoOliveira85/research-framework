@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from research_framework.pipeline import state_layout as L
+
 SCRIPT_PATH = Path(__file__).parent.parent.parent / "scripts" / "vault_health.py"
 
 
@@ -74,11 +76,13 @@ def _write_note(
 # Spec 058 — control-file git-tracking helpers
 # ---------------------------------------------------------------------------
 
+_COVERAGE_TARGETS = L.coverage_targets_path(Path()).as_posix()
+
 _ALL_CONTROL = (
     "research.spec.md",
     "settings.yaml",
     "_pipeline/research-backlog.md",
-    "_pipeline/coverage-targets.json",
+    _COVERAGE_TARGETS,
 )
 
 
@@ -448,7 +452,7 @@ class TestControlFileGitTracking:
             vault,
             "settings.yaml",
             "_pipeline/research-backlog.md",
-            "_pipeline/coverage-targets.json",
+            _COVERAGE_TARGETS,
         )
         warnings = vh.scan_control_file_git_tracking(vault)
         assert len(warnings) == 1
@@ -463,7 +467,7 @@ class TestControlFileGitTracking:
             vault,
             "research.spec.md",
             "_pipeline/research-backlog.md",
-            "_pipeline/coverage-targets.json",
+            _COVERAGE_TARGETS,
         )
         warnings = vh.scan_control_file_git_tracking(vault)
         assert len(warnings) == 1
@@ -507,7 +511,7 @@ class TestControlFileGitTracking:
         _git_add(
             vault,
             "_pipeline/research-backlog.md",
-            "_pipeline/coverage-targets.json",
+            _COVERAGE_TARGETS,
         )
         warnings = vh.scan_control_file_git_tracking(vault)
         assert len(warnings) == 2
@@ -556,7 +560,7 @@ class TestControlFileGitTracking:
         _git_add(
             vault,
             "_pipeline/research-backlog.md",
-            "_pipeline/coverage-targets.json",
+            _COVERAGE_TARGETS,
         )
         vh.run(vault, apply=False, offline=True)
         report_text = (vault / "_pipeline" / "health-report.md").read_text(

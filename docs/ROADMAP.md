@@ -27,10 +27,13 @@ Specs own design depth (`specs/NNN-*/spec.md`; the index is
 *truthfulness* is a review-time obligation (CLAUDE.md § Documentation
 discipline).
 
-**Paused after 2.0.1 (2026-10-30).** Nothing is in flight: no tier row below
-is `[~]`, and the open issues are the four on-hold rows at the end of
-§ Deferred (#7, #10, #11, #18). Pick up at the first `[ ]` row of the v2.1.0
-tier, or at the trigger of a Deferred row.
+**Resumed 2026-11-22, for one chain.** The owner un-held #10 (spec 083) and
+#18 (spec 084) so that the fix for #53 — existing topics are never
+researched again (spec 087) — can stand on them: 083, then 084, then 087,
+with #52 (outside-in discovery) after. Two on-hold rows remain at the end of
+§ Deferred (#7, #11). Everything else is as it was when work paused after
+2.0.1 (2026-10-30): pick up at the first `[ ]` row of the v2.1.0 tier, or at
+the trigger of a Deferred row.
 
 **Status convention**: `[ ]` planned · `[~]` in progress · `[x]` shipped ·
 `[?]` blocked on a named decision.
@@ -170,6 +173,7 @@ precondition of the one after it, and #249 composes all of them.
 | 3 | **#43** — spec 023 Phase 2: `VaultHandle`, `active-sources.json`, `.local.md`, FR-009/010/011/012/016/017 | 023 | 1, 2 — the contract must exist before the engine serves N vaults through it | `[ ]` |
 | 4 | **#274** remainder — the ~16-folder absorption, recorded as a clean-room authoring task | — | D6 | `[ ]` — the index + archive shipped in private 1.2.0; #274 closes with a ledger |
 | 5 | Clean-room reader gaps: the two runtimes (075 D1), generator/scaffold + `research.spec.md` contract, standalone source-module contract, verifier/gate rule catalogue (IX-*, SG/CG/GA), budget/cost operator doc, `_pipeline/` artifact + schema index, weekly-run operator runbook, quality-harness `unmeasured` semantics, cross-repo contracts (XI), a CI/CD doc | — | — | `[ ]` — each a doc, not a feature |
+| 6 | **#10** — durable vault state in a tracked `_pipeline/state/`, one ignore rule, `./vault update` migrates existing vaults with history | 083 | lands before 084 (#18, the backlog conversion); its inventory (`specs/083-durable-state-layout/research.md`) is item 5's `_pipeline/` artifact index in draft | `[~]` — un-held 2026-11-22; D-1 (cycle ledger), D-2 (`sources.db` tracked), D-4 (pending state committed at run start) decided the same day |
 
 **Closes** #217's residue, #43, #52.
 
@@ -208,9 +212,8 @@ it back (the archive rule in `specs/_archive/README.md` needs both banners).
 | spec 054 | MCP-managed source access | Per-module `managed: true` routing a fetch to an MCP-capable subagent (Principle IV); three open questions (transport, agent-emits-what, declaration granularity). No tracking issue. | The 2026-06-08 MCP-free pivot: `github` and `atlassian` became REST modules and every live vault's sources are reachable without MCP. | A declared source reachable **only** through MCP. |
 | spec 060 tiers | Source-module Tier 2-later / 3 / 4 | Tier 2-later: `newsletters`, `hackernews`, `wikipedia`, `blog_posts`, `conference_talks`, `github_extras`. Tier 3: `pdfs`, `podcasts`, `epub`, `twitter`, `mastodon`/`bluesky`. Tier 4: `social_bookmarklet` (CSV import). Parked: slack/discord exports, email, notion, goodreads. Governed by 060's prioritisation criteria, the per-module acceptance bar (020 five-file template, hermetic contract tests, 022 non-regression, mandatory 051 `preflight()`, zero new deps) and the 020 contract-amendment gate. | Demand-driven: the two batches that shipped (`youtube`/`reddit`/`rss`/`oreilly`; `github`/`atlassian`) were what live vaults declared. | A live vault declaring a source of that kind. One green ship before parallel ports (060's kickoff rule). |
 | **#7** / spec 085 (draft) | Shared vault infrastructure | Serve many vaults from one set of scripts instead of a copy per vault. A full spec-kit draft (spec, plan, tasks) exists on the local branch `085-shared-vault-infrastructure`; it is not on `main`. Overlaps v2.2.0 row 3 (spec 023 Phase 2, `VaultHandle`). | On hold by owner decision (2026-10-28), before the 2.0.0 batch. | The owner un-holds it; reconcile with v2.2.0 row 3 first. |
-| **#10** / spec 083 (draft) | Durable state layout | Keep durable vault state in a tracked directory, apart from regenerable scratch in `_pipeline/`. Draft spec on the local branch `083-durable-state-layout`, not on `main`. | On hold by owner decision (2026-10-28). | The owner un-holds it. |
 | **#11** / spec 086 (draft) | Source-information surface | Explore other ways to serve source information, especially to agents. Draft spec on the local branch `086-source-information-surface`, not on `main`. | On hold by owner decision (2026-10-28). | The owner un-holds it. |
-| **#18** / spec 084 (draft) | Structured research backlog | Keep the research backlog as structured JSON with a rendered Markdown view. Draft spec on the local branch `084-structured-research-backlog`, not on `main`. | On hold by owner decision (2026-10-28). | The owner un-holds it. |
+| **#18** / spec 084 (draft) | Structured research backlog | Keep the research backlog as structured JSON with a rendered Markdown view. Draft spec on the local branch `084-structured-research-backlog`, not on `main`. | Un-held by the owner on 2026-11-22; waits only for 083. | 083 merges. |
 
 ---
 

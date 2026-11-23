@@ -13,6 +13,7 @@ import json
 import subprocess
 from pathlib import Path
 
+from research_framework.pipeline import state_layout as L
 from research_framework.pipeline.orchestrator import (
     _quarantine_out_of_scope_notes,
     _quarantine_rejected_notes,
@@ -66,7 +67,7 @@ def test_constrained_exit_quarantines_all_rejected(tmp_path: Path) -> None:
     data = vault / "data_vault"
     remaining = {p.stem for p in data.rglob("*.md")}
     assert remaining == {"good-one"}, "no rejected note may remain in the corpus"
-    quarantined = {p.stem for p in (vault / "_pipeline" / "quarantine").glob("*.md")}
+    quarantined = {p.stem for p in (L.quarantine_dir(vault)).glob("*.md")}
     assert quarantined == {"bad-one", "bad-two", "bad-three"}
 
 
@@ -93,7 +94,7 @@ def test_clean_exit_no_rejected_quarantines_zero(tmp_path: Path) -> None:
     _note(vault, "good-one", "accepted")
     _note(vault, "good-two", "accepted")
     assert _quarantine_rejected_notes(vault) == 0
-    assert not (vault / "_pipeline" / "quarantine").exists()
+    assert not (L.quarantine_dir(vault)).exists()
 
 
 def test_a_quarantine_move_never_overwrites_an_earlier_quarantined_note(
@@ -103,7 +104,7 @@ def test_a_quarantine_move_never_overwrites_an_earlier_quarantined_note(
     name was ``<stem>-<count>``, never checked: a second sweep's ``overview``
     landed on the first sweep's ``overview-0.md`` and replaced it."""
     vault = tmp_path / "v"
-    quarantine = vault / "_pipeline" / "quarantine"
+    quarantine = L.quarantine_dir(vault)
     quarantine.mkdir(parents=True)
     (quarantine / "overview.md").write_text("first sweep\n", encoding="utf-8")
     (quarantine / "overview-0.md").write_text("second sweep\n", encoding="utf-8")
@@ -131,7 +132,7 @@ def test_out_of_scope_quarantine_keeps_same_named_notes_apart(tmp_path: Path) ->
     moved = _quarantine_out_of_scope_notes(vault, spec)
 
     assert len(moved) == 2
-    quarantine = vault / "_pipeline" / "quarantine"
+    quarantine = L.quarantine_dir(vault)
     bodies = sorted(p.read_text(encoding="utf-8") for p in quarantine.glob("*.md"))
     assert bodies == ["alpha: crypto mining\n", "beta: crypto mining\n"]
 
@@ -173,7 +174,7 @@ def test_rejected_refresh_of_committed_note_is_restored_not_lost(
     # NOT deleted, NOT left holding the rejected draft.
     assert note.read_text(encoding="utf-8") == original_body
     # The rejected draft is preserved for review, not silently discarded.
-    quarantined = (vault / "_pipeline" / "quarantine" / "Existing-Note.md").read_text(
+    quarantined = (L.quarantine_dir(vault) / "Existing-Note.md").read_text(
         encoding="utf-8"
     )
     assert "Rejected rewrite body." in quarantined
@@ -203,7 +204,7 @@ def test_rejected_brand_new_note_in_git_vault_still_quarantined_as_before(
 
     assert count == 1
     assert not (vault / "data_vault" / "Brand-New.md").exists()
-    assert (vault / "_pipeline" / "quarantine" / "Brand-New.md").exists()
+    assert (L.quarantine_dir(vault) / "Brand-New.md").exists()
 
 
 class TestQuarantineBacklogReconciliation:
@@ -244,7 +245,7 @@ class TestQuarantineBacklogReconciliation:
 
         # The note was fixed and its quarantine copy removed; nothing else
         # is rejected this sweep.
-        (vault / "_pipeline" / "quarantine" / "bad-one.md").unlink()
+        (L.quarantine_dir(vault) / "bad-one.md").unlink()
         count = _quarantine_rejected_notes(vault)
 
         assert count == 0

@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from research_framework.pipeline import state_layout as L
+
 
 def test_generate_dry_run_end_to_end(sample_spec_path: Path, tmp_path: Path) -> None:
     """Full generate flow produces a structurally complete vault."""
@@ -38,7 +40,7 @@ def test_generate_dry_run_end_to_end(sample_spec_path: Path, tmp_path: Path) -> 
     assert (vault / "_concepts.md").exists()
     assert (vault / "_graph.md").exists()
     assert (vault / "_templates" / "concept.md").exists()
-    assert (vault / "_pipeline" / "coverage-targets.json").exists()
+    assert (L.coverage_targets_path(vault)).exists()
     assert (vault / "_pipeline" / "spec-parse.json").exists()
     assert (vault / "_pipeline" / "budget-log.md").exists()
     assert (vault / "_pipeline" / "prompts" / "scout-prompt.md").exists()
@@ -77,7 +79,7 @@ def test_generate_dry_run_end_to_end(sample_spec_path: Path, tmp_path: Path) -> 
     assert "Test Vault" in claude
 
     # coverage-targets.json reflects the spec
-    coverage = json.loads((vault / "_pipeline" / "coverage-targets.json").read_text())
+    coverage = json.loads((L.coverage_targets_path(vault)).read_text())
     assert len(coverage["categories"]) == 2
     assert all(c["met_count"] == 0 for c in coverage["categories"])
 

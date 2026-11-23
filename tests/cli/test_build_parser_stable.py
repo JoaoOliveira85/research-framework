@@ -69,6 +69,8 @@ _EXPECTED_SUBCOMMANDS: tuple[str, ...] = (
     "pause",
     "export",
     "ask",
+    # Spec 083: moves a pre-083 vault's state under _pipeline/state/.
+    "migrate-layout",
 )
 
 

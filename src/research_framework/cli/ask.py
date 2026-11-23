@@ -25,7 +25,7 @@ from ..pipeline.ask_escalation import (
 )
 from ..pipeline.settings import UNLIMITED_MAX_CYCLES, strict_settings_refusal
 from ._budget_resolve import BudgetError, resolve_cycle_budget_from_path
-from ._common import refuse_if_archived
+from ._common import refuse_if_archived, refuse_if_legacy_layout
 from .research_cycles import _cmd_cycle, _standing_pause
 from .research_resume import _cycle_aborted, _highest_completed_cycle
 
@@ -181,6 +181,10 @@ def _cmd_ask(args: argparse.Namespace) -> int:
     # the paid ask, as `cycle` refuses before anything else.
     if args.escalate and (archived_rc := refuse_if_archived(vault)) is not None:
         return archived_rc
+    # Spec 083 FR-015: `--escalate` runs a cycle, which writes state. A plain
+    # ask writes none and is not refused.
+    if args.escalate and (legacy_rc := refuse_if_legacy_layout(vault)) is not None:
+        return legacy_rc
 
     # Issue #8: the ask is itself a paid dispatch, made before `--escalate`
     # reaches `cycle` and its own strict check, so the refusal comes first.

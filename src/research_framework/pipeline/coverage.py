@@ -1,6 +1,6 @@
 """Coverage target I/O and queries.
 
-Reads/writes `{vault}/_pipeline/coverage-targets.json` with atomic file replacement.
+Reads/writes the coverage targets (`state_layout.coverage_targets_path`) with atomic file replacement.
 """
 
 from __future__ import annotations
@@ -20,12 +20,11 @@ from research_framework.vault.frontmatter import (
 )
 
 from ..spec.schema import CoverageCategory, CoverageTargets
+from . import cycle_ledger, state_layout
 from .atomic_write import write_json
 from .settings import CycleYieldSettings, SettingsError, load_vault_settings
 
 _LOG = logging.getLogger(__name__)
-
-TARGETS_REL = Path("_pipeline") / "coverage-targets.json"
 
 # Strips a leading "NN - " scaffold ordering prefix from a category directory
 # name (e.g. "01 - Concepts" -> "Concepts") so it can be matched against a
@@ -145,19 +144,19 @@ _CATEGORY_TOKEN_RE = re.compile(r"[a-zA-ZÀ-ÿ0-9]+")
 
 
 def _targets_path(vault_dir: Path) -> Path:
-    return vault_dir / TARGETS_REL
+    return state_layout.coverage_targets_path(vault_dir)
 
 
 def load_targets(vault_dir: Path) -> CoverageTargets:
     path = _targets_path(vault_dir)
     if not path.exists():
-        raise FileNotFoundError(f"coverage-targets.json not found: {path}")
+        raise FileNotFoundError(f"coverage targets not found: {path}")
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
-        raise RuntimeError(f"coverage-targets.json is malformed: {e}") from e
+        raise RuntimeError(f"coverage targets are malformed: {e}") from e
     if not isinstance(data, dict):
-        raise RuntimeError("coverage-targets.json is not an object")
+        raise RuntimeError("coverage targets are not an object")
     return CoverageTargets.from_dict(data)
 
 
@@ -449,7 +448,7 @@ def recompute_from_disk(vault_dir: Path, *, persist: bool = True) -> CoverageTar
 
     Pure + idempotent w.r.t. the tree: same ``data_vault/`` ⇒ same counts.
     When ``persist`` is True the recount is written back to
-    ``coverage-targets.json`` via the existing atomic :func:`save_targets`
+    the coverage targets file via the existing atomic :func:`save_targets`
     (a cache write); read-only consumers (e.g. ``vault status``) pass
     ``persist=False``.
     """
@@ -609,7 +608,7 @@ def merge_expected_filenames_from_scan(vault_dir: Path) -> CoverageTargets:
     are left untouched — soft types (market/team/...) continue to use the
     hand-typed target_count.
 
-    Returns the updated CoverageTargets (also persisted to coverage-targets.json).
+    Returns the updated CoverageTargets (also persisted to the coverage targets file).
     """
     targets = load_targets(vault_dir)
     scan_path = vault_dir / REPO_SCAN_REL
@@ -676,34 +675,8 @@ def _hours_since_last_cycle(
     disk or the timestamp cannot be parsed. Falls back to the scout JSON
     if research.json is absent (e.g. a cycle aborted mid-stream).
     """
-    cycles_dir = vault_dir / "_pipeline" / "cycles"
-    if not cycles_dir.is_dir():
-        return None
-    latest_ts: datetime | None = None
-    for prior in range(current_cycle - 1, 0, -1):
-        cycle_3 = f"{prior:03d}"
-        for fname in (
-            f"cycle-{cycle_3}-research.json",
-            f"cycle-{cycle_3}-scout.json",
-        ):
-            path = cycles_dir / fname
-            if not path.is_file():
-                continue
-            try:
-                doc = json.loads(path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                continue
-            ts = doc.get("timestamp")
-            if not isinstance(ts, str):
-                continue
-            try:
-                parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            except ValueError:
-                continue
-            latest_ts = parsed
-            break
-        if latest_ts is not None:
-            break
+    # Spec 083: the cycle ledger first, the cycles/ scan for cycles it lacks.
+    latest_ts = cycle_ledger.last_finished_at(vault_dir, current_cycle)
     if latest_ts is None:
         return None
     if latest_ts.tzinfo is None:

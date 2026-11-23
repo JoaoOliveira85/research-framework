@@ -19,6 +19,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from research_framework.pipeline import state_layout
 from research_framework.pipeline.gates_step import normalise_topic_row
 from research_framework.quality.metrics._helpers import split_frontmatter
 from research_framework.quality.metrics.note_quality import compute_note_quality_metric
@@ -152,7 +153,7 @@ def score_note_writer(
         vault_dir=fixture_dir,
         spec_path=fixture_dir / "research.spec.md",
         settings_path=fixture_dir / "settings.yaml",
-        coverage_targets_path=fixture_dir / "_pipeline" / "coverage-targets.json",
+        coverage_targets_path=state_layout.coverage_targets_path(fixture_dir),
         fake_agent_responses_dir=fixture_dir / "fake_agent_responses",
         note_count_target=0,
         failure_mode="none",

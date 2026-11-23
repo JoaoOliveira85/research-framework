@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from research_framework.pipeline import state_layout
 from research_framework.pipeline.cycle_runner import (
     get_last_cycle_results,
     run_cycle_steps,
@@ -157,7 +158,8 @@ def resolve_fixture(name: str) -> Fixture:
         vault_dir=vault_dir,
         spec_path=vault_dir / "research.spec.md",
         settings_path=vault_dir / "settings.yaml",
-        coverage_targets_path=vault_dir / "coverage-targets.json",
+        coverage_targets_path=vault_dir
+        / state_layout.coverage_targets_path(vault_dir).name,
         fake_agent_responses_dir=vault_dir / "fake_agent_responses",
         note_count_target=_NOTE_COUNT_TARGETS[name],
         failure_mode=REGISTERED_FIXTURES[name],
@@ -277,7 +279,7 @@ def collect_fixture_current(
     out_dir = (output_dir or _DEFAULT_OUTPUT_DIR).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     ts = run_ts or _utc_now_iso()
-    # Hash the committed (source) coverage-targets.json: the baseline-staleness
+    # Hash the committed (source) coverage targets: the baseline-staleness
     # check is anchored to the tracked fixture, not the throwaway per-run copy.
     current_hash = coverage_targets_hash(fixture.coverage_targets_path)
     # FR-001/FR-002: run cycles + compute metrics against an isolated copy so

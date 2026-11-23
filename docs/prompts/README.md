@@ -36,7 +36,7 @@ These are already standalone, verbatim, tracked files. Copying them here would m
 | [`dfs-prompt-gen`](../../.agents/skills/dfs-prompt-gen/SKILL.md) | `.agents/skills/dfs-prompt-gen/SKILL.md` | `stages.dfs_prompt_gen` | `99db2077a5417d91` |
 | [`doc-planner`](../../.agents/skills/doc-planner/SKILL.md) | `.agents/skills/doc-planner/SKILL.md` | `stages.doc_planner` | `639437b77f665dc8` |
 | [`doc-writer`](../../.agents/skills/doc-writer/SKILL.md) | `.agents/skills/doc-writer/SKILL.md` | `stages.doc_writer` | `778e520c67d0f09c` |
-| [`final-report`](../../.agents/skills/final-report/SKILL.md) | `.agents/skills/final-report/SKILL.md` | `stages.final_report` | `d65fdfa2f0eb2d28` |
+| [`final-report`](../../.agents/skills/final-report/SKILL.md) | `.agents/skills/final-report/SKILL.md` | `stages.final_report` | `323f227518257531` |
 | [`foreman`](../../.agents/skills/foreman/SKILL.md) | `.agents/skills/foreman/SKILL.md` | not selected by any settings.yaml stage | `7a43636aee5fed37` |
 | [`idea-refiner`](../../.agents/skills/idea-refiner/SKILL.md) | `.agents/skills/idea-refiner/SKILL.md` | not selected by any settings.yaml stage | `fc66c215fa32f399` |
 | [`install-wizard`](../../.agents/skills/install-wizard/SKILL.md) | `.agents/skills/install-wizard/SKILL.md` | `stages.install_wizard` | `30cead920a44e064` |

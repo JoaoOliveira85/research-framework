@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 import yaml
 
+from research_framework.pipeline import state_layout as L
 from tests._helpers import fake_agent
 
 # ---------------------------------------------------------------------------
@@ -80,7 +81,8 @@ def _write_minimal_vault(tmp_path: Path) -> Path:
         "cycle_number": 0,
         "categories": spec_dict["coverage_targets"]["categories"],
     }
-    (vault / "_pipeline" / "coverage-targets.json").write_text(
+    L.coverage_targets_path(vault).parent.mkdir(parents=True, exist_ok=True)
+    (L.coverage_targets_path(vault)).write_text(
         json.dumps(targets_dict, indent=2), encoding="utf-8"
     )
     return vault

@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from research_framework.pipeline import state_layout
 from research_framework.pipeline.atomic_write import write_json, write_text
 from research_framework.pipeline.cycle_summary import _aggregate_capture_failures
 from research_framework.spec.parser import parse as parse_spec
@@ -32,6 +33,7 @@ from research_framework.vault.frontmatter import (
     parse_frontmatter,
 )
 
+_SOURCES_DB_LABEL = state_layout.sources_db_path(Path()).name
 _LOG = logging.getLogger(__name__)
 _WARNED_UNPARSEABLE: set[Path] = set()
 
@@ -222,7 +224,7 @@ def _scout_signals(cycle_dir: Path, cycle: int) -> dict[str, dict[str, Any]]:
 
 
 def _source_db_signals(vault: Path, cycle: int) -> dict[str, dict[str, int]]:
-    db_path = vault / "_pipeline" / "sources.db"
+    db_path = state_layout.sources_db_path(vault)
     if not db_path.is_file():
         return {}
     out: dict[str, dict[str, int]] = {}
@@ -239,7 +241,7 @@ def _source_db_signals(vault: Path, cycle: int) -> dict[str, dict[str, int]]:
         ).fetchall()
         conn.close()
     except sqlite3.Error as exc:
-        _LOG.warning("sources.db read failed: %s", exc)
+        _LOG.warning("sources database read failed: %s", exc)
         return {}
     for row in rows:
         out[str(row["name"])] = {
@@ -309,7 +311,7 @@ def _note_citation_hosts(vault: Path) -> dict[str, int]:
     Tier-2 citation list the v2 ledger never read) and maps each URL to its host,
     returning ``host → citation_count``. This is the ground truth the v2 verdict
     machine was blind to — a source whose host appears here was demonstrably used,
-    regardless of what the scout/sources.db join inferred.
+    regardless of what the scout/sources-database join inferred.
     """
     hosts: dict[str, int] = {}
     for note in _iter_note_paths(vault):
@@ -365,10 +367,10 @@ def _read_via(source: DataSourceConfig, signals: VerdictSignals) -> str:
     """B3 (FR-024): best-effort direct-vs-MCP attribution.
 
     A source declared ``access_method: mcp`` (or whose every repo is MCP) is read
-    through a managed MCP server, not the raw_capture/sources.db direct path — so
+    through a managed MCP server, not the raw_capture/sources-database direct path — so
     it must NOT be silently dropped to ``NOT_REACHED`` just because no direct fetch
     signal exists (the FR-018 blind spot). Direct fetch evidence (an attempt or a
-    sources.db note) ⇒ ``direct``; otherwise an MCP declaration ⇒ ``mcp``; neither
+    sources-database note) ⇒ ``direct``; otherwise an MCP declaration ⇒ ``mcp``; neither
     ⇒ ``unknown`` (never a false drop).
     """
     access = (getattr(source, "access_method", "") or "").lower()
@@ -449,8 +451,8 @@ def _fuse_signals(
     notes_generated = int((db_row or {}).get("notes_generated", 0))
     notes_referencing = int((db_row or {}).get("notes_referencing", 0))
     if db_row is not None:
-        evidence["notes_generated"] = "sources.db"
-        evidence["notes_referencing"] = "sources.db"
+        evidence["notes_generated"] = _SOURCES_DB_LABEL
+        evidence["notes_referencing"] = _SOURCES_DB_LABEL
 
     considered = bool((scout_row or {}).get("searched"))
     reason_raw = (scout_row or {}).get("reason")
@@ -474,7 +476,7 @@ def _fuse_signals(
     if notes_generated > 0:
         fetch_attempted = True
         fetch_outcome = "ok"
-        evidence["fetch_outcome"] = "sources.db"
+        evidence["fetch_outcome"] = _SOURCES_DB_LABEL
 
     quality_rejected = bool(quality_hits.get(source.name))
     if quality_rejected:
@@ -578,7 +580,7 @@ def _deterministic_generated_at(vault: Path, cycle: int) -> str:
         path = cycle_dir / f"cycle-{cycle:03d}-{suffix}"
         if path.is_file():
             mtimes.append(path.stat().st_mtime)
-    db_path = vault / "_pipeline" / "sources.db"
+    db_path = state_layout.sources_db_path(vault)
     if db_path.is_file():
         mtimes.append(db_path.stat().st_mtime)
     stamp = max(mtimes) if mtimes else 0.0

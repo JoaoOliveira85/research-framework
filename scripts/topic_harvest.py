@@ -15,7 +15,7 @@ Signals harvested (Phase 1, no LLM):
   2. Researcher-flagged new links — titles the researcher listed in
      `new_wikilinks_discovered` of the research report, deduped against (1).
   3. Unmet coverage categories — categories from
-     `_pipeline/coverage-targets.json` with `met_count < target_count`,
+     the coverage targets under `_pipeline/state/` with `met_count < target_count`,
      ordered by `required` first, then shortfall descending.
 
 Contract:
@@ -41,6 +41,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from research_framework.pipeline import state_layout
+
 # Match any non-bracket content inside [[...]]. Normalization below handles
 # aliases (| ...), anchors (# ...), folder prefixes, and `.md` suffixes.
 _WIKILINK_RE = re.compile(r"\[\[([^\[\]]+?)\]\]")
@@ -49,7 +51,7 @@ _BLOCK_START_FMT = "<!-- topic-harvest:cycle={c:03d} -->"
 _BLOCK_END_FMT = "<!-- /topic-harvest:cycle={c:03d} -->"
 
 # Default citation threshold for auto-promoting orphan wikilinks into
-# coverage-targets.json. Overridable via `pipeline.backlog_promotion_threshold`
+# the coverage targets. Overridable via `pipeline.backlog_promotion_threshold`
 # in the vault's settings.yaml. See constitution v1.3.0 § "Coverage Targets —
 # Dynamic extension via backlog promotion".
 DEFAULT_BACKLOG_PROMOTION_THRESHOLD = 2
@@ -237,7 +239,7 @@ def _harvest_researcher_flags(
 
 
 def _coverage_gaps(vault: Path) -> list[CoverageGap]:
-    data = _read_json(vault / "_pipeline" / "coverage-targets.json")
+    data = _read_json(state_layout.coverage_targets_path(vault))
     if not data:
         return []
     gaps: list[CoverageGap] = []
@@ -366,7 +368,8 @@ def _promote_high_citation_orphans(
     vault_dir: Path, followups: list[Followup], threshold: int
 ) -> list[str]:
     """Promote orphan wikilinks cited at or above ``threshold`` into
-    ``_pipeline/coverage-targets.json`` as new ``CoverageCategory`` entries.
+    the coverage targets (``_pipeline/state/``) as new ``CoverageCategory``
+    entries.
 
     Constitution v1.3.0 § "Coverage Targets — Dynamic extension via backlog
     promotion": coverage tracks the vault's emergent topology, not just the

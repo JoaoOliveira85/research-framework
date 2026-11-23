@@ -259,7 +259,7 @@ New flow documentation.
         body = {"schema_version": "1.1", "status": "ok", **payload}
         _write(f"_pipeline/cycles/{rel}", json.dumps(body, indent=2) + "\n")
 
-    db = ROOT / "_pipeline/sources.db"
+    db = ROOT / "_pipeline/state/sources.db"
     db.parent.mkdir(parents=True, exist_ok=True)
     if db.exists():
         db.unlink()

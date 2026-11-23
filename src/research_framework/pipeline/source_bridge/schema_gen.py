@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from research_framework._assets import asset_path
+from research_framework.pipeline import state_layout
 
 from .cache import atomic_write_json, module_sources_dir
 from .errors import StaleManualSchemaError
@@ -35,7 +36,7 @@ def schema_gen_hash_path(vault_dir: Path, module: str) -> Path:
 
 
 def facts_schema_path(vault_dir: Path, module: str) -> Path:
-    return module_sources_dir(vault_dir, module) / "facts-schema.json"
+    return state_layout.facts_schema_path(vault_dir, module)
 
 
 def load_facts_schema(path: Path) -> dict[str, Any]:
@@ -44,7 +45,7 @@ def load_facts_schema(path: Path) -> dict[str, Any]:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
-        logger.warning("Unreadable facts-schema.json at %s", path)
+        logger.warning("Unreadable facts schema at %s", path)
         return {}
 
 
@@ -93,7 +94,7 @@ def run(
     agent_response: dict[str, Any] | None = None,
     force_stale_schema: bool = False,
 ) -> dict[str, Any]:
-    """Generate or validate ``facts-schema.json`` for a module."""
+    """Generate or validate a module's facts schema."""
     spec_path = spec_path or (vault_dir / "research.spec.md")
     schema_path = facts_schema_path(vault_dir, module)
     module_sources_dir(vault_dir, module).mkdir(parents=True, exist_ok=True)

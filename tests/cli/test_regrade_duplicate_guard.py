@@ -15,6 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from research_framework.cli.regrade import duplicate_of_live_note
+from research_framework.pipeline import state_layout as L
 
 _NOTE = """---
 title: {title}
@@ -34,7 +35,7 @@ def _live(vault: Path, name: str, body: str = "Shared body.") -> Path:
 
 
 def _quarantined(vault: Path, name: str) -> Path:
-    p = vault / "_pipeline" / "quarantine" / name
+    p = L.quarantine_dir(vault) / name
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(_NOTE.format(title=Path(name).stem, body="Shared body."), "utf-8")
     return p
@@ -77,7 +78,7 @@ def test_end_to_end_regrade_leaves_the_duplicate_in_quarantine(tmp_path: Path) -
     from research_framework.cli.regrade import run_regrade
 
     _live(tmp_path, "person_c.md")
-    dupe = tmp_path / "_pipeline" / "quarantine" / "person_c-0.md"
+    dupe = L.quarantine_dir(tmp_path) / "person_c-0.md"
     dupe.parent.mkdir(parents=True, exist_ok=True)
     dupe.write_text(
         "---\ntitle: person_c-0\ntype: practitioner\n"
@@ -106,7 +107,7 @@ def test_reinstate_never_overwrites_a_live_note_of_the_same_name(
     from research_framework.cli.regrade import run_regrade
 
     live = _live(tmp_path, "person_c.md", body="NEW REWRITTEN body.")
-    stale = tmp_path / "_pipeline" / "quarantine" / "person_c.md"
+    stale = L.quarantine_dir(tmp_path) / "person_c.md"
     stale.parent.mkdir(parents=True, exist_ok=True)
     stale.write_text(
         "---\ntitle: person_c\ntype: practitioner\n"

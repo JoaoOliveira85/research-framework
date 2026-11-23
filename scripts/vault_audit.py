@@ -127,7 +127,7 @@ def _pipeline_quality_reports_section(vault_dir: Path) -> str:
 
 def _source_quality_table(sources: list[dict[str, Any]]) -> str:
     if not sources:
-        return "_No sources.db found or no sources registered._"
+        return "_No sources database found or no sources registered._"
     active = [s for s in sources if s.get("status") != "archived"]
     archived = [s for s in sources if s.get("status") == "archived"]
     lines = [
@@ -163,7 +163,7 @@ def _build_report(
     source_detail = (
         f"{active_count} active, {archived_count} archived"
         if source_summary
-        else "no sources.db"
+        else "no sources database"
     )
     source_status = "INFO" if not source_summary else "PASS"
 

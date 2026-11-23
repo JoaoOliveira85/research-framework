@@ -1,6 +1,6 @@
 # Testing Strategy — Layered Pyramid
 
-**Status**: active (last test-count refresh 2026-09-08, mechanically
+**Status**: active (last test-count refresh 2026-11-23, mechanically
 verified — see § TL;DR; strategy itself unchanged since the 2026-05-22
 Foundation refresh)  
 **Supersedes**: the 0.2.23 edition of this document in spirit; the
@@ -58,12 +58,12 @@ pytest -m e2e              # tier-5/6 e2e only
 ruff check .               # lint baseline (must be zero)
 ```
 
-<!-- test-count: not_e2e=4906 total=4939 e2e_only=33 refreshed=2026-10-30 -->
+<!-- test-count: not_e2e=4991 total=5028 e2e_only=37 refreshed=2026-11-23 -->
 **This is the one place in the repo a test count is committed** — every
 other doc that mentions a count (README, CLAUDE.md, CONTRIBUTING.md,
 ARCHITECTURE.md, `docs/RELEASE.md`) points here instead of quoting its
-own copy. Today that's **4906** fast-loop tests (`pytest -m "not e2e"`),
-**4939** total (`pytest --collect-only -q`), **33** deselected as `e2e`.
+own copy. Today that's **4991** fast-loop tests (`pytest -m "not e2e"`),
+**5028** total (`pytest --collect-only -q`), **37** deselected as `e2e`.
 `tests/docs/test_one_source_per_fact.py` re-collects the suite and
 fails if the comment above no longer matches — when it fails, update
 the comment **and** the three bolded numbers in this paragraph
@@ -694,6 +694,18 @@ a new flag. It is a floor, not a proof: a flag threaded into a non-CLI
 function that then ignores it still passes, which was the shape of both
 `--target-topics` and `--budget-cap` — catching *that* needs dataflow
 analysis. What it does close is the flag that never leaves `cli/` at all.
+
+**State paths (spec 083 FR-005).** `scripts/guards/state_paths.py` is a named line
+of the battery. It walks the AST of every file under `src/` and `scripts/`
+except `pipeline/state_layout.py` and fails on a whitespace-free string literal
+with a path segment equal to a state artefact's name from
+`state_layout.STATE_ARTEFACTS` (`"coverage-targets.json"`,
+`"state/sources.db"`, `vault / "_pipeline" / "propose-rejects.md"`).
+Docstrings, comments and prose messages are not flagged. The Markdown backlog
+name is exempt until spec 084; the JSON backlog names are allowed in two named
+modules, and two uses of the word `quarantine` that are not the state directory
+are allowlisted with a reason, all in the guard's own constants. It cannot see a
+name assembled at run time; a tier-2 test plants a literal to prove it fires.
 
 **Wrong-checkout package (issue #2).** A guard run as a script gets
 `scripts/guards/` on `sys.path[0]`, not `src/`, so `import research_framework`

@@ -24,6 +24,24 @@ def refuse_if_archived(vault_dir: Path) -> int | None:
     return ARCHIVED_EXIT
 
 
+def refuse_if_legacy_layout(vault_dir: Path) -> int | None:
+    """Print the spec-083 refusal to stderr and return exit 2, else ``None``.
+
+    For a verb that writes durable state: it must not write new state beside old
+    state it is not reading (FR-015), and it never reads a legacy path as a
+    fallback. Call it before any side effect. ``migrate-layout`` and ``update``
+    are the verbs that do NOT call it.
+    """
+    from ..pipeline import state_layout
+
+    try:
+        state_layout.require_migrated(vault_dir)
+    except state_layout.LegacyLayoutError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    return None
+
+
 def force_line_buffered_stdio() -> None:
     """Reconfigure stdout/stderr to line-buffered mode (see cli.py history)."""
     for stream in (sys.stdout, sys.stderr):

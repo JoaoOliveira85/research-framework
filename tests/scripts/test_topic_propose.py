@@ -16,6 +16,8 @@ from typing import Any
 
 import pytest
 
+from research_framework.pipeline import state_layout as L
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "topic_propose.py"
 
@@ -402,7 +404,7 @@ def test_persistent_rejects_file_records_scope_rejections(
         ]
     )
     topic_propose.propose(vault, 1, agent_caller=caller)
-    rejects_path = vault / "_pipeline" / "propose-rejects.md"
+    rejects_path = L.propose_rejects_path(vault)
     assert rejects_path.is_file()
     body = rejects_path.read_text(encoding="utf-8")
     assert "Thermodynamics primer" in body

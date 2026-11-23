@@ -67,6 +67,7 @@ GUARD_TEST_PATHS: tuple[str, ...] = (
     "tests/benchmark/unit/test_marker_isolation.py",
     "tests/benchmark/unit/test_build_exclusion.py",
     "tests/cli/test_parser_flag_consumer_guard.py",
+    "tests/guards/test_state_paths_guard.py",
     "tests/cli/test_exit_code_contract.py",
     "tests/scripts/test_guard_checkout_package.py",
 )
@@ -112,11 +113,20 @@ def _parser_flag_guard() -> Guard:
     )
 
 
+def _state_paths_guard() -> Guard:
+    """Spec 083 FR-005: only ``state_layout`` spells a state artefact's name."""
+    return Guard(
+        name="state-paths",
+        command=(sys.executable, "scripts/guards/state_paths.py"),
+    )
+
+
 def guard_battery() -> list[Guard]:
     return [
         _portability_guard(),
         _agent_asset_references_guard(),
         _parser_flag_guard(),
+        _state_paths_guard(),
         _pytest_guard(),
     ]
 

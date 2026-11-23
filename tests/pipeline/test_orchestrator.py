@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from research_framework.cli._budget_resolve import BudgetResolution
+from research_framework.pipeline import state_layout as L
 from research_framework.pipeline.coverage import save_targets
 from research_framework.pipeline.orchestrator import _append_budget_log
 from research_framework.spec.schema import (
@@ -591,7 +592,8 @@ def test_phase2_promoted_titles_merge_into_target_topics(tmp_path: Path) -> None
         ' "rejected": [{"title": "Thermodynamics", "rejected_by": "scope_check"}]}'
     )
     # Persistent rejects file (simulates topic_propose.py's output).
-    (vault / "_pipeline" / "propose-rejects.md").write_text(
+    L.propose_rejects_path(vault).parent.mkdir(parents=True, exist_ok=True)
+    (L.propose_rejects_path(vault)).write_text(
         "# Persistent tangent rejections\n\n- **Thermodynamics** — cycle 001\n"
     )
     _render_cycle_scout_prompt(_cf_spec(vault), vault, cycle_num=2)

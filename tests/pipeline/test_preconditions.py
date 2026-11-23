@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from research_framework.pipeline import preconditions
+from research_framework.pipeline import state_layout as L
 from research_framework.pipeline.preconditions import check
 
 
@@ -40,17 +41,18 @@ def _skip_framework_tests_subprocess(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_missing_coverage_targets(tmp_vault_dir: Path) -> None:
-    (tmp_vault_dir / "_pipeline" / "coverage-targets.json").unlink()
+    (L.coverage_targets_path(tmp_vault_dir)).unlink()
     ok, unmet = check(tmp_vault_dir)
     assert not ok
     assert any("coverage-targets" in m for m in unmet)
 
 
-def test_missing_budget_log(tmp_vault_dir: Path) -> None:
+def test_missing_budget_log_is_recreated_not_blocking(tmp_vault_dir: Path) -> None:
+    # Spec 083 D9: the budget log is a regenerable record.
     (tmp_vault_dir / "_pipeline" / "budget-log.md").unlink()
-    ok, unmet = check(tmp_vault_dir)
-    assert not ok
-    assert any("budget-log" in m for m in unmet)
+    _, unmet = check(tmp_vault_dir)
+    assert not any("budget-log" in m for m in unmet)
+    assert (tmp_vault_dir / "_pipeline" / "budget-log.md").is_file()
 
 
 def test_missing_claude_md(tmp_vault_dir: Path) -> None:
@@ -68,7 +70,8 @@ def test_claude_md_missing_naming_convention(tmp_vault_dir: Path) -> None:
 
 
 def test_malformed_coverage_targets(tmp_vault_dir: Path) -> None:
-    (tmp_vault_dir / "_pipeline" / "coverage-targets.json").write_text("not json")
+    L.coverage_targets_path(tmp_vault_dir).parent.mkdir(parents=True, exist_ok=True)
+    (L.coverage_targets_path(tmp_vault_dir)).write_text("not json")
     ok, unmet = check(tmp_vault_dir)
     assert not ok
     assert any("malformed" in m for m in unmet)

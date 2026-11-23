@@ -2,7 +2,7 @@
 
 `scaffold.py` wrote `/*` plus a re-include for the corpus only, so
 `research.spec.md`, `settings.yaml`, `_pipeline/research-backlog.md` and
-`_pipeline/coverage-targets.json` were all git-ignored — the exact set
+`_pipeline/coverage-targets.json` (now under `_pipeline/state/`) were all git-ignored — the exact set
 `vault_health.scan_control_file_git_tracking` (spec 058) then warns about. The
 framework was generating the condition it warns about, and on all five of the
 operator's live vaults it did: every one reported
@@ -21,16 +21,19 @@ from pathlib import Path
 
 import pytest
 
+from research_framework.pipeline import state_layout as L
+
 CONTROL_FILES = (
     "research.spec.md",
     "settings.yaml",
     "_pipeline/research-backlog.md",
-    "_pipeline/coverage-targets.json",
+    L.coverage_targets_path(Path()).as_posix(),
 )
 
 STILL_IGNORED = (
     "scripts/agent_call.py",
     "_pipeline/sources.db",
+    "_pipeline/coverage-targets.json",
     "_pipeline/cycles/cycle-001-scout.json",
     "raw_data/2026/01/page.html",
     "update_vault.py",

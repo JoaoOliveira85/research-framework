@@ -31,7 +31,7 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Source: `.specify/memory/constitution.md` **v1.6.0**. Answer every row. `N/A` is a valid
+Source: `.specify/memory/constitution.md` **v1.6.1**. Answer every row. `N/A` is a valid
 answer **with a reason**; a blank row is not an answer. A `VIOLATION` answer requires a row
 in Complexity Tracking below, or the plan does not proceed.
 

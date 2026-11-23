@@ -12,7 +12,7 @@ control-flow decision is made off the deterministic body below it.
 
 Inputs (per ``research.md`` R-009):
 
-- ``_pipeline/coverage-targets.json`` — current met/target per category.
+- the coverage targets under ``_pipeline/state/`` — current met/target per category.
 - ``_pipeline/research-backlog.md`` — orphan wikilinks emitted by
   ``scripts/topic_harvest.py``; we re-rank them with the citation
   formula ``0.3 + 0.1 * citation_count`` capped at ``1.0``.

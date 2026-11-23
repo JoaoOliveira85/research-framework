@@ -31,6 +31,7 @@ from pathlib import Path
 
 import pytest
 
+from research_framework.pipeline import state_layout as L
 from research_framework.pipeline.preconditions import check
 
 _real_subprocess_run = subprocess.run
@@ -45,7 +46,9 @@ def _write_structural_files(vault: Path) -> None:
     """Pre 3/4/5 files (always required, even on resume)."""
     pl = vault / "_pipeline"
     pl.mkdir(parents=True, exist_ok=True)
-    pl.joinpath("coverage-targets.json").write_text("{}", encoding="utf-8")
+    targets = L.coverage_targets_path(vault)
+    targets.parent.mkdir(parents=True, exist_ok=True)
+    targets.write_text("{}", encoding="utf-8")
     pl.joinpath("budget-log.md").write_text("# budget\n", encoding="utf-8")
     vault.joinpath("CLAUDE.md").write_text(
         "# vault\nnaming convention: snake_case\n", encoding="utf-8"
@@ -231,11 +234,11 @@ def test_resume_still_demands_coverage_targets(tmp_path: Path) -> None:
     assert any("coverage-targets" in m for m in unmet)
 
 
-def test_resume_still_demands_budget_log(tmp_path: Path) -> None:
-    vault = tmp_path / "v-no-budget"
-    pl = vault / "_pipeline"
-    pl.mkdir(parents=True)
-    pl.joinpath("coverage-targets.json").write_text("{}", encoding="utf-8")
+def test_resume_requires_the_state_directory_not_the_budget_log(
+    tmp_path: Path,
+) -> None:
+    vault = tmp_path / "v-no-state"
+    (vault / "_pipeline").mkdir(parents=True)
     vault.joinpath("CLAUDE.md").write_text(
         "# vault\nnaming convention: snake_case\n", encoding="utf-8"
     )
@@ -243,7 +246,8 @@ def test_resume_still_demands_budget_log(tmp_path: Path) -> None:
 
     ok, unmet = check(vault, for_resume=True)
     assert not ok
-    assert any("budget-log" in m for m in unmet)
+    assert any("precondition 4" in m for m in unmet)
+    assert not any("budget-log" in m for m in unmet)
 
 
 def test_resume_still_demands_claude_md_with_naming_convention(
@@ -252,7 +256,9 @@ def test_resume_still_demands_claude_md_with_naming_convention(
     vault = tmp_path / "v-no-claude"
     pl = vault / "_pipeline"
     pl.mkdir(parents=True)
-    pl.joinpath("coverage-targets.json").write_text("{}", encoding="utf-8")
+    targets = L.coverage_targets_path(vault)
+    targets.parent.mkdir(parents=True, exist_ok=True)
+    targets.write_text("{}", encoding="utf-8")
     pl.joinpath("budget-log.md").write_text("# budget\n", encoding="utf-8")
     vault.joinpath("research.spec.md").write_text("", encoding="utf-8")
 
