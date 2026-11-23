@@ -1,7 +1,7 @@
 # research-framework Development Guidelines
 
 Auto-generated from all feature plans; hand-corrected 2026-10-30 to the
-**v2.0.1** release of the public line. `CHANGELOG.md` is the record of what
+**v2.1.0** release of the public line. `CHANGELOG.md` is the record of what
 shipped and `docs/ROADMAP.md` the record of what comes next; the "Active
 Technologies" bullets below are the spec-kit agent-context digest of each
 shipped plan and read as a ledger, oldest first. Where this file and a
@@ -411,12 +411,12 @@ catch stale references.
 
 - `ARCHITECTURE.md` — system design source of truth (read first).
 - `CONTRIBUTING.md` — spec-kit flow, TDD discipline, doc taxonomy.
-- `docs/ROADMAP.md` — shipped registry, the v2.1.0 / v2.2.0 tiers and
+- `docs/ROADMAP.md` — shipped registry, the v2.2.0 / v2.3.0 tiers and
   the Deferred table. **Source of truth for "what comes next".**
 - `docs/TODO.md` — scratchpad. Often empty. Triage to ROADMAP.
 - `CHANGELOG.md` — every user-visible change. Read [1.0.0] for the public
   release's scope, [1.0.1] for the first patch and [2.0.0] for the breaking
-  release and its migration notes; [2.0.1] is the latest patch. `[Unreleased]` is where in-flight work lands.
+  release and its migration notes; [2.0.1] is its patch, and [2.1.0] for durable state, the structured backlog, note updates and outside-in discovery. `[Unreleased]` is where in-flight work lands.
 - `docs/RELEASE.md` — release process (version tags and `workflow_dispatch`
   only; heading date = tag date; the Migration-notes rule;
   what `./vault update` does and does not rewrite).
@@ -432,6 +432,18 @@ catch stale references.
 ## Recent Changes
 
 Every shipped change is recorded in `CHANGELOG.md`.
+
+### 2.1.0 (2026-11-23)
+
+- Added: durable vault state under a tracked `_pipeline/state/` (`pipeline/state_layout.py` is
+  the only module that spells a state path; `pipeline/cycle_ledger.py`; `./vault migrate-layout`,
+  spec 083, #10); the research backlog as a structured store (`pipeline/backlog.py`, rendered
+  Markdown view, spec 084, #18); note currency and updates (`vault/note_currency.py`,
+  `pipeline/currency.py`, `pipeline/update_outcomes.py`, gate `UG-001`, `pipeline.cycle_split`,
+  `review_after_days`, an update judged by what it changed, `pipeline/report_reconcile.py`,
+  spec 087, #53); outside-in discovery (`pipeline/discovery.py`, gate `DG-001`,
+  `_pipeline/state/discovery-ledger.json`, spec 088, #52). An existing vault migrates with one
+  `./vault update` (`CHANGELOG.md` § Migration notes).
 
 ### 2.0.1 (2026-10-30)
 

@@ -1,6 +1,6 @@
 # Feature Specification: Durable vault state lives in `_pipeline/state/`
 
-**Status**: planned — specified and clarified from code evidence on
+**Status**: shipped(2026-11-23, PR #56) — released in 2.1.0. History: specified and clarified from code evidence on
 2026-10-28; un-held and the three owner decisions (D-1, D-2, D-4,
 § Decisions) taken on 2026-11-22. Lands **before** `084` (D-3, agreed with
 `084`), which lands before `087`.

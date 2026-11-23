@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-23
+
 ### Added
 
 - A vault's durable state now lives in one tracked directory, `_pipeline/state/` (spec 083, #10). It holds `coverage-targets.json`, `sources.db`, `propose-rejects.md`, `archive-snapshots.json`, `approval-decisions.json`, `quarantine/`, `sources/<module>/facts-schema.json` and the new `cycle-ledger.json`; everything else under `_pipeline/` is scratch and stays git-ignored. The scaffolded `.gitignore` names no file under `_pipeline/`: one re-include (`!_pipeline/state/`) covers the directory, and the SQLite `-wal` / `-shm` sidecars of the now-tracked `sources.db` stay ignored. `pipeline/state_layout.py` is the only module that spells a state path, and `scripts/guards/state_paths.py` (in `scripts/guards/run_all.py`) fails when another file under `src/` or `scripts/` names one. (tests: `tests/pipeline/test_state_layout.py`, `tests/guards/test_state_paths_guard.py`, `tests/e2e/test_state_directory_contents.py`)

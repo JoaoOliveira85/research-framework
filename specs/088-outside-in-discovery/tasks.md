@@ -1,11 +1,13 @@
 # Tasks: Outside-in discovery
 
+> **Ledger** — this spec shipped; the boxes below are a historical record, not a live gate (CONTRIBUTING.md § 2). The Status header in `spec.md` is the source of truth for what shipped.
+
 **Spec**: [`spec.md`](spec.md) · **Plan**: [`plan.md`](plan.md) · **Status of
 the spec**: `planned`. Task boxes are live. `087` lands first.
 
 ## Phase 1: Areas, ledger, settings (nothing calls them)
 
-- [x] T001 `pipeline/discovery.py`: `scope_areas`, `choose_areas`, the ledger
+- T001 `pipeline/discovery.py`: `scope_areas`, `choose_areas`, the ledger
       (`load_ledger`, `record_cycle`), the registry row and accessor in
       `state_layout` (FR-002, FR-008, FR-009; plan § 1).
 
@@ -27,7 +29,7 @@ the spec**: `planned`. Task boxes are live. `087` lands first.
 
   **TDD discipline**: required.
 
-- [x] T002 Settings `pipeline.discovery` in the schema and every shipped
+- T002 Settings `pipeline.discovery` in the schema and every shipped
       profile; `split_quota` returns three counts with a carried fractional
       credit (FR-007, FR-012; plan § 2, § 4).
 
@@ -45,7 +47,7 @@ the spec**: `planned`. Task boxes are live. `087` lands first.
 
 ## Phase 2: The pass
 
-- [x] T003 The scout prompt's discovery section, the report shape, and
+- T003 The scout prompt's discovery section, the report shape, and
       `validate_cycle.py` (FR-001, FR-003, FR-011; plan § 3).
 
   ### Testing Requirements
@@ -59,7 +61,7 @@ the spec**: `planned`. Task boxes are live. `087` lands first.
 
   **TDD discipline**: required.
 
-- [x] T004 Rotation at cycle start, `DG-001`, routing, the three-way split in
+- T004 Rotation at cycle start, `DG-001`, routing, the three-way split in
       the plan and the batch loop, the ledger write after the scout step
       (FR-004…FR-009; plan § 4, § 5, § 6).
 
@@ -88,7 +90,7 @@ the spec**: `planned`. Task boxes are live. `087` lands first.
 
 ## Phase 3: Surfaces and proof
 
-- [x] T005 Cycle summary, `status`, `health`; `README.md`, `ARCHITECTURE.md`,
+- T005 Cycle summary, `status`, `health`; `README.md`, `ARCHITECTURE.md`,
       `CHANGELOG.md`, `docs/ROADMAP.md` (FR-010).
 
   ### Testing Requirements
@@ -100,7 +102,7 @@ the spec**: `planned`. Task boxes are live. `087` lands first.
 
   **TDD discipline**: required for the two surfaces.
 
-- [x] T006 Gates: fast loop, e2e, guard battery, both ruff gates; refresh the
+- T006 Gates: fast loop, e2e, guard battery, both ruff gates; refresh the
       test-count marker. `build.sh --quality` and the rehearsal on a vault
       copy are done separately.
 

@@ -1,5 +1,7 @@
 # Tasks: Durable vault state lives in `_pipeline/state/`
 
+> **Ledger** — this spec shipped; the boxes below are a historical record, not a live gate (CONTRIBUTING.md § 2). The Status header in `spec.md` is the source of truth for what shipped.
+
 **Spec**: [`spec.md`](spec.md) · **Plan**: [`plan.md`](plan.md) · **Status of
 the spec**: `planned`. Task boxes are live: a `- [ ]` means genuinely not
 done. Each task is one commit (or a short series), tests in the same commit
@@ -9,7 +11,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
 ## Phase 1: The layout, with no behaviour change
 
-- [ ] T001 Create `L`: `STATE_DIR`, one accessor per artefact, the
+- T001 Create `L`: `STATE_DIR`, one accessor per artefact, the
       `STATE_ARTEFACTS` registry (name, new path, legacy path, kind),
       `is_legacy_layout(vault)` and `require_migrated(vault)` with its typed
       error (FR-001, FR-002, FR-004; plan § 1, § 8).
@@ -36,7 +38,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [ ] T002 Render the new `.gitignore` stanza in
+- T002 Render the new `.gitignore` stanza in
       `generator/scaffold.py::_render_vault_gitignore`, including the
       transitional backlog re-include (FR-003, FR-019; plan § 2).
 
@@ -57,7 +59,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [x] T003 Move coverage targets to `L.coverage_targets_path`: the scaffold
+- T003 Move coverage targets to `L.coverage_targets_path`: the scaffold
       seed, `pipeline/coverage.py`, `scripts/topic_harvest.py`, and every
       reader (`quality_report`, `preconditions`, `digest/sections`,
       `quality/`, `research_plan`, `reporter`, `orchestrator`,
@@ -81,7 +83,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [x] T004 Move `propose-rejects.md`, `approval-decisions.json`,
+- T004 Move `propose-rejects.md`, `approval-decisions.json`,
       `archive-snapshots.json` and `sources/<module>/facts-schema.json`
       (`scripts/topic_propose.py`, `orchestrator._load_propose_rejects`,
       `budget_guard`, `cli/pause.py`, `scripts/vault_health.py`,
@@ -103,7 +105,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [x] T005 Move `sources.db` to `L.sources_db_path` (`source_manager`,
+- T005 Move `sources.db` to `L.sources_db_path` (`source_manager`,
       `orchestrator`, `digest/sections`, `reports/top_sources`,
       `scripts/source_ledger.py`, `scripts/reconcile_source_metrics.py`,
       `scripts/vault_audit.py`, the scaffold seed) and add
@@ -120,7 +122,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [x] T006 Move the quarantine directory to `L.quarantine_dir`
+- T006 Move the quarantine directory to `L.quarantine_dir`
       (`orchestrator`, `cli/regrade.py`, `vault/claims_export.py`,
       `quality_report`, `run_report`, `spec_append`, `cli/export.py`,
       `cli/acceptance.py`, `scripts/validate_vault.py`, the shim template's
@@ -138,7 +140,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
 ## Phase 2: Facts that used to live in scratch
 
-- [x] T007 Add `pipeline/cycle_ledger.py`; append a row when a cycle closes;
+- T007 Add `pipeline/cycle_ledger.py`; append a row when a cycle closes;
       make `_resolve_resume_cycle`, `_cumulative_sidecar_cost` and
       `_hours_since_last_cycle` read it under the plan § 3 rule (FR-006).
 
@@ -163,7 +165,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [x] T008 Precondition 4 requires the state directory and the ledger's
+- T008 Precondition 4 requires the state directory and the ledger's
       parent, not `budget-log.md`; a missing `budget-log.md` is re-created
       (spec D9; plan § 10).
 
@@ -174,7 +176,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [x] T009 `vault_commit`: stage `_pipeline/state/` with every cycle and
+- T009 `vault_commit`: stage `_pipeline/state/` with every cycle and
       command commit (checkpointing `sources.db` first), and make
       `begin_run` commit pending state on the base branch as
       `vault: pending state` before it branches (FR-008, D-4; plan § 5).
@@ -203,7 +205,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
 ## Phase 3: Existing vaults
 
-- [x] T010 `pipeline/layout_migration.py` with `MIGRATION_STEPS` and the
+- T010 `pipeline/layout_migration.py` with `MIGRATION_STEPS` and the
       `move_state_into_state_dir` step; the CLI verb `migrate-layout
       <vault> [--dry-run] [--force]`; the shim verb and `./vault help`; the
       row in the `077` contract table (FR-007, FR-009, FR-011…FR-014,
@@ -250,7 +252,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [x] T011 Run the migration from `vault_update.sync_vault_scripts`, so a
+- T011 Run the migration from `vault_update.sync_vault_scripts`, so a
       shim rendered by the previous release migrates the vault (FR-010).
 
   ### Testing Requirements
@@ -267,7 +269,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [x] T012 State-writing verbs refuse a legacy vault with exit 2 before any
+- T012 State-writing verbs refuse a legacy vault with exit 2 before any
       dispatch; `status`, `status --json` and `health` without `--apply`
       report it and carry on (FR-015, FR-016).
 
@@ -291,7 +293,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
 ## Phase 4: Keeping it true
 
-- [x] T013 The guard `scripts/guards/state_paths.py`, wired into
+- T013 The guard `scripts/guards/state_paths.py`, wired into
       `scripts/guards/run_all.py` (FR-005; plan § 9).
 
   ### Testing Requirements
@@ -304,7 +306,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [x] T014 Everything that names the paths in prose or data:
+- T014 Everything that names the paths in prose or data:
       `scripts/vault_health.py::CONTROL_FILE_PATHS` and the spec-058 check
       (FR-017); `scripts/build_scaffold_manifest.py` and the regenerated
       `dist-templates/scaffold-manifest.json`; the constitution's
@@ -328,7 +330,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
 ## Phase 5: Proof
 
-- [x] T015 End-to-end acceptance and the gates.
+- T015 End-to-end acceptance and the gates.
 
   ### Testing Requirements
 

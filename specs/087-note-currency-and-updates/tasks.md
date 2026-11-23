@@ -1,12 +1,14 @@
 # Tasks: Note currency and updates
 
+> **Ledger** — this spec shipped; the boxes below are a historical record, not a live gate (CONTRIBUTING.md § 2). The Status header in `spec.md` is the source of truth for what shipped.
+
 **Spec**: [`spec.md`](spec.md) · **Plan**: [`plan.md`](plan.md) · **Status of
 the spec**: `planned`. Task boxes are live: a `- [ ]` means genuinely not
 done. `083` and `084` land first; this branch is rebased onto `084`.
 
 ## Phase 1: Fields, entries and the sweep (nothing dispatched differently)
 
-- [x] T001 `src/research_framework/vault/note_currency.py`: field names,
+- T001 `src/research_framework/vault/note_currency.py`: field names,
       the five values, `effective`, `countable`, `is_due`. The note template
       stamps `as_of` and `currency` empty; `scripts/validate_vault.py`'s
       required list and `processors/verify.py`'s resolver read the names
@@ -37,7 +39,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
   **TDD discipline**: required.
 
-- [x] T002 `NoteTypeConfig.review_after_days`: dataclass, `to_dict` /
+- T002 `NoteTypeConfig.review_after_days`: dataclass, `to_dict` /
       `from_dict`, `spec/simple.py::_expand_note_types`, a positive-integer
       check in `spec/validator.py`, `PARSER_VERSION` bump (FR-009; plan § 5).
 
@@ -53,7 +55,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
   **TDD discipline**: required.
 
-- [x] T003 `pipeline/backlog.py`: origin `update`, id `update:<stem>`,
+- T003 `pipeline/backlog.py`: origin `update`, id `update:<stem>`,
       schema `1.1`, `observe_update`, `close_update`, `update_topics`, the
       "Notes to update" section of the view; the contracts under
       `specs/084-structured-research-backlog/contracts/` gain the origin
@@ -74,7 +76,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
   **TDD discipline**: required.
 
-- [x] T004 `pipeline/currency.py::queue_due_reviews`, called at cycle start
+- T004 `pipeline/currency.py::queue_due_reviews`, called at cycle start
       before the plan is generated, with a `recompute_from_disk` beside it
       (FR-010, FR-018's "where the planner looks"; plan § 4).
 
@@ -95,7 +97,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
 ## Phase 2: The scout reports, the settings exist
 
-- [x] T005 The scout prompt renders existing notes as "already have a note"
+- T005 The scout prompt renders existing notes as "already have a note"
       and persistent rejects as a separate skip list; the scout report
       accepts `topics_found.updates`; after the merge, `updates` rows and
       `new` rows that match an existing note become `new_material` entries;
@@ -124,7 +126,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
   **TDD discipline**: required.
 
-- [x] T006 `pipeline.cycle_split` in the settings schema and every shipped
+- T006 `pipeline.cycle_split` in the settings schema and every shipped
       profile; `research_mode` chooses how it applies, default `expand`;
       `phases` filters the scout prompt's sources; the `research_modes`
       blocks leave the profiles and `_INERT_PATHS`; the guard
@@ -156,7 +158,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
 ## Phase 3: Updates are dispatched and judged
 
-- [x] T007 The plan's update queue and `_split_quota`; `BatchAssignment.kind`;
+- T007 The plan's update queue and `_split_quota`; `BatchAssignment.kind`;
       the batch loop cuts and counts update batches; the update batch prompt
       (`## Update topics (JSON)`, exclusions exempt the assigned notes, no
       synthetic "no new file" failure, no "do not edit existing notes" hint)
@@ -181,7 +183,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
   **TDD discipline**: required.
 
-- [x] T008 The writer's update contract and the outcome gate: the DFS prompt's
+- T008 The writer's update contract and the outcome gate: the DFS prompt's
       update instructions (challenge from the problem the note addresses),
       `update_outcomes` in the research report, `UG-001` against `HEAD`,
       restore on failure, `close_update`, `notes_updated` derived, a
@@ -212,7 +214,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
   **TDD discipline**: required.
 
-- [x] T009 The verifier's `IX-currency-evidence` and
+- T009 The verifier's `IX-currency-evidence` and
       `IX-supersession-symmetry` rules (FR-007, FR-013; plan § 10).
 
   ### Testing Requirements
@@ -231,7 +233,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
 ## Phase 4: What the vault says about itself
 
-- [x] T010 Coverage skips uncountable notes; `./vault coverage` recounts in
+- T010 Coverage skips uncountable notes; `./vault coverage` recounts in
       memory and shows past-review and superseded counts per category;
       `health` gains a Currency section; `status` shows the last cycle's
       outcomes by kind; the `ask` template's rule; prompt corpus regenerated
@@ -257,7 +259,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
 ## Phase 5: Existing vaults, and proof
 
-- [x] T011 The migration step `stamp_note_currency` in
+- T011 The migration step `stamp_note_currency` in
       `layout_migration.MIGRATION_STEPS` (FR-021, FR-022; plan § 13).
 
   ### Testing Requirements
@@ -277,7 +279,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
   **TDD discipline**: required.
 
-- [x] T012 Docs: `README.md` (what "keeps itself current" now means),
+- T012 Docs: `README.md` (what "keeps itself current" now means),
       `ARCHITECTURE.md`, `examples/` specs gain `review_after_days` on one
       type, `CHANGELOG.md` `[Unreleased]` with `### Migration notes`, the
       ROADMAP row, the constitution's coverage-gate text if it says "note
@@ -289,7 +291,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
   **TDD discipline**: not applicable (documentation).
 
-- [x] T013 Acceptance and the gates.
+- T013 Acceptance and the gates.
 
   ### Testing Requirements
 

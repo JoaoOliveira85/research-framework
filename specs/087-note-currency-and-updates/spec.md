@@ -1,6 +1,6 @@
 # Feature Specification: Note currency and updates — an existing topic is researched again
 
-**Status**: planned — drafted 2026-11-22 from #53; clarified the same day
+**Status**: shipped(2026-11-23, PR #58) — released in 2.1.0. History: drafted 2026-11-22 from #53; clarified the same day
 (owner decisions Q1–Q4, § Clarifications); corrected and planned on
 2026-11-23 from a code survey at `1961f9a` (§ Clarifications, Session
 2026-11-23; [`plan.md`](plan.md)). Lands after `083` and `084`.
