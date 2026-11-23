@@ -695,6 +695,18 @@ function that then ignores it still passes, which was the shape of both
 `--target-topics` and `--budget-cap` — catching *that* needs dataflow
 analysis. What it does close is the flag that never leaves `cli/` at all.
 
+**State paths (spec 083 FR-005).** `scripts/guards/state_paths.py` is a named line
+of the battery. It walks the AST of every file under `src/` and `scripts/`
+except `pipeline/state_layout.py` and fails on a whitespace-free string literal
+with a path segment equal to a state artefact's name from
+`state_layout.STATE_ARTEFACTS` (`"coverage-targets.json"`,
+`"_pipeline/sources.db"`, `vault / "_pipeline" / "propose-rejects.md"`).
+Docstrings, comments and prose messages are not flagged. The Markdown backlog
+name is exempt until spec 084; the JSON backlog names are allowed in two named
+modules, and two uses of the word `quarantine` that are not the state directory
+are allowlisted with a reason, all in the guard's own constants. It cannot see a
+name assembled at run time; a tier-2 test plants a literal to prove it fires.
+
 **Wrong-checkout package (issue #2).** A guard run as a script gets
 `scripts/guards/` on `sys.path[0]`, not `src/`, so `import research_framework`
 resolves through site-packages: a stale editable install or a sibling worktree

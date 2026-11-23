@@ -328,7 +328,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
 ## Phase 5: Proof
 
-- [ ] T015 End-to-end acceptance and the gates.
+- [x] T015 End-to-end acceptance and the gates.
 
   ### Testing Requirements
 
@@ -348,7 +348,8 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
   `ruff format --check .`, `bash build.sh --quality`; refresh the
   `<!-- test-count: … -->` marker in `docs/testing-strategy.md`.
 
-  Rehearsal, reported in the PR: `migrate-layout --dry-run`, then the real
+  Rehearsal (not done in this change; the coordinator runs it separately on
+  copies of live vaults — this line stays open), reported in the PR: `migrate-layout --dry-run`, then the real
   migration, on copies of two live vaults (one with 40+ cycles), with the
   before/after `git ls-files _pipeline/` and the ledger's totals against a
   manual sum of the sidecars.
