@@ -44,7 +44,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
   **TDD discipline**: required.
 
-- [ ] T002 Observations and queries: `observe_topic`, `observe_quarantine`,
+- [x] T002 Observations and queries: `observe_topic`, `observe_quarantine`,
       `resolve_covered`, `resolve_quarantine`, `resolve_quarantine_stem`,
       `planner_topics`, `all_titles` (FR-007, FR-009, FR-010, FR-012,
       FR-013; `data-model.md` writer and reader maps; `research.md` R7).

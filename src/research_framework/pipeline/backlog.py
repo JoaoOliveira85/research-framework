@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -49,6 +49,14 @@ _VERSION_RE = re.compile(r"^(\d+)\.(\d+)$")
 _DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 
 # Fields each writer may set on an entry (FR-007), besides ``updated``.
+_OWNED_TOPIC_FIELDS: dict[str, frozenset[str]] = {
+    "harvest": frozenset({"citation_count", "cited_from", "detail"}),
+    "propose": frozenset({"detail", "relation", "parent_note", "scope_warn"}),
+}
+_TOPIC_ORIGINS: dict[str, frozenset[str]] = {
+    "harvest": frozenset({"harvest", "researcher"}),
+    "propose": frozenset({"proposal"}),
+}
 
 
 class BacklogUnavailable(Exception):
@@ -60,6 +68,22 @@ class TitleRef(NamedTuple):
 
     key: str
     title: str
+
+
+@dataclass(frozen=True)
+class TopicRef:
+    """An immutable view of one queued topic for the planner."""
+
+    id: str
+    key: str
+    title: str
+    origin: str
+    citation_count: int
+    cited_from: tuple[str, ...]
+    first_seen_cycle: int | None
+    last_seen_cycle: int | None
+    seen_cycles: int
+    detail: str
 
 
 # ---------------------------------------------------------------------------
@@ -331,7 +355,172 @@ class Transaction:
 
     # -- helpers ----------------------------------------------------------
 
+    def _find(self, entry_id: str) -> dict[str, Any] | None:
+        for entry in self._entries:
+            if entry["id"] == entry_id:
+                return entry
+        return None
+
+    def _stamp_seen(self, entry: dict[str, Any], cycle: int | None) -> None:
+        if cycle is None:
+            return
+        last = entry.get("last_seen_cycle")
+        if last != cycle:
+            entry["seen_cycles"] = entry.get("seen_cycles", 0) + 1
+        if last is None or cycle > last:
+            entry["last_seen_cycle"] = cycle
+
+    def _set(self, entry: dict[str, Any], name: str, value: Any) -> None:
+        if value is not None:
+            entry[name] = value
+
+    def _resolve(self, entry: dict[str, Any]) -> bool:
+        if entry["status"] != "open" or entry.get("status_by") == "operator":
+            return False
+        entry["status"] = "resolved"
+        entry["status_by"] = self._writer
+        entry["status_written"] = "resolved"
+        entry["updated"] = self._today
+        return True
+
     # -- observations -----------------------------------------------------
+
+    def observe_topic(
+        self,
+        *,
+        cycle: int,
+        title: str,
+        origin: str,
+        citation_count: int | None = None,
+        cited_from: Iterable[str] | None = None,
+        detail: str | None = None,
+        relation: str | None = None,
+        parent_note: str | None = None,
+        scope_warn: bool | None = None,
+    ) -> None:
+        """Upsert one ``topic:`` entry. Existing entries get observation fields only."""
+        if self._writer not in _TOPIC_ORIGINS:
+            raise ValueError(f"writer {self._writer!r} does not observe topics")
+        if origin not in _TOPIC_ORIGINS[self._writer]:
+            raise ValueError(f"writer {self._writer!r} cannot create origin {origin!r}")
+        if not isinstance(cycle, int) or isinstance(cycle, bool) or cycle < 1:
+            raise ValueError(f"cycle must be an integer >= 1, got {cycle!r}")
+        display = " ".join(title.split())
+        if not display:
+            raise ValueError("topic title is empty")
+        fields: dict[str, Any] = {
+            "citation_count": citation_count,
+            "cited_from": None if cited_from is None else list(cited_from),
+            "detail": detail,
+            "relation": relation,
+            "parent_note": parent_note,
+            "scope_warn": scope_warn,
+        }
+        owned = _OWNED_TOPIC_FIELDS[self._writer]
+        foreign = sorted(
+            k for k, v in fields.items() if v is not None and k not in owned
+        )
+        if foreign:
+            raise ValueError(
+                f"writer {self._writer!r} does not own field(s) {', '.join(foreign)}"
+            )
+        entry = self._find(topic_id(display))
+        if entry is None:
+            entry = {
+                "id": topic_id(display),
+                "title": display,
+                "origin": origin,
+                "status": "open",
+                "status_by": self._writer,
+                "status_written": "open",
+                "added": self._today,
+                "updated": self._today,
+                "first_seen_cycle": cycle,
+                "last_seen_cycle": cycle,
+                "seen_cycles": 1,
+            }
+            self._entries.append(entry)
+        else:
+            self._stamp_seen(entry, cycle)
+            entry["updated"] = self._today
+        for name, value in fields.items():
+            if value is None:
+                continue
+            # An operator's own description is not replaced by a writer's.
+            if name == "detail" and entry["origin"] == "operator" and entry.get(name):
+                continue
+            entry[name] = value
+
+    def observe_quarantine(
+        self,
+        *,
+        stem: str,
+        kind: str,
+        detail: str | None = None,
+        cycle: int | None = None,
+    ) -> None:
+        """Upsert one ``quarantine:<stem>`` entry (kind and detail are the latest)."""
+        if kind not in KINDS:
+            raise ValueError(f"kind must be one of {KINDS}, got {kind!r}")
+        if not stem:
+            raise ValueError("quarantine stem is empty")
+        entry = self._find(quarantine_id(stem))
+        if entry is None:
+            entry = {
+                "id": quarantine_id(stem),
+                "title": stem,
+                "origin": "quarantine",
+                "status": "open",
+                "status_by": self._writer,
+                "status_written": "open",
+                "added": self._today,
+                "updated": self._today,
+                "first_seen_cycle": cycle,
+                "last_seen_cycle": cycle,
+                "seen_cycles": 0 if cycle is None else 1,
+                "stem": stem,
+                "kind": kind,
+            }
+            self._entries.append(entry)
+        else:
+            self._stamp_seen(entry, cycle)
+            entry["updated"] = self._today
+            entry["stem"] = stem
+            entry["kind"] = kind
+        self._set(entry, "detail", detail)
+
+    def resolve_covered(self, existing_stems: Iterable[str]) -> int:
+        """Resolve open harvest/researcher topics whose note now exists."""
+        stems = {title_key(s) for s in existing_stems}
+        count = 0
+        for entry in self._entries:
+            if entry["origin"] not in ("harvest", "researcher"):
+                continue
+            if not entry["id"].startswith("topic:"):
+                continue
+            if title_key(entry["title"]) in stems and self._resolve(entry):
+                count += 1
+        return count
+
+    def resolve_quarantine(self, live_stems: Iterable[str]) -> int:
+        """Resolve open quarantine entries whose quarantine file is gone."""
+        live = set(live_stems)
+        count = 0
+        for entry in self._entries:
+            if entry["origin"] != "quarantine":
+                continue
+            if entry.get("stem") not in live and self._resolve(entry):
+                count += 1
+        return count
+
+    def resolve_quarantine_stem(self, stem: str) -> int:
+        """Resolve exactly the open quarantine entries whose ``stem`` is ``stem``."""
+        count = 0
+        for entry in self._entries:
+            if entry["origin"] == "quarantine" and entry.get("stem") == stem:
+                if self._resolve(entry):
+                    count += 1
+        return count
 
 
 def update(vault_dir: Path, writer: str, fn: Callable[[Transaction], None]) -> bool:
@@ -364,8 +553,120 @@ def update(vault_dir: Path, writer: str, fn: Callable[[Transaction], None]) -> b
 
 
 # ---------------------------------------------------------------------------
+# Module-level observations (one transaction each)
+# ---------------------------------------------------------------------------
+
+
+def create_empty(vault_dir: Path) -> bool:
+    """Seed an empty store and its view; a no-op when the store exists."""
+    if store_path(vault_dir).exists():
+        return False
+    return update(vault_dir, "migration", lambda tx: None)
+
+
+def observe_topic(
+    vault_dir: Path,
+    writer: str,
+    *,
+    cycle: int,
+    title: str,
+    origin: str,
+    citation_count: int | None = None,
+    cited_from: Iterable[str] | None = None,
+    detail: str | None = None,
+    relation: str | None = None,
+    parent_note: str | None = None,
+    scope_warn: bool | None = None,
+) -> bool:
+    return update(
+        vault_dir,
+        writer,
+        lambda tx: tx.observe_topic(
+            cycle=cycle,
+            title=title,
+            origin=origin,
+            citation_count=citation_count,
+            cited_from=cited_from,
+            detail=detail,
+            relation=relation,
+            parent_note=parent_note,
+            scope_warn=scope_warn,
+        ),
+    )
+
+
+def observe_quarantine(
+    vault_dir: Path,
+    *,
+    stem: str,
+    kind: str,
+    detail: str | None = None,
+    cycle: int | None = None,
+) -> bool:
+    return update(
+        vault_dir,
+        "quarantine",
+        lambda tx: tx.observe_quarantine(
+            stem=stem, kind=kind, detail=detail, cycle=cycle
+        ),
+    )
+
+
+def resolve_covered(vault_dir: Path, existing_stems: Iterable[str]) -> bool:
+    stems = list(existing_stems)
+    return update(vault_dir, "harvest", lambda tx: tx.resolve_covered(stems))
+
+
+def resolve_quarantine(vault_dir: Path, live_stems: Iterable[str]) -> bool:
+    stems = list(live_stems)
+    return update(vault_dir, "quarantine", lambda tx: tx.resolve_quarantine(stems))
+
+
+def resolve_quarantine_stem(vault_dir: Path, stem: str) -> bool:
+    return update(vault_dir, "regrade", lambda tx: tx.resolve_quarantine_stem(stem))
+
+
+# ---------------------------------------------------------------------------
 # Queries (immutable results)
 # ---------------------------------------------------------------------------
+
+
+def _first_seen_sort_key(item: tuple[int, dict[str, Any]]) -> tuple[int, int, int]:
+    index, entry = item
+    first = entry.get("first_seen_cycle")
+    return (1 if first is None else 0, first or 0, index)
+
+
+def planner_topics(vault_dir: Path) -> list[TopicRef]:
+    """Open topics worth queueing: operator-owned or cited (research R7)."""
+    queued = []
+    for index, entry in enumerate(_read_for_query(vault_dir)):
+        if entry["status"] != "open":
+            continue
+        if entry["origin"] in ("quarantine", "migrated"):
+            continue
+        if not entry["id"].startswith("topic:"):
+            continue
+        cited = entry.get("citation_count", 0) >= 1
+        owned = entry["origin"] == "operator" or entry.get("status_by") == "operator"
+        if owned or cited:
+            queued.append((index, entry))
+    queued.sort(key=_first_seen_sort_key)
+    return [
+        TopicRef(
+            id=e["id"],
+            key=title_key(e["title"]),
+            title=e["title"],
+            origin=e["origin"],
+            citation_count=e.get("citation_count", 0),
+            cited_from=tuple(e.get("cited_from", ())),
+            first_seen_cycle=e.get("first_seen_cycle"),
+            last_seen_cycle=e.get("last_seen_cycle"),
+            seen_cycles=e.get("seen_cycles", 0),
+            detail=e.get("detail", ""),
+        )
+        for _, e in queued
+    ]
 
 
 def all_titles(vault_dir: Path) -> list[TitleRef]:
