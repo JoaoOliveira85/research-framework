@@ -168,7 +168,7 @@ def test_a_1_0_store_is_read_and_written_as_1_1_without_loss(tmp_path: Path) -> 
     )
 
     after = _store(tmp_path)
-    assert after["schema_version"] == "1.1"
+    assert after["schema_version"] == "1.2"
     assert after["x_top"] == {"keep": [1, 2]}
     assert after["entries"][0] == store["entries"][0]
     assert list(after["entries"][0]["my_field"]) == ["b", "a"]

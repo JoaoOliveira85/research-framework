@@ -3,7 +3,7 @@
 {%- set refresh = spec.research_mode == 'refresh' -%}
 {%- set coverage_cats = (spec.coverage_targets.categories if spec.coverage_targets is defined and spec.coverage_targets else []) -%}
 ---
-_template_version: 7
+_template_version: 8
 ---
 You are running BFS scout cycle {CYCLE_NUM} of a recursive research pass on the
 {{ spec.name }} vault.
@@ -271,6 +271,56 @@ report updates for them.
 {% endfor %}
 {% endif %}
 
+{% if discovery_areas is defined and discovery_areas %}
+## Discovery pass — what is new in the field
+
+Everything above starts from names this vault already holds. This pass starts
+from the field. These are the scope areas assigned to this cycle:
+
+{% for area in discovery_areas %}
+- {{ area }}
+{% endfor %}
+
+For EACH area, search for what has appeared or changed since {{ discovery_window_start or 'the start of the window' }}, and answer three questions:
+
+1. What appeared or changed since then (new approaches, releases, results,
+   deprecations, successors that go by a new name)?
+2. What is contested (where credible sources disagree)?
+3. How do practitioners now solve the problem this area describes?
+
+Rules for this pass:
+
+- Search from the area's problem, NOT from this vault's existing note titles.
+  A search on names the vault already has cannot find what is called something
+  else.
+- A finding about a topic that already has a note is still reported, with
+  its sources. The framework routes it to an update of that note (as in
+  `topics_found.updates`), never to a second note.
+- Every row needs at least one source URL and that source's publication date
+  (`published`, ISO `YYYY-MM-DD`). A row with no source, or a publication date
+  before the window start, is dropped.
+- Set `area` to the area's text exactly as listed above. A row naming any
+  other area is dropped.
+- Report every area in `discovery_checked`, even when you found nothing: list
+  the queries you asked and `"found": 0`. "Checked, nothing new" is a result.
+- Discovery rows (`topics_found.discovery`) do not count toward the cycle-focus
+  70% rule or the category-diversity rule, which apply to `topics_found.new`
+  only.
+{% if refresh %}
+- This cycle refreshes (`research_mode: refresh`), so no new topics are wanted
+  and `topics_found.new` stays empty. Discovery rows about topics that already
+  have a note are welcome: they become updates of that note. Rows about topics
+  the vault does not hold are accepted but will not be dispatched in this mode.
+{% endif %}
+
+Report shape (see the output section):
+
+- `topics_found.discovery`: `[{"title", "area", "why_new", "source_urls",
+  "published", "coverage_category", "proposed_filename"}]`
+- `discovery_checked`: `[{"area", "queries", "found"}]`, one entry per assigned
+  area.
+
+{% endif %}
 Check CLAUDE.md's note-inclusion criteria. A topic warrants a note if ANY apply:
 - Referenced 2+ times across different notes
 - Directly queryable by a user
@@ -330,9 +380,27 @@ The report MUST follow the v2 schema (no extra commentary, JSON only):
         "summary": "<what is new about it>"
       }
     ],
+{% if discovery_areas is defined and discovery_areas %}
+    "discovery": [
+      {
+        "title": "<topic title>",
+        "area": "<one of the assigned discovery areas, verbatim>",
+        "why_new": "<what is new about it>",
+        "source_urls": ["<URL>"],
+        "published": "<YYYY-MM-DD publication date of the source>",
+        "coverage_category": "<one of the configured categories>",
+        "proposed_filename": "<filename>.md"
+      }
+    ],
+{% endif %}
     "total": <int>
   },
   "proposed_filenames": ["<Topic Title>.md"],
+{% if discovery_areas is defined and discovery_areas %}
+  "discovery_checked": [
+    {"area": "<assigned area, verbatim>", "queries": ["<query asked>"], "found": <int>}
+  ],
+{% endif %}
   "sources_consulted": ["GitHub repos", "Confluence", ...],
   "access_methods_used": {"<org>/<repo>": "local" | "mcp"},
   "termination_condition": null | "A" | "B" | "C",
@@ -373,6 +441,13 @@ Constraints:
   Each row names a note the vault ALREADY has (`note`: its filename or stem, as
   listed under "Already have a note"), the `source_urls` that show what is new,
   and a one-line `summary`. Never propose a second note for the same topic.
+{% if discovery_areas is defined and discovery_areas %}
+
+- `topics_found.discovery` and `discovery_checked` are described under
+  "Discovery pass". `discovery_checked` MUST have one entry per assigned area;
+  `topics_found.discovery` may be `[]`. Discovery rows are not `topics_found.new`
+  rows and are not counted by SG-001 or SG-002.
+{% endif %}
 
 Output ONLY the JSON file at the path above. Do not print the JSON to stdout.
 {% else %}
@@ -395,9 +470,17 @@ The report MUST follow this exact schema (no extra commentary, JSON only):
     "updates": [
       {"note": "<existing note filename or stem>", "source_urls": ["<URL>"], "summary": "<what is new>"}
     ],
+{% if discovery_areas is defined and discovery_areas %}
+    "discovery": [
+      {"title": "<topic title>", "area": "<assigned area, verbatim>", "why_new": "<what is new>", "source_urls": ["<URL>"], "published": "<YYYY-MM-DD>", "coverage_category": "<category>", "proposed_filename": "<filename>.md"}
+    ],
+{% endif %}
     "total": <int>
   },
   "proposed_filenames": ["<Topic Title>.md", "..."],
+{% if discovery_areas is defined and discovery_areas %}
+  "discovery_checked": [{"area": "<assigned area, verbatim>", "queries": ["<query asked>"], "found": <int>}],
+{% endif %}
   "notes_created": [],
   "notes_updated": [],
   "new_wikilinks_discovered": ["<unresolved term from scan>"],
@@ -428,6 +511,13 @@ Constraints:
   Each row names a note the vault ALREADY has (`note`: its filename or stem, as
   listed under "Already have a note"), the `source_urls` that show what is new,
   and a one-line `summary`. Never propose a second note for the same topic.
+{% if discovery_areas is defined and discovery_areas %}
+
+- `topics_found.discovery` and `discovery_checked` are described under
+  "Discovery pass". `discovery_checked` MUST have one entry per assigned area;
+  `topics_found.discovery` may be `[]`. Discovery rows are not `topics_found.new`
+  rows and are not counted by SG-001 or SG-002.
+{% endif %}
 
 Output ONLY the JSON file at the path above. Do not print the JSON to stdout.
 {% endif %}

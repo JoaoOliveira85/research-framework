@@ -25,6 +25,10 @@ the operator; **never parsed by code** (FR-016).
 
 - **<stem>** — <reason> · as of <date or "unknown"> · <n> prompting source(s) · last failure (cycle <c>): <why>
 
+## Found by discovery
+
+- **<title>** — scope area: <area> · <n> source(s)
+
 ## Flagged by the researcher
 
 - **<title>** — <detail> · first seen cycle <a>
@@ -58,7 +62,7 @@ _<R> resolved and <D> dropped entries are kept in the JSON file._
 ## Rules
 
 1. Sections appear in this order (FR-017: harvest, notes to update (spec 087),
-   researcher, quarantine, operator, proposal, migrated, then coverage). A section with no open entry
+   found by discovery (spec 088), researcher, quarantine, operator, proposal, migrated, then coverage). A section with no open entry
    is omitted, heading included. The header, the summary line and the footer
    are always present.
 2. Only `open` entries are listed. "Notes to update" lists `update` entries in

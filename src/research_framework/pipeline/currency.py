@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from collections.abc import Iterable, Mapping
 from datetime import date
 from pathlib import Path
@@ -125,35 +126,53 @@ def record_scout_updates(
       carrying the row's ``source_urls``.
     """
     notes = _corpus_notes(vault_dir, spec)
-    sightings: dict[str, list[str]] = {}
-
-    def add(stem_path: Path, urls: Iterable[Any]) -> None:
-        sightings.setdefault(stem_path.stem, [])
-        for url in urls:
-            text = str(url).strip()
-            if text and text not in sightings[stem_path.stem]:
-                sightings[stem_path.stem].append(text)
-
+    rows: list[dict[str, Any]] = []
     try:
         doc = json.loads(scout_report.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         doc = {}
     found = doc.get("topics_found") if isinstance(doc, dict) else None
-    rows = found.get("updates") if isinstance(found, dict) else None
-    for row in rows if isinstance(rows, list) else []:
+    updates = found.get("updates") if isinstance(found, dict) else None
+    for row in updates if isinstance(updates, list) else []:
         name = str(row.get("note") or "").strip() if isinstance(row, dict) else ""
-        path = notes.get(_exclusion_slug(name)) if name else None
-        if path is None:
+        key = _exclusion_slug(name) if name else ""
+        if not key or key not in notes:
             _LOG.warning(
                 "[currency] scout update names no existing note, ignored: %r", row
             )
             continue
         urls = row.get("source_urls")
-        add(path, urls if isinstance(urls, list) else [])
-    for row in dropped_new_rows:
+        rows.append({"key": key, "source_urls": urls if isinstance(urls, list) else []})
+    rows.extend(dropped_new_rows)
+    return record_new_material(vault_dir, spec, rows, cycle=cycle)
+
+
+def record_new_material(
+    vault_dir: Path,
+    spec: SpecConfig,
+    rows: Iterable[Mapping[str, Any]],
+    cycle: int | None = None,
+) -> int:
+    """Queue a ``new_material`` update per existing note the rows point at.
+
+    Each row is ``{"key": <normalised note slug>, "source_urls": [...]}``; a row
+    whose key names no existing note is skipped. Sightings of one note merge
+    (urls deduplicated, in order). One transaction as the ``scout`` writer;
+    returns how many notes were queued. Used by the scout step (its ``updates``
+    rows and the ``new`` rows the plan merge dropped) and by the discovery
+    routing (a finding about a note the vault holds, spec 088).
+    """
+    notes = _corpus_notes(vault_dir, spec)
+    sightings: dict[str, list[str]] = {}
+    for row in rows:
         path = notes.get(str(row.get("key") or ""))
-        if path is not None:
-            add(path, row.get("source_urls") or [])
+        if path is None:
+            continue
+        known = sightings.setdefault(path.stem, [])
+        for url in row.get("source_urls") or []:
+            text = str(url).strip()
+            if text and text not in known:
+                known.append(text)
     if not sightings:
         return 0
     by_stem = {p.stem: p for p in notes.values()}
@@ -192,18 +211,27 @@ def split_quota(
     mode: str,
     new_available: int,
     updates_available: int,
-) -> tuple[int, int]:
-    """Share a cycle's planned topic count between new topics and updates.
+    discovery_available: int = 0,
+    discovery_credit: float | None = None,
+) -> tuple[int, int, int]:
+    """Share a cycle's planned topic count: ``(new_n, update_n, discovery_n)``.
 
     ``shares`` is ``pipeline.cycle_split`` (``new``/``updates``/``discovery``,
-    attributes or mapping keys). Spec 087 FR-015..FR-017:
+    attributes or mapping keys). Spec 087 FR-015..FR-017 and spec 088 FR-007:
 
-    * Discovery has no work of its own yet, so its share always goes to new
-      topics.
-    * ``mode`` applies first: ``bootstrap`` gives updates 0, ``refresh`` gives
-      new topics 0, ``expand`` (and anything else) uses the shares as written.
-    * The two shares are rounded together (largest remainder) so they sum to
-      ``quota``.
+    * ``discovery_n`` is the cap on discovery topics dispatched. It is
+      ``min(floor(credit), discovery_available, quota)``, where ``credit`` is
+      ``discovery_credit`` (the ledger's carried fractional credit,
+      :func:`.discovery.accrue_credit`) or, when none is given, this cycle's
+      share of the quota. It is 0 when no discovery topic is waiting, when the
+      discovery share is 0, and under ``refresh``; the share then goes to new
+      topics, exactly as it did before discovery had work of its own.
+    * The rest of the quota is shared between new topics and updates: ``mode``
+      applies first (``bootstrap`` gives updates 0, ``refresh`` gives new
+      topics 0, ``expand`` and anything else uses the shares as written), and
+      the two are rounded together (largest remainder) so they sum to the rest.
+      A discovery share that did not dispatch anything counts as a new-topic
+      share; one that did does not.
     * A share with no work falls to the other: with fewer open update entries
       than the update count the rest goes to new topics, and with fewer new
       topics than the new count the rest goes to updates. A mode's zero is
@@ -213,7 +241,19 @@ def split_quota(
     quota = max(0, int(quota))
     new_available = max(0, int(new_available))
     updates_available = max(0, int(updates_available))
-    new_weight = _share(shares, "new") + _share(shares, "discovery")
+    discovery_available = max(0, int(discovery_available))
+    discovery_share = _share(shares, "discovery")
+    discovery_n = 0
+    if mode != "refresh" and discovery_share and discovery_available and quota:
+        credit = (
+            quota * discovery_share / 100
+            if discovery_credit is None
+            else float(discovery_credit)
+        )
+        discovery_n = min(math.floor(credit + 1e-9), discovery_available, quota)
+        discovery_n = max(discovery_n, 0)
+    quota -= discovery_n
+    new_weight = _share(shares, "new") + (0 if discovery_n else discovery_share)
     update_weight = _share(shares, "updates")
     if mode == "bootstrap":
         update_weight = 0
@@ -221,7 +261,7 @@ def split_quota(
         new_weight = 0
     total = new_weight + update_weight
     if quota == 0 or total == 0:
-        return 0, 0
+        return 0, 0, discovery_n
     raw_updates = quota * update_weight / total
     update_n = int(raw_updates)
     new_n = int(quota * new_weight / total)
@@ -241,7 +281,7 @@ def split_quota(
         spare = new_n - new_available
         new_n = new_available
         update_n += min(spare, updates_available - update_n) if update_weight else 0
-    return new_n, update_n
+    return new_n, update_n, discovery_n
 
 
 def note_path(vault_dir: Path, spec: SpecConfig, stem: str) -> Path | None:
@@ -320,7 +360,7 @@ def plan_updates(
     refs = backlog.update_topics(vault_dir)
     if not updates_supported(vault_dir)[0]:
         refs = []  # the share falls to new topics, as for any empty share
-    new_n, update_n = split_quota(
+    new_n, update_n, _discovery_n = split_quota(
         quota,
         cycle_split_shares(vault_dir),
         mode=cycle_mode(vault_dir, spec),
@@ -352,7 +392,7 @@ def plan_updates(
                 prompted_by=ref.prompted_by,
             )
         )
-    new_n, update_n = split_quota(
+    new_n, update_n, _discovery_n = split_quota(
         quota,
         cycle_split_shares(vault_dir),
         mode=cycle_mode(vault_dir, spec),
@@ -365,29 +405,43 @@ def plan_updates(
 
 
 def cycle_expectations(
-    vault_dir: Path, spec: SpecConfig, quota: int, scout_updates: int = 0
+    vault_dir: Path,
+    spec: SpecConfig,
+    quota: int,
+    scout_updates: int = 0,
+    discovery_available: int = 0,
 ) -> tuple[int, int]:
-    """``(new topics wanted, updates planned)`` for a cycle, for the scout gates.
+    """``(new topics wanted, other work planned)`` for a cycle, for the scout gates.
 
     The same split the plan makes (:func:`split_quota`), but computed when the
     scout has just reported: ``scout_updates`` is the number of
     ``topics_found.updates`` rows it returned, which add to the open entries.
     New topics are treated as plentiful (the scout is the one finding them), so
     ``new wanted`` is 0 only when the mode (``refresh``) or the shares ask for
-    none, and ``updates planned`` is 0 when the vault cannot run update batches.
+    none, and the second count is 0 when the vault cannot run update batches.
+
+    Spec 088: ``discovery_available`` is how many discovery topics could be
+    dispatched this cycle (open backlog topics plus the rows in this report).
+    Discovery topics are not ``topics_found.new`` rows, so the slots they take
+    are taken OFF ``new wanted`` (SG-001 must not expect rows in
+    ``topics_found.new`` for work the discovery share will do) and ADDED to the
+    second count, which is "work the cycle will do besides new topics": updates
+    plus discovery topics. With none available this is exactly the spec-087
+    ``(new wanted, updates planned)``.
     """
     supported = updates_supported(vault_dir)[0]
     available = 0
     if supported:
         available = len(backlog.update_topics(vault_dir)) + max(0, scout_updates)
-    new_n, update_n = split_quota(
+    new_n, update_n, discovery_n = split_quota(
         max(1, quota),
         cycle_split_shares(vault_dir),
         mode=cycle_mode(vault_dir, spec),
         new_available=max(1, quota),
         updates_available=available,
+        discovery_available=discovery_available,
     )
-    return new_n, update_n
+    return new_n, update_n + discovery_n
 
 
 def update_work_continues(report: Mapping[str, Any]) -> bool:

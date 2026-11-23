@@ -34,7 +34,7 @@ from .atomic_write import write_bytes, write_text
 _LOG = logging.getLogger(__name__)
 
 SCHEMA_MAJOR = 1
-SCHEMA_MINOR = 1
+SCHEMA_MINOR = 2
 SCHEMA_VERSION = f"{SCHEMA_MAJOR}.{SCHEMA_MINOR}"
 
 # The writer name the orchestrator's quarantine sweep uses. Named so that no
@@ -60,6 +60,7 @@ ORIGINS = (
     "operator",
     "migrated",
     "update",
+    "discovery",  # 1.2 (spec 088): a topic the outside-in pass found
 )
 STATUSES = ("open", "resolved", "dropped")
 KINDS = ("rewrite", "retry")
@@ -86,10 +87,16 @@ _DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 _OWNED_TOPIC_FIELDS: dict[str, frozenset[str]] = {
     "harvest": frozenset({"citation_count", "cited_from", "detail"}),
     "propose": frozenset({"detail", "relation", "parent_note", "scope_warn"}),
+    # Spec 088: the scope area a discovery topic came from, its sources, the
+    # category and filename the scout proposed.
+    "scout": frozenset(
+        {"detail", "scope_area", "source_urls", "category", "proposed_filename"}
+    ),
 }
 _TOPIC_ORIGINS: dict[str, frozenset[str]] = {
     "harvest": frozenset({"harvest", "researcher"}),
     "propose": frozenset({"proposal"}),
+    "scout": frozenset({"discovery"}),
 }
 
 
@@ -136,6 +143,20 @@ class UpdateRef:
     last_failure_cycle: int | None = None
 
 
+@dataclass(frozen=True)
+class DiscoveryRef:
+    """An immutable view of one open discovery topic (spec 088)."""
+
+    id: str
+    title: str
+    scope_area: str
+    source_urls: tuple[str, ...]
+    category: str
+    proposed_filename: str
+    detail: str
+    first_seen_cycle: int | None
+
+
 # ---------------------------------------------------------------------------
 # Paths and identity
 # ---------------------------------------------------------------------------
@@ -156,6 +177,14 @@ def overwritten_path(vault_dir: Path) -> Path:
 def title_key(title: str) -> str:
     """Whitespace collapsed, stripped, case-folded (research R6)."""
     return " ".join(title.split()).casefold()
+
+
+def _slug(name: str) -> str:
+    """Case-folded, ``.md`` stripped, each run of non-word characters one ``-``
+    (the form ``research_plan._exclusion_slug`` compares in)."""
+    text = " ".join(name.split()).casefold()
+    text = text[:-3] if text.endswith(".md") else text
+    return re.sub(r"[\W_]+", "-", text).strip("-")
 
 
 def topic_id(title: str) -> str:
@@ -251,7 +280,16 @@ def _validate_entry(entry: Any, index: int, *, lenient_enums: bool) -> str | Non
         and all(isinstance(p, str) for p in entry["cited_from"])
     ):
         return f"{where}.cited_from must be an array of strings"
-    for name in ("detail", "relation", "parent_note", "stem", "as_of"):
+    for name in (
+        "detail",
+        "relation",
+        "parent_note",
+        "stem",
+        "as_of",
+        "scope_area",
+        "category",
+        "proposed_filename",
+    ):
         if name in entry and not isinstance(entry[name], str):
             return f"{where}.{name} must be a string"
     if "reason" in entry and entry["reason"] not in REASONS and not lenient_enums:
@@ -267,6 +305,11 @@ def _validate_entry(entry: Any, index: int, *, lenient_enums: bool) -> str | Non
         and all(isinstance(p, str) for p in entry["prompted_by"])
     ):
         return f"{where}.prompted_by must be an array of strings"
+    if "source_urls" in entry and not (
+        isinstance(entry["source_urls"], list)
+        and all(isinstance(p, str) for p in entry["source_urls"])
+    ):
+        return f"{where}.source_urls must be an array of strings"
     if "attempts" in entry and not (
         _is_int(entry["attempts"]) and entry["attempts"] >= 0
     ):
@@ -513,6 +556,10 @@ class Transaction:
         relation: str | None = None,
         parent_note: str | None = None,
         scope_warn: bool | None = None,
+        scope_area: str | None = None,
+        source_urls: Iterable[str] | None = None,
+        category: str | None = None,
+        proposed_filename: str | None = None,
     ) -> None:
         """Upsert one ``topic:`` entry. Existing entries get observation fields only."""
         if self._writer not in _TOPIC_ORIGINS:
@@ -531,6 +578,10 @@ class Transaction:
             "relation": relation,
             "parent_note": parent_note,
             "scope_warn": scope_warn,
+            "scope_area": scope_area,
+            "source_urls": None if source_urls is None else list(source_urls),
+            "category": category,
+            "proposed_filename": proposed_filename,
         }
         owned = _OWNED_TOPIC_FIELDS[self._writer]
         foreign = sorted(
@@ -756,15 +807,28 @@ class Transaction:
         return True
 
     def resolve_covered(self, existing_stems: Iterable[str]) -> int:
-        """Resolve open harvest/researcher topics whose note now exists."""
-        stems = {title_key(s) for s in existing_stems}
+        """Resolve open harvest/researcher/discovery topics whose note now exists.
+
+        A discovery topic is found by a human title and written under the
+        filename the scout proposed, so it also matches on the punctuation-
+        and case-insensitive form of its title or proposed filename.
+        """
+        stems_list = list(existing_stems)
+        stems = {title_key(s) for s in stems_list}
+        slugs = {_slug(s) for s in stems_list} - {""}
         count = 0
         for entry in self._entries:
-            if entry["origin"] not in ("harvest", "researcher"):
+            if entry["origin"] not in ("harvest", "researcher", "discovery"):
                 continue
             if not entry["id"].startswith("topic:"):
                 continue
-            if title_key(entry["title"]) in stems and self._resolve(entry):
+            covered = title_key(entry["title"]) in stems
+            if not covered and entry["origin"] == "discovery":
+                covered = bool(
+                    {_slug(entry["title"]), _slug(entry.get("proposed_filename", ""))}
+                    & slugs - {""}
+                )
+            if covered and self._resolve(entry):
                 count += 1
         return count
 
@@ -879,6 +943,10 @@ def observe_topic(
     relation: str | None = None,
     parent_note: str | None = None,
     scope_warn: bool | None = None,
+    scope_area: str | None = None,
+    source_urls: Iterable[str] | None = None,
+    category: str | None = None,
+    proposed_filename: str | None = None,
 ) -> bool:
     return update(
         vault_dir,
@@ -893,6 +961,10 @@ def observe_topic(
             relation=relation,
             parent_note=parent_note,
             scope_warn=scope_warn,
+            scope_area=scope_area,
+            source_urls=source_urls,
+            category=category,
+            proposed_filename=proposed_filename,
         ),
     )
 
@@ -1003,8 +1075,8 @@ def planner_topics(vault_dir: Path) -> list[TopicRef]:
     for index, entry in enumerate(_read_for_query(vault_dir)):
         if entry["status"] != "open":
             continue
-        if entry["origin"] in ("quarantine", "migrated"):
-            continue
+        if entry["origin"] in ("quarantine", "migrated", "discovery"):
+            continue  # a discovery topic is dispatched through its own share
         if not entry["id"].startswith("topic:"):
             continue
         cited = entry.get("citation_count", 0) >= 1
@@ -1107,6 +1179,44 @@ def set_aside_updates(
     return _open_updates(vault_dir, set_aside=True, max_attempts=max_attempts)
 
 
+def discovery_topics(vault_dir: Path) -> list[DiscoveryRef]:
+    """Open ``discovery`` topics, oldest first (spec 088 FR-007).
+
+    ``planner_topics`` never returns these: they are dispatched through the
+    discovery share only. An operator's ``dropped`` status removes one.
+    """
+    queued = [
+        (index, entry)
+        for index, entry in enumerate(_read_for_query(vault_dir))
+        if entry["status"] == "open"
+        and entry["origin"] == "discovery"
+        and entry["id"].startswith("topic:")
+    ]
+    queued.sort(key=_first_seen_sort_key)
+    return [
+        DiscoveryRef(
+            id=e["id"],
+            title=e["title"],
+            scope_area=e.get("scope_area", ""),
+            source_urls=tuple(e.get("source_urls", ())),
+            category=e.get("category", ""),
+            proposed_filename=e.get("proposed_filename", ""),
+            detail=e.get("detail", ""),
+            first_seen_cycle=e.get("first_seen_cycle"),
+        )
+        for _, e in queued
+    ]
+
+
+def topic_state(vault_dir: Path, title: str) -> tuple[str, str] | None:
+    """``(origin, status)`` of the topic entry with this title, else ``None``."""
+    wanted = topic_id(title)
+    for entry in _read_for_query(vault_dir):
+        if entry["id"] == wanted:
+            return entry["origin"], entry["status"]
+    return None
+
+
 def all_titles(vault_dir: Path) -> list[TitleRef]:
     """Every entry's key and display title, whatever its status (FR-013)."""
     return [
@@ -1156,6 +1266,15 @@ def _topic_line_researcher(entry: dict[str, Any]) -> str:
     if first is not None:
         line += f" · first seen cycle {first}"
     return line
+
+
+def _discovery_line(entry: dict[str, Any]) -> str:
+    area = _one_line(entry.get("scope_area", "")) or "unknown scope area"
+    count = len(entry.get("source_urls", []))
+    return (
+        f"- **{_one_line(entry['title'])}** — scope area: {area} · "
+        f"{_plural(count, 'source')}"
+    )
 
 
 def _quarantine_line(entry: dict[str, Any]) -> str:
@@ -1265,6 +1384,7 @@ def _render_text(vault_dir: Path, entries: list[dict[str, Any]]) -> str:
         "operator": [],
         "proposal": [],
         "migrated": [],
+        "discovery": [],
         "update": _update_section_lines(vault_dir, update_entries),
     }
     for _, entry in open_entries:
@@ -1274,6 +1394,8 @@ def _render_text(vault_dir: Path, entries: list[dict[str, Any]]) -> str:
             sections["harvest"].append(_topic_line_harvest(entry))
         elif origin == "harvest":
             sections["harvest"].append(_topic_line_harvest(entry))
+        elif origin == "discovery":
+            sections["discovery"].append(_discovery_line(entry))
         elif origin == "researcher":
             sections["researcher"].append(_topic_line_researcher(entry))
         elif origin == "quarantine":
@@ -1289,6 +1411,7 @@ def _render_text(vault_dir: Path, entries: list[dict[str, Any]]) -> str:
     headings = (
         ("harvest", "Follow-on topics (harvest)"),
         ("update", "Notes to update"),
+        ("discovery", "Found by discovery"),
         ("researcher", "Flagged by the researcher"),
         ("quarantine", "Quarantined notes"),
         ("operator", "Added by the operator"),

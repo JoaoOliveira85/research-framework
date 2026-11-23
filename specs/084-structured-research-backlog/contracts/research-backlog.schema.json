@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "research-backlog-1.1",
+  "$id": "research-backlog-1.2",
   "title": "Research backlog store (_pipeline/state/research-backlog.json)",
   "type": "object",
   "required": ["schema_version", "entries"],
@@ -29,8 +29,8 @@
         },
         "title": { "type": "string", "minLength": 1 },
         "origin": {
-          "enum": ["harvest", "researcher", "proposal", "quarantine", "operator", "migrated", "update"],
-          "description": "Who created the entry. Never changes. A minor schema bump may add a value."
+          "enum": ["harvest", "researcher", "proposal", "quarantine", "operator", "migrated", "update", "discovery"],
+          "description": "Who created the entry. Never changes. A minor schema bump may add a value (update: 1.1, discovery: 1.2)."
         },
         "status": { "enum": ["open", "resolved", "dropped"] },
         "status_by": {
@@ -52,6 +52,10 @@
         "relation": { "type": "string" },
         "parent_note": { "type": "string" },
         "scope_warn": { "type": "boolean" },
+        "scope_area": { "type": "string", "description": "discovery entries (1.2): the scope area whose pass found the topic." },
+        "source_urls": { "type": "array", "items": { "type": "string" }, "description": "discovery entries (1.2): the sources the scout gave; replaced by the latest sighting." },
+        "category": { "type": "string", "description": "discovery entries (1.2): the coverage category the scout proposed." },
+        "proposed_filename": { "type": "string", "description": "discovery entries (1.2): the filename the scout proposed." },
         "stem": { "type": "string" },
         "kind": { "enum": ["rewrite", "retry"] },
         "reason": {

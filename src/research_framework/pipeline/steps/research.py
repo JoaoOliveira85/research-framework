@@ -109,15 +109,26 @@ def _phase(ctx: CycleContext) -> int:
             from ..currency import cycle_mode, cycle_split_shares, split_quota
             from ..research_plan import is_placeholder_topic
 
-            new_cap, update_cap = split_quota(
+            # Spec 088: discovery topics head the queue and were capped by the
+            # discovery share when the scout step merged them; they are taken
+            # off the quota first and written alongside the new-topic share.
+            discovery_n = sum(
+                1 for t in plan.priority_queue if t.provenance == "discovery"
+            )
+            new_cap, update_cap, discovery_cap = split_quota(
                 int(plan.cycle_quota),
                 cycle_split_shares(vault_dir),
                 mode=cycle_mode(vault_dir),
                 new_available=sum(
-                    1 for t in plan.priority_queue if not is_placeholder_topic(t)
+                    1
+                    for t in plan.priority_queue
+                    if not is_placeholder_topic(t) and t.provenance != "discovery"
                 ),
                 updates_available=len(plan.update_queue),
+                discovery_available=discovery_n,
+                discovery_credit=float(discovery_n),
             )
+            new_cap += discovery_cap
         assignments = slice_topics_into_batches(
             plan, eff_bs, new_count=new_cap, update_count=update_cap
         )
@@ -131,7 +142,7 @@ def _phase(ctx: CycleContext) -> int:
         note_writer_invocations = 0
         cycle_quota = max(1, int(plan.cycle_quota))
         if update_cap and new_cap is not None:
-            cycle_quota = max(1, new_cap)  # the new-topic share only
+            cycle_quota = max(1, new_cap)  # the new-topic and discovery shares
         updates_worked = 0
         # The synthetic mid-batch check counts new-topic batches only.
         n_batches_total = sum(1 for a in assignments if a.kind != "update")

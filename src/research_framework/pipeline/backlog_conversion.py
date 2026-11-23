@@ -47,7 +47,7 @@ from .atomic_write import write_bytes
 _LOG = logging.getLogger(__name__)
 
 # A legacy Markdown backlog cannot hold a note update (spec 087).
-_LEGACY_ORIGINS = tuple(o for o in backlog.ORIGINS if o != "update")
+_LEGACY_ORIGINS = tuple(o for o in backlog.ORIGINS if o not in ("update", "discovery"))
 
 _MARKER_RE = re.compile(
     r"^<!-- (/?)(?:topic-(harvest|propose):cycle=(\d+)|(quarantine)) -->$"

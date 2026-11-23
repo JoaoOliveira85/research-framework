@@ -381,12 +381,17 @@ def _new_topics_wanted(pipeline_dir: Path | None) -> bool:
 
 def _has_update_work(report: dict, pipeline_dir: Path | None) -> bool:
     """Whether the cycle has updates to do: the scout reported some, or the plan
-    (``update_quota`` in ``_pipeline/research-plan.md``) allots a share to them.
+    (``update_quota`` in ``_pipeline/research-plan.md``) allots a share to them,
+    or it reported discovery rows (spec 088).
     A scout with no new topics is then reporting what it should, not breaking
     the trunk-seed ordering."""
     found = report.get("topics_found")
     rows = found.get("updates") if isinstance(found, dict) else None
     if isinstance(rows, list) and rows:
+        return True
+    # Spec 088: discovery rows are work the cycle dispatches besides new topics.
+    discovered = found.get("discovery") if isinstance(found, dict) else None
+    if isinstance(discovered, list) and discovered:
         return True
     if pipeline_dir is None:
         return False
@@ -545,6 +550,58 @@ def _updates_shape_errors(report: dict) -> list[str]:
     return errors
 
 
+def _discovery_shape_errors(report: dict) -> list[str]:
+    """``topics_found.discovery`` and ``discovery_checked`` are optional; when
+    present they are shape-checked (spec 088 FR-003). Whether a row's area was
+    assigned, its source dated inside the window and its title new is the
+    pipeline's DG-001 gate, not this shape check."""
+    errors: list[str] = []
+    topics_found = report.get("topics_found")
+    if isinstance(topics_found, dict) and "discovery" in topics_found:
+        rows = topics_found["discovery"]
+        if not isinstance(rows, list):
+            errors.append("topics_found.discovery must be a list")
+            rows = []
+        for index, row in enumerate(rows):
+            where = f"topics_found.discovery[{index}]"
+            if not isinstance(row, dict):
+                errors.append(f"{where} must be an object")
+                continue
+            for key in ("title", "area"):
+                if not (isinstance(row.get(key), str) and row[key].strip()):
+                    errors.append(f"{where} needs a non-empty '{key}'")
+            urls = row.get("source_urls")
+            if urls is not None and not (
+                isinstance(urls, list) and all(isinstance(u, str) for u in urls)
+            ):
+                errors.append(f"{where}.source_urls must be a list of strings")
+            published = row.get("published")
+            if published is not None and not isinstance(published, str):
+                errors.append(f"{where}.published must be a string or null")
+    if "discovery_checked" in report:
+        rows = report["discovery_checked"]
+        if not isinstance(rows, list):
+            return [*errors, "discovery_checked must be a list"]
+        for index, row in enumerate(rows):
+            where = f"discovery_checked[{index}]"
+            if not isinstance(row, dict):
+                errors.append(f"{where} must be an object")
+                continue
+            if not (isinstance(row.get("area"), str) and row["area"].strip()):
+                errors.append(f"{where} needs a non-empty 'area'")
+            queries = row.get("queries")
+            if not (
+                isinstance(queries, list) and all(isinstance(q, str) for q in queries)
+            ):
+                errors.append(f"{where}.queries must be a list of strings")
+            found = row.get("found")
+            if not (
+                isinstance(found, int) and not isinstance(found, bool) and found >= 0
+            ):
+                errors.append(f"{where}.found must be a non-negative integer")
+    return errors
+
+
 _UPDATE_OUTCOMES = ("confirmed", "revised", "superseded", "retracted")
 
 
@@ -594,6 +651,7 @@ def validate_report_structure(report: dict) -> list[str]:
     if phase not in ("scout", "research"):
         errors.append(f"invalid phase: {phase!r} (must be 'scout' or 'research')")
     errors.extend(_updates_shape_errors(report))
+    errors.extend(_discovery_shape_errors(report))
     errors.extend(_update_outcomes_shape_errors(report))
     return errors
 
@@ -1066,6 +1124,7 @@ def validate_report_structure_v2(report: dict) -> list[str]:
             + " must be present"
         )
     errors.extend(_updates_shape_errors(report))
+    errors.extend(_discovery_shape_errors(report))
     errors.extend(_update_outcomes_shape_errors(report))
     return errors
 

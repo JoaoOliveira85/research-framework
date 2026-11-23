@@ -35,9 +35,10 @@ GateStatus = Literal["PASS", "WARN", "FAIL", "NA"]
 from WARN; see SG-003 / CG-003 abstraction-gate behaviour when the spec
 declares no ``forbidden_filename_prefixes`` (R-007)."""
 
-_GATE_ID_PATTERN = re.compile(r"^[CSU]G-\d{3}$")
-"""Match ``CG-001``..``CG-999``, ``SG-001``..``SG-999`` and the update gate
-``UG-001``..``UG-999`` (spec 087). Three-digit
+_GATE_ID_PATTERN = re.compile(r"^[CSUD]G-\d{3}$")
+"""Match ``CG-001``..``CG-999``, ``SG-001``..``SG-999``, the update gate
+``UG-001``..``UG-999`` (spec 087) and the discovery gate ``DG-001``..``DG-999``
+(spec 088). Three-digit
 zero-padded suffix matches ``contracts/cycle-quality-report.schema.json``."""
 
 
@@ -52,7 +53,7 @@ class GateResult:
 
     Invariants enforced in :meth:`__post_init__`:
 
-    - ``gate_id`` matches ``^[CSU]G-\\d{3}$``.
+    - ``gate_id`` matches ``^[CSUD]G-\\d{3}$``.
     - ``status`` is one of PASS / WARN / FAIL / NA.
     - ``status == "FAIL"`` requires non-empty ``correction_hint``.
 

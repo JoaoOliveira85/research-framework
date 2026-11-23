@@ -28,6 +28,7 @@ from . import (
     backlog,
     currency,
     cycle_ledger,
+    discovery,
     plan_narrator,
     quality_report,
     research_plan,
@@ -57,6 +58,7 @@ from .cycle_summary import write_summary as _write_cycle_summary
 from .gates import GateResult, run_gate
 from .gates_cycle import CG001_min_cycle_yield
 from .gates_step import SG005_frontmatter_completeness
+from .rejects import persistent_reject_titles as _persistent_reject_titles
 from .run_report import write_run_report as _write_run_report
 from .settings import (
     UNLIMITED_MAX_CYCLES,
@@ -672,7 +674,13 @@ def run_single_cycle(
     # promoted proposals and persistent rejects from the previous
     # cycle, so we re-render whenever there's a previous cycle's worth
     # of state on disk. Cycle 1 still uses the generate-time prompt.
-    if spec is not None and (resume or cycle_num >= 2):
+    if spec is not None and (
+        resume
+        or cycle_num >= 2
+        # Spec 088: the discovery pass asks its areas in the scout prompt, which
+        # the generate-time prompt of cycle 1 cannot carry.
+        or (discovery.discovery_share(vault_dir) > 0 and discovery.scope_areas(spec))
+    ):
         _render_cycle_scout_prompt(
             spec, vault_dir, cycle_num, target_topics=target_topics
         )
@@ -1536,34 +1544,39 @@ def _phase2_promoted_titles(vault_dir: Path, *, before_cycle: int) -> list[str]:
     return []
 
 
-def _persistent_reject_titles(vault_dir: Path) -> list[str]:
-    """Read the persistent propose rejects and return titles to exclude.
+def _discovery_assignment(
+    vault_dir: Path, spec: SpecConfig, cycle_num: int
+) -> tuple[list[str], str | None]:
+    """The scope areas this cycle's scout is asked about, and the window start.
 
-    Format written by ``scripts/topic_propose.py`` is::
-
-        - **<title>** — cycle NNN (YYYY-MM-DD): <reason>
-
-    We parse the bolded title from each bullet. Unknown lines are
-    silently skipped (the file is human-editable — users may add
-    comments or custom annotations).
+    Empty while the ``cycle_split`` discovery share is 0 (the pass is off).
+    Chosen once per cycle and remembered in the cycle's scratch directory: a
+    re-render (resume, validation retry) asks the same areas, and the scout
+    step reads the assignment back to check the report against it (spec 088
+    FR-002, FR-004). Never raises: a pass that cannot start is skipped.
     """
-    import re as _re
-
-    path = state_layout.propose_rejects_path(vault_dir)
-    if not path.is_file():
-        return []
     try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return []
-    out: list[str] = []
-    for line in text.splitlines():
-        m = _re.match(r"^\s*-\s+\*\*([^*\n]+?)\*\*", line)
-        if m:
-            title = m.group(1).strip()
-            if title:
-                out.append(title)
-    return out
+        if discovery.discovery_share(vault_dir) <= 0:
+            return [], None
+        prior = discovery.read_assignment(vault_dir, cycle_num)
+        if prior is not None:
+            return list(prior["areas"]), str(prior["window_start"])
+        settings = discovery.discovery_settings(vault_dir)
+        areas = discovery.choose_areas(
+            discovery.load_ledger(vault_dir),
+            discovery.scope_areas(spec),
+            settings.areas_per_cycle,
+        )
+        if not areas:
+            return [], None
+        start = discovery.window_start(
+            dt.datetime.now(dt.UTC).date(), settings.window_days
+        )
+        discovery.write_assignment(vault_dir, cycle_num, areas, start)
+        return areas, start.isoformat()
+    except Exception as exc:  # noqa: BLE001 - the pass must never stop a cycle
+        _LOG.warning("[discovery] cycle %d: pass skipped: %s", cycle_num, exc)
+        return [], None
 
 
 def _render_cycle_scout_prompt(
@@ -1626,6 +1639,9 @@ def _render_cycle_scout_prompt(
         enriched_spec = _copy.copy(spec)
         enriched_spec.data_sources = enriched_sources
 
+    discovery_areas, discovery_window_start = _discovery_assignment(
+        vault_dir, spec, cycle_num
+    )
     try:
         render_scout_prompt(
             enriched_spec,
@@ -1633,6 +1649,8 @@ def _render_cycle_scout_prompt(
             target_topics=computed_topics,
             existing_notes=sorted(existing - rejected),
             rejected_topics=sorted(rejected),
+            discovery_areas=discovery_areas,
+            discovery_window_start=discovery_window_start,
         )
     except Exception as e:
         # Render failure is non-fatal — fall back to the generate-time prompt.

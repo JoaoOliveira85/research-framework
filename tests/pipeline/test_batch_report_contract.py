@@ -146,7 +146,7 @@ def _validate_batch_report(d: dict) -> tuple[bool, str]:
     sg = d.get("sg_gate_results")
     if not isinstance(sg, list):
         return False, "sg_gate_results"
-    gid_pat = re.compile(r"^[CSU]G-\d{3}$")
+    gid_pat = re.compile(r"^[CSUD]G-\d{3}$")
     statuses = {"PASS", "WARN", "FAIL", "NA"}
     for gr in sg:
         if not isinstance(gr, dict):

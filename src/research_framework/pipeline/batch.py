@@ -243,6 +243,12 @@ def slice_topics_into_batches(
     )
     clamped = _clamp_batch_size(raw_bs)
     queue = _drop_placeholder_topics(list(plan.priority_queue), plan.cycle_number)
+    # Spec 088: discovery topics are dispatched ahead of every other new topic
+    # (a stable partition: each group keeps its order), whatever a re-sort of
+    # the queue did to them.
+    queue = [t for t in queue if t.provenance == "discovery"] + [
+        t for t in queue if t.provenance != "discovery"
+    ]
     update_n = min(max(int(update_count or 0), 0), len(plan.update_queue))
     if update_n <= 0:
         return _slice_new_batches(

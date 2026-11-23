@@ -406,8 +406,8 @@ def test_scout_prompt_instructs_generalize_step_and_topics_found(
 
     # Template version must be bumped so the migrator knows to re-render vaults
     # scaffolded against an older template: v1 omitted topics_found, v2 the
-    # research-plan rules (#12), v5 reports on existing notes, v6 filters sources by phase, v7 says refresh wants no new topics (spec 087).
-    assert "_template_version: 7" in prompt
+    # research-plan rules (#12), v5 reports on existing notes, v6 filters sources by phase, v7 says refresh wants no new topics (spec 087), v8 adds the discovery pass (spec 088).
+    assert "_template_version: 8" in prompt
 
 
 def test_scout_prompt_renders_target_topics_when_supplied(tmp_path: Path) -> None:

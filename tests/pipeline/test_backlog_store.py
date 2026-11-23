@@ -224,7 +224,7 @@ def test_a_missing_store_is_created_empty_on_the_first_write(tmp_path: Path) -> 
     assert _noop(tmp_path) is True
     assert json.loads(
         state_layout.research_backlog_path(tmp_path).read_text(encoding="utf-8")
-    ) == {"schema_version": "1.1", "entries": []}
+    ) == {"schema_version": "1.2", "entries": []}
 
 
 def test_an_unconverted_legacy_markdown_backlog_is_not_written(

@@ -119,6 +119,15 @@ STATE_ARTEFACTS: tuple[StateArtefact, ...] = (
         "file",
         moved_by_083=False,
     ),
+    # New with spec 088 FR-008: which scope areas the outside-in discovery pass
+    # checked and when. It had no file before, so no layout migration moves it.
+    StateArtefact(
+        "discovery_ledger",
+        f"{STATE_DIR}/discovery-ledger.json",
+        "",
+        "file",
+        moved_by_083=False,
+    ),
 )
 
 _BY_NAME = {artefact.name: artefact for artefact in STATE_ARTEFACTS}
@@ -201,6 +210,11 @@ def approval_decisions_path(vault_dir: Path) -> Path:
 
 def cycle_ledger_path(vault_dir: Path) -> Path:
     return _new(vault_dir, "cycle_ledger")
+
+
+def discovery_ledger_path(vault_dir: Path) -> Path:
+    """Spec 088's discovery ledger; ``pipeline/discovery.py`` is its only writer."""
+    return _new(vault_dir, "discovery_ledger")
 
 
 def legacy_paths_present(vault_dir: Path) -> list[Path]:

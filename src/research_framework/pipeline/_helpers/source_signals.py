@@ -54,7 +54,11 @@ def _cycle_quota_for_gates(pipeline_dir: Path) -> int:
 
 
 def _cycle_expectations_for_gates(
-    vault_dir: Path, spec, quota: int, scout_body: dict
+    vault_dir: Path,
+    spec,
+    quota: int,
+    scout_body: dict,
+    discovery_available: int = 0,
 ) -> tuple[int | None, int]:
     """``(new topics wanted, updates planned)`` for SG-001 (spec 087).
 
@@ -67,7 +71,11 @@ def _cycle_expectations_for_gates(
         found = scout_body.get("topics_found") if isinstance(scout_body, dict) else None
         rows = found.get("updates") if isinstance(found, dict) else None
         return cycle_expectations(
-            vault_dir, spec, quota, len(rows) if isinstance(rows, list) else 0
+            vault_dir,
+            spec,
+            quota,
+            len(rows) if isinstance(rows, list) else 0,
+            discovery_available,
         )
     except Exception:
         return None, 0
