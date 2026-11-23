@@ -188,6 +188,12 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
   ### Testing Requirements
 
+  The converter half landed (`pipeline/backlog_conversion.py`:
+  `convert_legacy`, `write_converted`; `backlog.install_store`; the archive's
+  registry row): Tests 1 and 5 and the archive part of Test 2 pass. Still to
+  do: the migration step, `--dry-run`, the commit and index removal (Tests 3,
+  4, 7), and the unconverted-vault refusal (Test 6).
+
   All on `tests/fixtures/backlog/legacy-shapes.md`, assembled from the
   shapes in spec § Evidence (invented content).
 

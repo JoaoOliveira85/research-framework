@@ -59,6 +59,13 @@ def _spec_table_rows() -> set[tuple[str, str]]:
     return rows
 
 
+# Artefacts a later spec adds to the registry; spec 083's FR-002 table cannot
+# list them. Each entry names the spec that declares it.
+_DECLARED_BY_A_LATER_SPEC = {
+    "research-backlog.pre-migration.md": "spec 084 FR-022",
+}
+
+
 def test_registry_is_the_spec_table() -> None:
     registry = {
         (
@@ -66,12 +73,19 @@ def test_registry_is_the_spec_table() -> None:
             a.legacy_rel.removeprefix("_pipeline/"),
         )
         for a in L.STATE_ARTEFACTS
+        if a.new_rel.removeprefix("_pipeline/state/") not in _DECLARED_BY_A_LATER_SPEC
     }
     assert registry == _spec_table_rows()
+    archive = next(a for a in L.STATE_ARTEFACTS if a.name == "research_backlog_archive")
+    assert (archive.legacy_rel, archive.moved_by_083) == ("", False)
+    assert L.research_backlog_archive_path(Path("v")) == Path(
+        "v/_pipeline/state/research-backlog.pre-migration.md"
+    )
     backlog = next(a for a in L.STATE_ARTEFACTS if a.name == "research_backlog")
     assert backlog.moved_by_083 is False
     assert all(
-        a.moved_by_083 or a.name in {"research_backlog", "cycle_ledger"}
+        a.moved_by_083
+        or a.name in {"research_backlog", "research_backlog_archive", "cycle_ledger"}
         for a in L.STATE_ARTEFACTS
     )
 

@@ -570,6 +570,40 @@ def update(vault_dir: Path, writer: str, fn: Callable[[Transaction], None]) -> b
     return True
 
 
+def install_store(
+    vault_dir: Path, entries: list[dict[str, Any]], *, archive: Path
+) -> None:
+    """Write a converted store and render its view (the conversion step only).
+
+    Unlike :func:`update` this accepts an *unconverted* vault: it is how one
+    becomes converted. It refuses to overwrite a store, validates the entries
+    against the same rules as a load, and requires ``archive`` to hold the
+    legacy Markdown byte for byte before that file is replaced by the view.
+
+    Raises ``FileExistsError`` (store present), ``ValueError`` (invalid
+    entries) or ``FileNotFoundError``/``ValueError`` (archive missing or not
+    equal to the legacy file).
+    """
+    path = store_path(vault_dir)
+    if path.exists():
+        raise FileExistsError(f"{path} already exists; nothing to convert")
+    data = {"schema_version": SCHEMA_VERSION, "entries": entries}
+    error, _ = _validate_store(data)
+    if error:
+        raise ValueError(f"converted backlog is invalid: {error}")
+    view = view_path(vault_dir)
+    if view.is_file() and _split_footer(view.read_bytes()) is None:
+        if not archive.is_file() or archive.read_bytes() != view.read_bytes():
+            raise ValueError(
+                f"{archive} must hold the legacy backlog byte for byte before "
+                f"{view} is replaced by the view"
+            )
+        view.unlink()
+    _normalize(entries)
+    write_text(path, _dumps(data))
+    _render_view(vault_dir, entries)
+
+
 # ---------------------------------------------------------------------------
 # Module-level observations (one transaction each)
 # ---------------------------------------------------------------------------

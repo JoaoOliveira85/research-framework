@@ -57,6 +57,15 @@ STATE_ARTEFACTS: tuple[StateArtefact, ...] = (
         "file",
         moved_by_083=False,
     ),
+    # Spec 084 FR-022: the pre-conversion Markdown backlog, kept byte for byte.
+    # It had no file before this layout, so no layout migration moves it.
+    StateArtefact(
+        "research_backlog_archive",
+        f"{STATE_DIR}/research-backlog.pre-migration.md",
+        "",
+        "file",
+        moved_by_083=False,
+    ),
     StateArtefact(
         "coverage_targets",
         f"{STATE_DIR}/coverage-targets.json",
@@ -154,6 +163,11 @@ def state_dir(vault_dir: Path) -> Path:
 def research_backlog_path(vault_dir: Path) -> Path:
     """Spec 084's store. Nothing writes it until 084 ships."""
     return _new(vault_dir, "research_backlog")
+
+
+def research_backlog_archive_path(vault_dir: Path) -> Path:
+    """The Markdown backlog as it was before conversion (spec 084 FR-022)."""
+    return _new(vault_dir, "research_backlog_archive")
 
 
 def coverage_targets_path(vault_dir: Path) -> Path:
