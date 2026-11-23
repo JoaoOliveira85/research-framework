@@ -32,6 +32,7 @@ def test_every_artefact_resolves_under_the_state_directory(tmp_path: Path) -> No
         "approval_decisions": L.approval_decisions_path(tmp_path),
         "cycle_ledger": L.cycle_ledger_path(tmp_path),
         "research_backlog": L.research_backlog_path(tmp_path),
+        "discovery_ledger": L.discovery_ledger_path(tmp_path),
     }
     for name, path in accessors.items():
         assert path == tmp_path / by_name[name].new_rel, name
@@ -63,6 +64,7 @@ def _spec_table_rows() -> set[tuple[str, str]]:
 # list them. Each entry names the spec that declares it.
 _DECLARED_BY_A_LATER_SPEC = {
     "research-backlog.pre-migration.md": "spec 084 FR-022",
+    "discovery-ledger.json": "spec 088 FR-008",
 }
 
 
@@ -85,7 +87,13 @@ def test_registry_is_the_spec_table() -> None:
     assert backlog.moved_by_083 is False
     assert all(
         a.moved_by_083
-        or a.name in {"research_backlog", "research_backlog_archive", "cycle_ledger"}
+        or a.name
+        in {
+            "research_backlog",
+            "research_backlog_archive",
+            "cycle_ledger",
+            "discovery_ledger",
+        }
         for a in L.STATE_ARTEFACTS
     )
 

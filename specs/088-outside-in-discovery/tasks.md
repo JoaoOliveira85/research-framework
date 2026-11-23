@@ -5,7 +5,7 @@ the spec**: `planned`. Task boxes are live. `087` lands first.
 
 ## Phase 1: Areas, ledger, settings (nothing calls them)
 
-- [ ] T001 `pipeline/discovery.py`: `scope_areas`, `choose_areas`, the ledger
+- [x] T001 `pipeline/discovery.py`: `scope_areas`, `choose_areas`, the ledger
       (`load_ledger`, `record_cycle`), the registry row and accessor in
       `state_layout` (FR-002, FR-008, FR-009; plan § 1).
 
