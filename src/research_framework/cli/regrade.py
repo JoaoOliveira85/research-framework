@@ -22,7 +22,7 @@ from typing import Any
 
 import yaml
 
-from research_framework.pipeline import state_layout
+from research_framework.pipeline import backlog, state_layout
 
 _LOG = logging.getLogger(__name__)
 
@@ -260,24 +260,17 @@ def _reinstate(vault_dir: Path, note: Path, outcome: RegradeOutcome) -> None:
         outcome.destination = str(dest.relative_to(vault_dir))
     except ValueError:  # pragma: no cover
         outcome.destination = str(dest)
-    _drop_backlog_pointer(vault_dir, note.stem)
+    _resolve_backlog_pointer(vault_dir, note.stem)
 
 
-def _drop_backlog_pointer(vault_dir: Path, stem: str) -> None:
-    """Best-effort removal of the spec-062 "rewrite quarantined note" backlog line."""
-    backlog = vault_dir / "_pipeline" / "research-backlog.md"
-    if not backlog.is_file():
-        return
-    try:
-        from ..pipeline.atomic_write import write_text as _aw_text
+def _resolve_backlog_pointer(vault_dir: Path, stem: str) -> None:
+    """Best-effort: resolve exactly the quarantine entry for ``stem`` (spec 084).
 
-        lines = backlog.read_text(encoding="utf-8").splitlines(keepends=True)
-        needle = f"rewrite quarantined note: {stem}".lower()
-        kept = [ln for ln in lines if needle not in ln.lower()]
-        if len(kept) != len(lines):
-            _aw_text(backlog, "".join(kept))
-    except OSError:  # pragma: no cover - advisory
-        pass
+    Exact stem match, both pointer kinds, and nothing else in the backlog is
+    read or changed. A vault with no store has no pointer to resolve.
+    """
+    if backlog.store_path(vault_dir).exists():
+        backlog.resolve_quarantine_stem(vault_dir, stem)
 
 
 def run_regrade(

@@ -8,7 +8,7 @@ import logging
 import time
 from pathlib import Path
 
-from .. import atomic_write
+from .. import atomic_write, backlog
 from .._helpers import scout_correction as sc
 from .._helpers import script_runner as sr
 from .._helpers import source_signals as ss
@@ -152,6 +152,9 @@ def _phase(ctx: CycleContext) -> int:
             "Re-run 'research-framework generate' to re-render prompts from the spec."
         )
         return 2
+    # The prompt lists the backlog view as required reading; render it first
+    # when it is missing (git-ignored, so a fresh clone has none).
+    backlog.ensure_view(vault_dir)
     # Render scout prompt (replace placeholders, append the research plan)
     scout_prompt_rendered = cycles_dir / f"cycle-{cycle_3}-scout-prompt.rendered.md"
     sc._render_cycle_scout_prompt(

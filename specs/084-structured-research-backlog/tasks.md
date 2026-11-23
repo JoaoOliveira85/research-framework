@@ -135,7 +135,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
   **TDD discipline**: required.
 
-- [ ] T006 The orchestrator's quarantine sweep and `./vault re-grade` use
+- [x] T006 The orchestrator's quarantine sweep and `./vault re-grade` use
       `observe_quarantine` / `resolve_quarantine` / `resolve_quarantine_stem`;
       the source-exhausted and constrained-exit messages name the harvest
       manifest and the JSON file (FR-010, FR-014, FR-015).
