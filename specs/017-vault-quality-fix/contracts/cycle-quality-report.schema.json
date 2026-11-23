@@ -35,7 +35,7 @@
       "type": "object",
       "description": "Keyed by gate_id (CG-001..CG-007, SG-001..SG-005). For SG gates that ran multiple times (one per batch), keys are suffixed '#N' (e.g. 'SG-004#1', 'SG-004#2').",
       "patternProperties": {
-        "^[CSU]G-\\d{3}(#\\d+)?$": { "$ref": "#/$defs/gate_result" }
+        "^[CSUD]G-\\d{3}(#\\d+)?$": { "$ref": "#/$defs/gate_result" }
       },
       "minProperties": 12,
       "additionalProperties": false
@@ -104,7 +104,7 @@
       "required": ["gate_id", "status", "metric_name", "metric_value", "message"],
       "additionalProperties": false,
       "properties": {
-        "gate_id": { "type": "string", "pattern": "^[CSU]G-\\d{3}$" },
+        "gate_id": { "type": "string", "pattern": "^[CSUD]G-\\d{3}$" },
         "status": { "enum": ["PASS", "WARN", "FAIL", "NA"] },
         "metric_name": { "type": "string" },
         "metric_value": { "type": ["number", "string", "boolean"] },

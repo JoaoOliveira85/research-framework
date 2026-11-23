@@ -59,7 +59,7 @@ the spec**: `planned`. Task boxes are live. `087` lands first.
 
   **TDD discipline**: required.
 
-- [ ] T004 Rotation at cycle start, `DG-001`, routing, the three-way split in
+- [x] T004 Rotation at cycle start, `DG-001`, routing, the three-way split in
       the plan and the batch loop, the ledger write after the scout step
       (FR-004…FR-009; plan § 4, § 5, § 6).
 

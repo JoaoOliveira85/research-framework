@@ -18,7 +18,7 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
@@ -702,4 +702,33 @@ def UG001_update_outcomes(verdicts: Sequence[Verdict]) -> GateResult:
         threshold=len(verdicts),
         message=f"{len(failing)}/{len(verdicts)} update outcome(s) do not hold",
         correction_hint=listing,
+    )
+
+
+def DG001_discovery_rows(verdicts: Sequence[Any]) -> GateResult:
+    """DG-001: every ``topics_found.discovery`` row has an assigned area, a
+    source, a dated publication inside the window and a title (spec 088 FR-004).
+
+    WARN-only: a failing row is dropped and counted, and the cycle goes on, so
+    this gate never returns FAIL. ``verdicts`` are
+    :class:`research_framework.pipeline.discovery.RowVerdict` rows.
+    """
+    failing = [v for v in verdicts if not v.ok]
+    if not failing:
+        return GateResult(
+            gate_id="DG-001",
+            status="PASS",
+            metric_name="discovery_rows_dropped",
+            metric_value=0,
+            threshold=0,
+            message=f"all {len(verdicts)} discovery row(s) pass",
+        )
+    listing = "; ".join(f"{v.title}: {v.reason}" for v in failing)
+    return GateResult(
+        gate_id="DG-001",
+        status="WARN",
+        metric_name="discovery_rows_dropped",
+        metric_value=len(failing),
+        threshold=0,
+        message=f"{len(failing)}/{len(verdicts)} discovery row(s) dropped: {listing}",
     )

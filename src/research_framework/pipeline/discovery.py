@@ -21,12 +21,18 @@ cycle adds it once.
 
 from __future__ import annotations
 
+import dataclasses
 import json
+import logging
+import re
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
 from ..spec.schema import SpecConfig
-from . import state_layout
+from . import backlog, state_layout
 from .atomic_write import write_json
 from .settings import (
     CycleSplit,
@@ -35,7 +41,12 @@ from .settings import (
     load_vault_settings,
 )
 
+_LOG = logging.getLogger(__name__)
+
 SCHEMA_VERSION = 1
+
+#: Provenance of a discovery topic in the research plan's priority queue.
+DISCOVERY_PROVENANCE = "discovery"
 
 Ledger = dict[str, Any]
 
@@ -168,6 +179,7 @@ def record_cycle(
     kept: int,
     rerouted: int,
     dropped: list[dict[str, str]],
+    topics: list[dict[str, str]] | None = None,
 ) -> Ledger:
     """Record what ``cycle`` assigned and what the scout reported; atomic.
 
@@ -184,6 +196,9 @@ def record_cycle(
         "rerouted": rerouted,
         "dropped": [dict(item) for item in dropped],
     }
+    if topics is not None:
+        # Optional: which scope area each kept topic came from (spec 088 US1).
+        record["topics"] = [dict(item) for item in topics]
     cycles = [rec for rec in ledger["cycles"] if rec["cycle"] != cycle]
     cycles.append(record)
     cycles.sort(key=lambda rec: rec["cycle"])
@@ -264,3 +279,348 @@ def choose_areas(ledger: Ledger, areas: list[str], n: int) -> list[str]:
         ),
     )
     return [area for _, area in ranked[: max(n, 0)]]
+
+
+# ---------------------------------------------------------------------------
+# The cycle's assignment, the DG-001 checks and the routing (spec 088 FR-004,
+# FR-005). Scratch, not state: the assignment lives with the cycle's files.
+# ---------------------------------------------------------------------------
+
+
+def assignment_path(vault_dir: Path, cycle: int) -> Path:
+    return (
+        vault_dir
+        / "_pipeline"
+        / "cycles"
+        / f"cycle-{cycle:03d}-discovery-assigned.json"
+    )
+
+
+def window_start(today: date, window_days: int) -> date:
+    return today - timedelta(days=max(window_days, 0))
+
+
+def write_assignment(
+    vault_dir: Path, cycle: int, areas: Sequence[str], start: date
+) -> None:
+    """Remember which areas ``cycle``'s scout was asked about, and the window."""
+    write_json(
+        assignment_path(vault_dir, cycle),
+        {"cycle": cycle, "areas": list(areas), "window_start": start.isoformat()},
+    )
+
+
+def read_assignment(vault_dir: Path, cycle: int) -> dict[str, Any] | None:
+    """The cycle's assignment, or ``None`` (no pass this cycle, or unreadable)."""
+    try:
+        doc = json.loads(assignment_path(vault_dir, cycle).read_text(encoding="utf-8"))
+        areas = doc["areas"]
+        date.fromisoformat(doc["window_start"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if not (isinstance(areas, list) and all(isinstance(a, str) for a in areas)):
+        return None
+    return {"areas": areas, "window_start": doc["window_start"]}
+
+
+_ISO_DATE = re.compile(r"^(\d{4}-\d{2}-\d{2})(?:[T ].*)?$")
+
+
+@dataclass(frozen=True)
+class RowVerdict:
+    """DG-001's verdict on one ``topics_found.discovery`` row."""
+
+    row: Any
+    ok: bool
+    reason: str = ""
+
+    @property
+    def title(self) -> str:
+        title = self.row.get("title") if isinstance(self.row, dict) else None
+        return title.strip() if isinstance(title, str) and title.strip() else "?"
+
+
+def _check_row(row: Any, assigned: Sequence[str], start: date, today: date) -> str:
+    """``""`` when the row passes, else the reason it does not."""
+    if not isinstance(row, dict):
+        return "row is not an object"
+    title = row.get("title")
+    if not (isinstance(title, str) and title.strip()):
+        return "empty title"
+    if row.get("area") not in assigned:
+        return "area was not assigned to this cycle"
+    urls = row.get("source_urls")
+    if not (
+        isinstance(urls, list) and any(isinstance(u, str) and u.strip() for u in urls)
+    ):
+        return "no source"
+    published = row.get("published")
+    if not isinstance(published, str):
+        return "no publication date"
+    match = _ISO_DATE.match(published.strip())
+    try:
+        when = date.fromisoformat(match.group(1)) if match else None
+    except ValueError:
+        when = None
+    if when is None:
+        return f"malformed publication date {published!r}"
+    if when < start:
+        return (
+            f"published {when.isoformat()}, before the window opens {start.isoformat()}"
+        )
+    if when > today:
+        return f"published {when.isoformat()}, after today"
+    return ""
+
+
+def evaluate_rows(
+    rows: Iterable[Any], assigned: Sequence[str], start: date, today: date
+) -> list[RowVerdict]:
+    """DG-001: ``area`` assigned (exact text), a source, an ISO ``published``
+    date inside ``[start, today]``, a non-empty ``title``. Whether the page
+    really carries that date is not something a script can know (spec 088 D2).
+    """
+    verdicts = []
+    for row in rows:
+        reason = _check_row(row, assigned, start, today)
+        verdicts.append(RowVerdict(row, not reason, reason))
+    return verdicts
+
+
+def _exclusion_keys(exclusions: Iterable[str], prefix: str) -> set[str]:
+    from .research_plan import _exclusion_slug
+
+    return {
+        _exclusion_slug(e.split(": ", 1)[-1])
+        for e in exclusions
+        if e.startswith(f"{prefix}:")
+    }
+
+
+@dataclass
+class Routing:
+    """What :func:`route_rows` did with the rows that passed DG-001."""
+
+    topics: list[dict[str, str]] = dataclasses.field(default_factory=list)
+    """``{title, area}`` of each row that is (or stays) a discovery topic."""
+    observed: list[str] = dataclasses.field(default_factory=list)
+    """Titles of open non-discovery backlog topics observed again."""
+    rerouted: int = 0
+    """Rows sent to ``new_material`` update entries of existing notes."""
+    dropped: list[dict[str, str]] = dataclasses.field(default_factory=list)
+
+    @property
+    def kept(self) -> int:
+        return len(self.topics) + len(self.observed)
+
+
+def route_rows(
+    vault_dir: Path,
+    spec: SpecConfig,
+    rows: Iterable[dict[str, Any]],
+    *,
+    cycle: int,
+    exclusions: Sequence[str] = (),
+    planned_titles: Iterable[str] = (),
+    mode: str = "expand",
+) -> Routing:
+    """Route each row that passed DG-001 by its normalised filename / title.
+
+    * a note the vault already has -> a ``new_material`` update entry (writer
+      ``scout``), counted as re-routed; never a second note;
+    * a persistent reject (or an out-of-scope phrase) -> dropped;
+    * a topic already in this cycle's plan or this report -> dropped;
+    * an open backlog topic that is not a discovery topic -> observed again, no
+      duplicate and no discovery slot (the planner already offers it);
+    * otherwise a discovery topic: recorded in the backlog (origin
+      ``discovery``) and offered to the plan by :func:`plan_discovery_topics`.
+      Under ``research_mode: refresh`` such a row is dropped instead.
+
+    The match key is the row's proposed filename, else its title, as the scout
+    merge uses; the title is tried too, so a differently-named file for a
+    covered title still routes to its note.
+    """
+    from . import currency
+    from .research_plan import _exclusion_slug
+
+    notes = currency._corpus_notes(vault_dir, spec)
+    rejected = _exclusion_keys(exclusions, "persistent-rejects")
+    out_of_scope = _exclusion_keys(exclusions, "out-of-scope")
+    try:
+        from .orchestrator import _persistent_reject_titles
+
+        rejected |= {_exclusion_slug(t) for t in _persistent_reject_titles(vault_dir)}
+    except Exception as exc:  # noqa: BLE001 - a missing reject list drops nothing
+        _LOG.warning("[discovery] could not read the persistent rejects: %s", exc)
+    planned = {t.strip().casefold() for t in planned_titles}
+    seen: set[str] = set()
+    routing = Routing()
+    rerouted_rows: list[dict[str, Any]] = []
+    observe: list[tuple[dict[str, Any], str]] = []  # (row, "topic" | "again")
+
+    for row in rows:
+        title = " ".join(str(row["title"]).split())
+        keys = [
+            k
+            for k in (
+                _exclusion_slug(str(row.get("proposed_filename") or "")),
+                _exclusion_slug(title),
+            )
+            if k
+        ]
+        urls = [str(u).strip() for u in row["source_urls"] if str(u).strip()]
+        note_key = next((k for k in keys if k in notes), None)
+        if note_key is not None:
+            rerouted_rows.append({"key": note_key, "source_urls": urls})
+            routing.rerouted += 1
+            continue
+        reason = ""
+        if any(k in rejected for k in keys):
+            reason = "persistent reject"
+        elif any(k in out_of_scope for k in keys):
+            reason = "out of scope"
+        elif title.casefold() in planned:
+            reason = "already in this cycle's plan"
+        elif keys[-1] in seen:
+            reason = "duplicate of another row in this report"
+        elif mode == "refresh":
+            reason = "research_mode refresh: a discovery row may only update a note"
+        else:
+            state = backlog.topic_state(vault_dir, title)
+            if state is not None and state[1] == "dropped":
+                reason = "dropped from the backlog by the operator"
+        if reason:
+            routing.dropped.append({"title": title, "reason": reason})
+            continue
+        seen.update(keys)
+        state = backlog.topic_state(vault_dir, title)
+        if state is not None and state[0] != "discovery" and state[1] == "open":
+            observe.append((row, "again"))
+            routing.observed.append(title)
+        else:
+            observe.append((row, "topic"))
+            routing.topics.append({"title": title, "area": str(row["area"])})
+
+    if rerouted_rows:
+        currency.record_scout_updates(
+            vault_dir,
+            spec,
+            vault_dir / "_pipeline" / "cycles" / "no-scout-report.json",
+            rerouted_rows,
+            cycle=cycle,
+        )
+    if observe:
+
+        def write(tx: backlog.Transaction) -> None:
+            for row, kind in observe:
+                title = " ".join(str(row["title"]).split())
+                if kind == "again":
+                    tx.observe_topic(cycle=cycle, title=title, origin="discovery")
+                    continue
+                category = row.get("coverage_category")
+                filename = row.get("proposed_filename")
+                why = row.get("why_new")
+                tx.observe_topic(
+                    cycle=cycle,
+                    title=title,
+                    origin="discovery",
+                    detail=why.strip()
+                    if isinstance(why, str) and why.strip()
+                    else None,
+                    scope_area=str(row["area"]),
+                    source_urls=[
+                        str(u).strip() for u in row["source_urls"] if str(u).strip()
+                    ],
+                    category=category
+                    if isinstance(category, str) and category
+                    else None,
+                    proposed_filename=(
+                        filename if isinstance(filename, str) and filename else None
+                    ),
+                )
+
+        if not backlog.update(vault_dir, "scout", write):
+            _LOG.warning("[discovery] the backlog could not be written")
+    return routing
+
+
+def plan_discovery_topics(
+    vault_dir: Path, spec: SpecConfig, plan: Any, *, cycle: int
+) -> tuple[Any, int]:
+    """Merge up to the discovery share's worth of open discovery topics into the
+    plan's queue, ahead of every other topic (spec 088 FR-007).
+
+    Candidates are the backlog's open discovery topics, oldest first, so the
+    ones an earlier cycle could not hold come before fresh rows. How many fit is
+    ``split_quota``'s ``discovery_n`` over the carried credit; the credit is
+    accrued once per ``cycle`` and the count dispatched is recorded as spent
+    (absolute, so a re-run adds nothing). Topics a note now covers, or that are
+    already in the queue, are skipped. Returns ``(plan, merged_count)``.
+    """
+    from . import currency
+    from .research_plan import (
+        PrioritizedTopic,
+        _exclusion_slug,
+        _pick_orphan_category,
+        is_placeholder_topic,
+    )
+
+    already = [t for t in plan.priority_queue if t.provenance == DISCOVERY_PROVENANCE]
+    queued = {t.title.strip().casefold() for t in plan.priority_queue}
+    notes = currency._corpus_notes(vault_dir, spec)
+    refs = [
+        r
+        for r in backlog.discovery_topics(vault_dir)
+        if r.title.strip().casefold() not in queued
+        and not any(
+            k in notes
+            for k in (_exclusion_slug(r.proposed_filename), _exclusion_slug(r.title))
+            if k
+        )
+    ]
+    # The credit accrues every cycle the pass runs, whether or not a topic waits.
+    credit = accrue_credit(
+        vault_dir,
+        cycle=cycle,
+        quota=int(plan.cycle_quota),
+        share=discovery_share(vault_dir),
+    )
+    if not refs and not already:
+        return plan, 0
+    _new, _upd, count = currency.split_quota(
+        int(plan.cycle_quota),
+        currency.cycle_split_shares(vault_dir),
+        mode=currency.cycle_mode(vault_dir, spec),
+        new_available=sum(
+            1
+            for t in plan.priority_queue
+            if not is_placeholder_topic(t) and t.provenance != DISCOVERY_PROVENANCE
+        ),
+        updates_available=len(plan.update_queue),
+        discovery_available=len(refs),
+        discovery_credit=credit,
+    )
+    spend_credit(vault_dir, cycle=cycle, spent=len(already) + count)
+    if count <= 0:
+        return plan, 0
+    categories = {c.name for c in plan.coverage_state}
+    merged = []
+    for ref in refs[:count]:
+        category = (
+            ref.category
+            if ref.category in categories
+            else _pick_orphan_category(plan.coverage_state)
+        )
+        merged.append(
+            PrioritizedTopic(
+                title=ref.title,
+                category=category,
+                priority_score=1.0,
+                source_hints=list(ref.source_urls),
+                provenance=DISCOVERY_PROVENANCE,
+            )
+        )
+    return (
+        dataclasses.replace(plan, priority_queue=merged + list(plan.priority_queue)),
+        len(merged),
+    )

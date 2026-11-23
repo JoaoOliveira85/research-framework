@@ -58,6 +58,16 @@ SCOUT_NEW_ENV = "FAKE_AGENT_SCOUT_NEW"
 SCOUT_UPDATES_ENV = "FAKE_AGENT_SCOUT_UPDATES"
 """A JSON list of ``topics_found.updates`` rows the procedural scout reports."""
 
+DISCOVERY_ENV = "FAKE_AGENT_DISCOVERY"
+"""Spec 088: a JSON object choosing the procedural scout's discovery report.
+
+Keys, all optional: ``new`` (titles of brand-new topics, default one probe
+topic), ``existing`` (stems of notes the vault holds, one row each),
+``unassigned`` (add a row naming an area nobody assigned), ``stale`` (add a row
+published outside the window) and ``no_checked`` (omit ``discovery_checked``).
+The assigned areas are read from the scout prompt, as a real scout would.
+"""
+
 DEFAULT_TIMESTAMP_FMT = "2026-05-17T00:00:{cycle:02d}Z"
 DEFAULT_TEMPLATE_VERSION = "1.0"
 
@@ -308,11 +318,69 @@ def _derive_scout_topics(
     return out
 
 
+def _discovery_areas_from_prompt(prompt_text: str) -> list[str]:
+    """The bullet list under the scout prompt's discovery-pass heading."""
+    marker = "These are the scope areas assigned to this cycle:"
+    if marker not in prompt_text:
+        return []
+    areas: list[str] = []
+    for line in prompt_text.split(marker, 1)[1].splitlines():
+        if line.startswith("- "):
+            areas.append(line[2:].strip())
+        elif areas and line.strip():
+            break
+    return areas
+
+
+def _discovery_report(
+    areas: list[str], category: str, options: dict[str, Any]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """``(topics_found.discovery rows, discovery_checked)`` for ``areas``."""
+    from datetime import UTC, datetime, timedelta
+
+    if not areas:
+        return [], []
+    today = datetime.now(UTC).date()
+    recent = (today - timedelta(days=10)).isoformat()
+
+    def row(title: str, **over: Any) -> dict[str, Any]:
+        return {
+            "title": title,
+            "area": areas[0],
+            "why_new": "appeared recently",
+            "source_urls": [f"https://example.org/discovery/{_slugify(title)}"],
+            "published": recent,
+            "coverage_category": category,
+            "proposed_filename": f"{_slugify(title)}.md",
+            **over,
+        }
+
+    rows = [row(t) for t in options.get("new", ["Outside-in Probe Topic"])]
+    for stem in options.get("existing", []):
+        rows.append(row(stem.replace("-", " ").title(), proposed_filename=f"{stem}.md"))
+    if options.get("unassigned"):
+        rows.append(row("Unassigned Probe", area="An area nobody assigned"))
+    if options.get("stale"):
+        rows.append(
+            row("Stale Probe", published=(today - timedelta(days=400)).isoformat())
+        )
+    checked = [
+        {
+            "area": area,
+            "queries": [f"what is new in {area}"],
+            "found": sum(1 for r in rows if r["area"] == area),
+        }
+        for area in areas
+    ]
+    return rows, [] if options.get("no_checked") else checked
+
+
 def write_scout(
     vault_dir: Path,
     cycle: int,
     *,
     scenario: str = "happy",
+    prompt_text: str = "",
 ) -> Path:
     """Write a deterministic v2 scout JSON for ``cycle``. Returns the path."""
     spec_parse = _load_spec_parse(vault_dir)
@@ -406,6 +474,18 @@ def write_scout(
     raw_updates = (os.environ.get(SCOUT_UPDATES_ENV) or "").strip()
     if raw_updates:
         report["topics_found"]["updates"] = json.loads(raw_updates)
+    # Spec 088: the outside-in pass, when the prompt assigned areas.
+    raw_discovery = (os.environ.get(DISCOVERY_ENV) or "").strip()
+    if raw_discovery:
+        rows, checked = _discovery_report(
+            _discovery_areas_from_prompt(prompt_text),
+            coverage_targets[0]["name"] if coverage_targets else "general",
+            json.loads(raw_discovery),
+        )
+        if rows or checked:
+            report["topics_found"]["discovery"] = rows
+        if checked:
+            report["discovery_checked"] = checked
 
     cycles_dir = vault_dir / "_pipeline" / "cycles"
     out = cycles_dir / f"cycle-{cycle:03d}-scout.json"
@@ -1329,7 +1409,7 @@ def _handle_scout(
     prompt_text: str,
 ) -> None:
     cycle = _parse_cycle_from_prompt(prompt_text) or 1
-    written = write_scout(args.vault, cycle, scenario=scenario)
+    written = write_scout(args.vault, cycle, scenario=scenario, prompt_text=prompt_text)
 
     # ``pipeline/runner.py`` is single-shot: its scout prompt substitutes
     # ``{SCOUT_REPORT}`` to ``<vault>/_pipeline/scout-report.json``, and it

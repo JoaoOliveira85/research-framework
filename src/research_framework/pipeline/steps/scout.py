@@ -14,6 +14,7 @@ from .._helpers import script_runner as sr
 from .._helpers import source_signals as ss
 from ..gates import GateResult, run_gate
 from ..gates_step import (
+    DG001_discovery_rows,
     SG001_topics_new_nonempty,
     SG002_topic_category_diversity,
     SG003_topic_abstraction_check,
@@ -543,7 +544,132 @@ def _phase(ctx: CycleContext) -> int:
                 )
     except Exception as exc:
         _LOG.warning(f"[currency] WARN: recording scout updates failed: {exc}")
+
+    # --- Step 2.7: the outside-in discovery pass (spec 088) ---
+    # Checks the scout's `topics_found.discovery` rows (DG-001), routes the ones
+    # that pass, merges the share's worth of discovery topics into the plan, and
+    # writes the discovery ledger. A no-op unless this cycle's prompt assigned
+    # areas. Best-effort, like the steps above: it must never fail the cycle.
+    try:
+        if spec_for_gates is not None and scout_report.is_file():
+            _discovery_step(
+                vault_dir,
+                spec_for_gates,
+                cycle_num,
+                pipeline_dir,
+                cycles_dir,
+                cycle_3,
+                scout_report,
+            )
+    except Exception as exc:
+        _LOG.warning(f"[discovery] WARN: the discovery pass failed: {exc}")
     return __exit
+
+
+def _load_plan(pipeline_dir: Path):
+    """The plan on disk with its priority queue parsed, or ``None``."""
+    from ..research_plan import ResearchPlan as _RP
+
+    plan_md_path = pipeline_dir / "research-plan.md"
+    if not plan_md_path.is_file():
+        return None
+    text = plan_md_path.read_text(encoding="utf-8")
+    plan = _RP.from_markdown(text)
+    return dataclasses.replace(
+        plan, priority_queue=sc._parse_priority_queue_from_plan_md(text)
+    )
+
+
+def _discovery_step(
+    vault_dir: Path,
+    spec,
+    cycle_num: int,
+    pipeline_dir: Path,
+    cycles_dir: Path,
+    cycle_3: str,
+    scout_report: Path,
+) -> None:
+    import datetime as _dt
+
+    from .. import discovery
+    from ..atomic_write import write_text as _aw_text
+    from ..currency import cycle_mode
+
+    assignment = discovery.read_assignment(vault_dir, cycle_num)
+    if assignment is None:
+        return
+    assigned = list(assignment["areas"])
+    start = _dt.date.fromisoformat(assignment["window_start"])
+    try:
+        doc = json.loads(scout_report.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        doc = {}
+    found = doc.get("topics_found") if isinstance(doc, dict) else None
+    raw_rows = found.get("discovery") if isinstance(found, dict) else None
+    rows = raw_rows if isinstance(raw_rows, list) else []
+    raw_checked = doc.get("discovery_checked") if isinstance(doc, dict) else None
+    checked = [
+        c
+        for c in (raw_checked if isinstance(raw_checked, list) else [])
+        if isinstance(c, dict) and isinstance(c.get("area"), str)
+    ]
+
+    verdicts = discovery.evaluate_rows(
+        rows, assigned, start, _dt.datetime.now(_dt.UTC).date()
+    )
+    _evaluate_step_gate(cycles_dir, cycle_num, DG001_discovery_rows, verdicts)
+    dropped = [{"title": v.title, "reason": v.reason} for v in verdicts if not v.ok]
+    for item in dropped:
+        _LOG.warning(f"[discovery] dropped row {item['title']!r}: {item['reason']}")
+    routing = discovery.Routing()
+    try:
+        plan = _load_plan(pipeline_dir)
+        routing = discovery.route_rows(
+            vault_dir,
+            spec,
+            [v.row for v in verdicts if v.ok],
+            cycle=cycle_num,
+            exclusions=plan.exclusions if plan else [],
+            planned_titles=[t.title for t in plan.priority_queue] if plan else [],
+            mode=cycle_mode(vault_dir, spec),
+        )
+        for item in routing.dropped:
+            _LOG.warning(f"[discovery] dropped row {item['title']!r}: {item['reason']}")
+        if routing.rerouted:
+            _LOG.info(
+                f"[discovery] {routing.rerouted} row(s) about existing notes "
+                "queued as updates"
+            )
+            _refresh_plan_update_queue(
+                pipeline_dir, cycles_dir, cycle_3, vault_dir, spec
+            )
+        plan = _load_plan(pipeline_dir)
+        if plan is not None:
+            plan, merged = discovery.plan_discovery_topics(
+                vault_dir, spec, plan, cycle=cycle_num
+            )
+            if merged:
+                _aw_text(pipeline_dir / "research-plan.md", plan.to_markdown())
+                _aw_text(
+                    cycles_dir / f"cycle-{cycle_3}-research-plan.md",
+                    plan.to_markdown(),
+                )
+                _LOG.info(
+                    f"[discovery] {merged} discovery topic(s) merged into the plan"
+                )
+    except Exception as exc:
+        _LOG.warning(f"[discovery] WARN: routing discovery rows failed: {exc}")
+    finally:
+        discovery.record_cycle(
+            vault_dir,
+            cycle=cycle_num,
+            assigned=assigned,
+            reported=checked,
+            kept=routing.kept,
+            rerouted=routing.rerouted,
+            dropped=dropped + routing.dropped,
+            topics=routing.topics,
+        )
 
 
 def _refresh_plan_update_queue(

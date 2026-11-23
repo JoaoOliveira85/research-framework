@@ -65,7 +65,7 @@ def _matches_cycle_report(payload: dict, root: dict) -> tuple[bool, str]:
     gates = payload.get("gates")
     if not isinstance(gates, dict) or len(gates) < 12:
         return False, "gates minProperties"
-    gate_key_re = re.compile(r"^[CS]G-\d{3}(#\d+)?$")
+    gate_key_re = re.compile(r"^[CSUD]G-\d{3}(#\d+)?$")
     grs = _gate_result_schema(root)
     for gk, gv in gates.items():
         if not gate_key_re.match(gk):

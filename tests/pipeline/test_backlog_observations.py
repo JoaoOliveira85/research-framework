@@ -432,5 +432,5 @@ def test_a_store_written_by_observations_satisfies_the_schema_checks(
 
 def test_create_empty_seeds_a_store_once(tmp_path: Path) -> None:
     assert backlog.create_empty(tmp_path) is True
-    assert _store(tmp_path) == {"schema_version": "1.1", "entries": []}
+    assert _store(tmp_path) == {"schema_version": "1.2", "entries": []}
     assert backlog.create_empty(tmp_path) is False
