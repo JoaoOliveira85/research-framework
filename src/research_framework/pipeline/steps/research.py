@@ -403,6 +403,18 @@ def _phase(ctx: CycleContext) -> int:
     except Exception as e:
         _LOG.warning(f"WARN: verifier stage failed: {e} — continuing")
 
+    # --- Step 3b': record how the cycle's update batches went (spec 087) ---
+    # After the verifier, which can still reject an outcome: the loop-continuation
+    # and Condition B decisions read this, so an update-only cycle is not read as
+    # "nothing happened" and a cycle whose updates all failed is not read as
+    # progress.
+    try:
+        from ..currency import stamp_update_work
+
+        stamp_update_work(vault_dir, cycle_num, research_report)
+    except Exception as e:
+        _LOG.warning(f"WARN: could not record the cycle's update work: {e}")
+
     # --- Step 3c: auto-normalize case-mismatched wikilinks (0.2.31) ---
     # The note-writer agent emits natural-language wikilinks
     # ([[Cassandra]], [[OMS]]) but filenames are lowercase-snake. Left

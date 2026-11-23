@@ -76,9 +76,22 @@ def _topics_found_new_rows(scout_report: dict) -> list[dict]:
 
 
 def SG001_topics_new_nonempty(
-    scout_report: dict, _spec: SpecConfig, cycle_quota: int
+    scout_report: dict,
+    _spec: SpecConfig,
+    cycle_quota: int,
+    *,
+    new_wanted: int | None = None,
+    updates_planned: int = 0,
 ) -> GateResult:
     """SG-001: scout's ``topics_found.new`` must contain ≥ ``cycle_quota`` items.
+
+    **Spec 087 (update work).** When the caller passes ``new_wanted`` (the
+    NEW-TOPIC count of the cycle's split, not the whole quota) an empty
+    ``topics_found.new`` is judged against what the cycle has to do: PASS when
+    no new topics were asked for (``refresh``, or a split that gives them
+    nothing); WARN when some were wanted but none came and ``updates_planned``
+    update work remains (the cycle goes on with its update batches); FAIL only
+    when there is neither. A non-empty list is compared with ``new_wanted``.
 
     **PASS** — ``count >= cycle_quota``.
 
@@ -100,10 +113,39 @@ def SG001_topics_new_nonempty(
         _spec: Parsed vault spec (unused).
         cycle_quota: Minimum number of ``topics_found.new`` rows required for PASS.
     """
-    if cycle_quota < 1:
+    if new_wanted is None and cycle_quota < 1:
         raise ValueError(f"cycle_quota must be >= 1, got {cycle_quota}")
+    if new_wanted is not None:
+        cycle_quota = max(1, new_wanted)
     rows = _topics_found_new_rows(scout_report)
     count = len(rows)
+    if new_wanted == 0:
+        return GateResult(
+            gate_id="SG-001",
+            status="PASS",
+            metric_name="topics_found_new_count",
+            metric_value=count,
+            threshold=0,
+            message=(
+                "no new topics were asked for this cycle "
+                f"({updates_planned} update(s) planned); topics_found.new has "
+                f"{count} topic(s), which is fine"
+            ),
+        )
+    if count == 0 and updates_planned > 0:
+        return GateResult(
+            gate_id="SG-001",
+            status="WARN",
+            metric_name="topics_found_new_count",
+            metric_value=0,
+            threshold=cycle_quota,
+            message=(
+                f"topics_found.new is empty although {cycle_quota} new topic(s) were "
+                f"wanted; the cycle continues with its {updates_planned} planned "
+                "update(s)"
+            ),
+            correction_hint="",
+        )
     if count == 0:
         return GateResult(
             gate_id="SG-001",

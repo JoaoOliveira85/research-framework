@@ -51,6 +51,10 @@ UPDATE_BLOCK_RE = re.compile(
     re.DOTALL,
 )
 
+SCOUT_NEW_ENV = "FAKE_AGENT_SCOUT_NEW"
+"""``0``: the procedural scout finds NO new topics, as a real scout does in a
+``refresh`` cycle or on a vault with nothing new to find."""
+
 SCOUT_UPDATES_ENV = "FAKE_AGENT_SCOUT_UPDATES"
 """A JSON list of ``topics_found.updates`` rows the procedural scout reports."""
 
@@ -337,6 +341,8 @@ def write_scout(
         vault_dir=vault_dir,
     )
 
+    if (os.environ.get(SCOUT_NEW_ENV) or "").strip() == "0":
+        topics = []
     topics_from_code = []
     topics_found_new = []
     proposed_filenames = []

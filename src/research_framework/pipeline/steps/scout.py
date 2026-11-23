@@ -286,6 +286,9 @@ def _phase(ctx: CycleContext) -> int:
             try:
                 quota = ss._cycle_quota_for_gates(pipeline_dir)
                 unfilled = ss._unfilled_categories_for_gates(vault_dir)
+                wanted, planned = ss._cycle_expectations_for_gates(
+                    vault_dir, spec_for_gates, quota, scout_body
+                )
                 r1 = _evaluate_step_gate(
                     cycles_dir,
                     cycle_num,
@@ -293,6 +296,8 @@ def _phase(ctx: CycleContext) -> int:
                     scout_body,
                     spec_for_gates,
                     quota,
+                    new_wanted=wanted,
+                    updates_planned=planned,
                 )
                 if r1.status == "FAIL":
                     return 2
@@ -421,6 +426,8 @@ def _phase(ctx: CycleContext) -> int:
                             scout_body,
                             spec_for_gates,
                             quota,
+                            new_wanted=wanted,
+                            updates_planned=planned,
                             label=" (post retry)",
                         )
                         if r1b.status == "FAIL":

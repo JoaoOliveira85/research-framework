@@ -1089,7 +1089,16 @@ def run_cycles(
         health_issues = _run_health_gate(vault_dir)
         coverage_met = all_targets_met(vault_dir)
 
-        has_fuel = bool(new_topics or followups or stubs or health_issues)
+        # Spec 087: update work counts as fuel when the cycle worked an update
+        # and more is queued. It stops when a cycle works none (all failed, or
+        # none could run), so it cannot loop on entries that cannot be settled.
+        update_fuel = _update_fuel(vault_dir, cycle)
+        has_fuel = bool(
+            new_topics or followups or stubs or health_issues or update_fuel
+        )
+        if not coverage_met and _cycle_mode(vault_dir, spec) == "refresh":
+            # a refresh run does not pursue coverage targets; it revisits notes
+            coverage_met = True
 
         # Successful exit: no fuel + coverage met → Phase 3.
         if not has_fuel and coverage_met:
@@ -1289,6 +1298,24 @@ def _cycle_commit_summary(vault_dir: Path, cycle_num: int) -> dict[str, object]:
     return summary
 
 
+def _update_fuel(vault_dir: Path, cycle_num: int) -> bool:
+    """True when the cycle worked at least one update and more are queued."""
+    from .currency import update_work_continues
+
+    report_file = _cycle_research_report_path(vault_dir, cycle_num)
+    try:
+        report = json.loads(report_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return isinstance(report, dict) and update_work_continues(report)
+
+
+def _cycle_mode(vault_dir: Path, spec: SpecConfig | None) -> str:
+    from .currency import cycle_mode
+
+    return cycle_mode(vault_dir, spec)
+
+
 def _scout_new_topics(vault_dir: Path, cycle_num: int) -> list[str]:
     """Return the scout's `topics_found.new` list for ``cycle_num``, or [] if
     the scout JSON is missing / malformed. Used as one of the three
@@ -1361,6 +1388,15 @@ def _constrained_exit(
             f"  - {len(new_topics)} new topic(s) the latest scout flagged "
             "but the cycle ran out of budget/cycles to research"
         )
+    try:
+        queued_updates = len(backlog.update_topics(vault_dir))
+    except Exception:  # noqa: BLE001 - a punch list never fails the exit
+        queued_updates = 0
+    if queued_updates:
+        _LOG.warning(
+            f"  - {queued_updates} note(s) queued for update "
+            '(the "Notes to update" section of the research backlog)'
+        )
     if followups:
         _LOG.warning(
             f"  - {len(followups)} orphan wikilink(s) in the latest harvest "
@@ -1403,7 +1439,11 @@ def _cycle_made_progress(vault_dir: Path, cycle_num: int) -> bool:
         return False
     created = report.get("notes_created") or []
     updated = report.get("notes_updated") or []
-    return bool(created) or bool(updated)
+    # An update that held (a ``confirmed`` one writes no note) is progress; one
+    # whose outcome failed is not.
+    from .currency import update_work_made_progress
+
+    return bool(created) or bool(updated) or update_work_made_progress(report)
 
 
 def _run_health_gate(vault_dir: Path) -> list[str]:

@@ -12,7 +12,7 @@ These are Jinja templates. Their text is rendered into a generated vault, so rea
 
 | Prompt | Source | Role | Dispatched by | sha256 |
 | --- | --- | --- | --- | --- |
-| [`scout-prompt`](scout-prompt.md) | `templates/prompts/scout-prompt.md.j2` | Topic discovery — produces `_pipeline/scout-report.json`. | `pipeline scout` / the cycle runner's scout step | `65bcf6bda91d70f0` |
+| [`scout-prompt`](scout-prompt.md) | `templates/prompts/scout-prompt.md.j2` | Topic discovery — produces `_pipeline/scout-report.json`. | `pipeline scout` / the cycle runner's scout step | `e404a8b2e4e50bf6` |
 | [`dfs-prompt`](dfs-prompt.md) | `templates/prompts/dfs-prompt.md.j2` | Depth-first research — writes notes, produces `_pipeline/research-report.json`. | `pipeline resume` / the cycle runner's research step | `700b29fa0d1b621c` |
 | [`command-ask`](command-ask.md) | `templates/commands/ask.md.j2` | Vault-grounded answering, with the Principle IX two-tier citation block. | `./vault ask` (interactive) | `62862d8da8d2c5ba` |
 | [`command-research`](command-research.md) | `templates/commands/research.md.j2` | Operator-facing research entry point. | `/research` inside a vault | `50313370f15ee70e` |

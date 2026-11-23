@@ -53,6 +53,26 @@ def _cycle_quota_for_gates(pipeline_dir: Path) -> int:
         return 1
 
 
+def _cycle_expectations_for_gates(
+    vault_dir: Path, spec, quota: int, scout_body: dict
+) -> tuple[int | None, int]:
+    """``(new topics wanted, updates planned)`` for SG-001 (spec 087).
+
+    ``(None, 0)`` when it cannot be worked out, which is the gate's old
+    behaviour (compare with the whole quota, FAIL on empty).
+    """
+    try:
+        from ..currency import cycle_expectations
+
+        found = scout_body.get("topics_found") if isinstance(scout_body, dict) else None
+        rows = found.get("updates") if isinstance(found, dict) else None
+        return cycle_expectations(
+            vault_dir, spec, quota, len(rows) if isinstance(rows, list) else 0
+        )
+    except Exception:
+        return None, 0
+
+
 def _unfilled_categories_for_gates(vault_dir: Path) -> int:
     try:
         from ..coverage import load_targets

@@ -362,3 +362,81 @@ def plan_updates(
     if update_n <= 0:
         return [], None, 0
     return queue, new_n, update_n
+
+
+def cycle_expectations(
+    vault_dir: Path, spec: SpecConfig, quota: int, scout_updates: int = 0
+) -> tuple[int, int]:
+    """``(new topics wanted, updates planned)`` for a cycle, for the scout gates.
+
+    The same split the plan makes (:func:`split_quota`), but computed when the
+    scout has just reported: ``scout_updates`` is the number of
+    ``topics_found.updates`` rows it returned, which add to the open entries.
+    New topics are treated as plentiful (the scout is the one finding them), so
+    ``new wanted`` is 0 only when the mode (``refresh``) or the shares ask for
+    none, and ``updates planned`` is 0 when the vault cannot run update batches.
+    """
+    supported = updates_supported(vault_dir)[0]
+    available = 0
+    if supported:
+        available = len(backlog.update_topics(vault_dir)) + max(0, scout_updates)
+    new_n, update_n = split_quota(
+        max(1, quota),
+        cycle_split_shares(vault_dir),
+        mode=cycle_mode(vault_dir, spec),
+        new_available=max(1, quota),
+        updates_available=available,
+    )
+    return new_n, update_n
+
+
+def update_work_continues(report: Mapping[str, Any]) -> bool:
+    """Whether a research report shows update work worth another cycle.
+
+    ``update_work`` is stamped by the research step when the cycle ran update
+    batches: ``worked`` counts outcomes that passed (``confirmed`` included),
+    ``failed`` those that did not, ``open_after`` the entries still queued.
+    A cycle that worked at least one update and left some made progress and may
+    continue; one whose update batches all failed did not, so it cannot loop
+    (the attempts limit then sets the stuck entries aside).
+    """
+    work = report.get("update_work")
+    if not isinstance(work, Mapping):
+        return False
+    return (
+        int(work.get("worked", 0) or 0) > 0 and int(work.get("open_after", 0) or 0) > 0
+    )
+
+
+def update_work_made_progress(report: Mapping[str, Any]) -> bool:
+    """Whether a research report records at least one update outcome that held."""
+    rows = report.get("update_outcome_results")
+    return isinstance(rows, list) and any(
+        isinstance(r, Mapping) and r.get("status") == "passed" for r in rows
+    )
+
+
+def stamp_update_work(vault_dir: Path, cycle: int, report_path: Path) -> None:
+    """Record in the cycle's research report how its update batches went."""
+    from .atomic_write import write_json
+    from .update_outcomes import _read_json, _sidecar
+
+    results = _read_json(_sidecar(vault_dir / "_pipeline" / "cycles", cycle)).get(
+        "results"
+    )
+    if not isinstance(results, list) or not results:
+        return
+    report = _read_json(report_path)
+    if not report:
+        return
+    worked = sum(
+        1 for r in results if isinstance(r, dict) and r.get("status") == "passed"
+    )
+    report["update_work"] = {
+        "worked": worked,
+        "failed": len(results) - worked,
+        "open_after": len(backlog.update_topics(vault_dir))
+        if updates_supported(vault_dir)[0]
+        else 0,
+    }
+    write_json(report_path, report)

@@ -371,6 +371,53 @@ def _vault_existing_filenames(vault_dir: Path) -> set[str]:
     return {p.name for p in data.rglob("*.md")}
 
 
+def _new_topics_wanted(pipeline_dir: Path | None) -> bool:
+    """False in ``refresh`` mode: the cycle asks the scout for no new topics."""
+    if pipeline_dir is None:
+        return True
+    spec = _parsed_spec(pipeline_dir.parent)
+    return not (spec and spec.get("research_mode") == "refresh")
+
+
+def _has_update_work(report: dict, pipeline_dir: Path | None) -> bool:
+    """Whether the cycle has updates to do: the scout reported some, or the plan
+    (``update_quota`` in ``_pipeline/research-plan.md``) allots a share to them.
+    A scout with no new topics is then reporting what it should, not breaking
+    the trunk-seed ordering."""
+    found = report.get("topics_found")
+    rows = found.get("updates") if isinstance(found, dict) else None
+    if isinstance(rows, list) and rows:
+        return True
+    if pipeline_dir is None:
+        return False
+    try:
+        text = (pipeline_dir / "research-plan.md").read_text(encoding="utf-8")
+    except OSError:
+        return False
+    import re
+
+    match = re.search(r"^update_quota:\s*(\d+)\s*$", text, re.MULTILINE)
+    return bool(match and int(match.group(1)) > 0)
+
+
+def _update_work_continues(report: dict) -> bool:
+    """A cycle that worked an update and left more queued has not run dry.
+
+    ``update_work`` is stamped into the research report by the research step
+    (spec 087): ``worked`` outcomes that held, ``open_after`` entries still
+    queued. Condition B ("no new topics") must not end such a cycle, whose work
+    was on existing notes. One whose updates all failed has made no progress
+    and can still end.
+    """
+    work = report.get("update_work")
+    if not isinstance(work, dict):
+        return False
+    try:
+        return int(work.get("worked", 0)) > 0 and int(work.get("open_after", 0)) > 0
+    except (TypeError, ValueError):
+        return False
+
+
 def _claimed_new_topic_count(report: dict) -> int:
     """How many notes this report says the DFS is about to write.
 
@@ -778,6 +825,18 @@ def check_termination(
         )
 
     # Condition B: no new topics after research AND no unresolved references
+    # AND no update work still under way (spec 087).
+    if phase == "research" and len(new_topics) == 0 and _update_work_continues(report):
+        return ValidationResult(
+            status="CONTINUE",
+            reason=(
+                "No new topics, but update work is under way and more is queued "
+                "— needs another cycle"
+            ),
+            warnings=warnings,
+            errors=[],
+            metrics_delta=metrics_delta,
+        )
     if phase == "research" and len(new_topics) == 0:
         if metrics:
             unresolved = metrics.get(
@@ -1046,7 +1105,15 @@ def check_termination_v2(
     # pure-domain vault (tie / no unique minimum priority) must not ABORT on
     # an empty topics_from_{trunk,code} list.
     derivable_trunk = bool(pipeline_dir and _load_trunk_dict(pipeline_dir))
-    if phase == "scout" and derivable_trunk and not topics_from_code:
+    # A `refresh` cycle asks the scout for no new topics (spec 087), so an empty
+    # trunk list is what a correct scout reports there, not an ordering violation.
+    if (
+        phase == "scout"
+        and derivable_trunk
+        and not topics_from_code
+        and _new_topics_wanted(pipeline_dir)
+        and not _has_update_work(report, pipeline_dir)
+    ):
         errors.append(f"trunk-seed ordering violated: {trunk_field} is empty")
 
     # All five dimensions must be covered in scout reports
@@ -1166,7 +1233,7 @@ def check_termination_v2(
             metrics_delta={},
         )
 
-    if termination == "B":
+    if termination == "B" and not _update_work_continues(report):
         return ValidationResult(
             status="TERMINATE",
             reason="Condition B: no new relevant topics after research",

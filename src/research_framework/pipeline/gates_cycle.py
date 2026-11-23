@@ -12,6 +12,19 @@ from research_framework.pipeline.gates import GateResult
 from research_framework.spec.schema import SpecConfig
 
 
+def _planned_new_topics(vault_dir: Path) -> int | None:
+    """The plan's new-topic count when it planned update work, else ``None``
+    (no update section: the whole cycle is new-topic work, as before)."""
+    from .research_plan import ResearchPlan
+
+    plan_path = vault_dir / "_pipeline" / "research-plan.md"
+    try:
+        plan = ResearchPlan.from_markdown(plan_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return int(plan.new_quota or 0) if plan.plans_updates else None
+
+
 def CG001_min_cycle_yield(
     vault_dir: Path,
     report: dict,
@@ -31,6 +44,27 @@ def CG001_min_cycle_yield(
     yt = compute_yield_target(vault_dir, cycle_number, max_cycles)
     threshold = yt.target
     n = len(report.get("notes_created") or [])
+    # Spec 087: the yield measures NEW notes, so it is owed only for the new-topic
+    # share of the cycle. A cycle whose plan asked for no new topics (refresh, or
+    # a split that gives them nothing) has no yield to miss; one that asked for
+    # some, found none and worked its updates is under target, not failed.
+    planned_new = _planned_new_topics(vault_dir)
+    if planned_new == 0 and n < threshold:
+        return GateResult(
+            gate_id="CG-001",
+            status="PASS",
+            metric_name="notes_created_this_cycle",
+            metric_value=n,
+            threshold=0,
+            message=(
+                f"{n} new note(s); the plan asked for no new topics this cycle "
+                "(its work is updates to existing notes)"
+            ),
+        )
+    update_work = report.get("update_work")
+    worked_updates = (
+        isinstance(update_work, dict) and int(update_work.get("worked", 0) or 0) > 0
+    )
     if threshold == 0:
         # No remaining coverage work — a complete vault has no mandatory yield.
         return GateResult(
@@ -57,6 +91,21 @@ def CG001_min_cycle_yield(
             metric_value=n,
             threshold=threshold,
             message=f"{n} note(s) meet minimum yield ({breakdown})",
+        )
+    if n < yt.floor and worked_updates:
+        return GateResult(
+            gate_id="CG-001",
+            status="WARN",
+            metric_name="notes_created_this_cycle",
+            metric_value=n,
+            threshold=threshold,
+            message=(
+                f"{n} new note(s) below floor {yt.floor} ({breakdown}); the cycle "
+                "worked updates to existing notes"
+            ),
+            correction_hint=(
+                f"Aim for {threshold} new note(s) next cycle ({breakdown})."
+            ),
         )
     if n < yt.floor:
         return GateResult(

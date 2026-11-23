@@ -7,16 +7,17 @@
 | **Source** | `templates/prompts/scout-prompt.md.j2` |
 | **Role** | Topic discovery — produces `_pipeline/scout-report.json`. |
 | **Dispatched by** | `pipeline scout` / the cycle runner's scout step |
-| **Source sha256** | `65bcf6bda91d70f0` |
+| **Source sha256** | `e404a8b2e4e50bf6` |
 
 Reproduced verbatim, including its placeholders. A vault gets this text with the placeholders filled at scaffold or dispatch time.
 
 ````
 {%- set primary = spec.data_sources | selectattr('priority', 'equalto', 1) | selectattr('role', 'equalto', 'behaviour') | list -%}
 {%- set code_first = primary and primary[0].repos -%}
+{%- set refresh = spec.research_mode == 'refresh' -%}
 {%- set coverage_cats = (spec.coverage_targets.categories if spec.coverage_targets is defined and spec.coverage_targets else []) -%}
 ---
-_template_version: 6
+_template_version: 7
 ---
 You are running BFS scout cycle {CYCLE_NUM} of a recursive research pass on the
 {{ spec.name }} vault.
@@ -62,8 +63,26 @@ This cycle's research plan is reproduced at the end of this prompt under
 `## Research Plan` (it is also on disk at `_pipeline/research-plan.md`).
 
 - Treat its priority queue as the canonical to-do list for this cycle.
+{% if not refresh %}
 - If it lists cycle focus categories (`## Cycle focus`), then
   at least 70% of your `topics_found.new` entries MUST belong to them.
+{% endif %}
+
+{% if refresh %}
+## This cycle refreshes: NO new topics are wanted
+
+This vault's `research_mode` is `refresh`. The cycle's work is revisiting the
+notes the vault already has, not growing it. So:
+
+- Leave `topics_found.new` EMPTY (`[]`); `topics_from_code` may be `[]` too. An
+  empty list is the correct report here, not a failure.
+- Your job is `topics_found.updates`: for each existing note you find NEW
+  material about (a newer release, a contradiction, a deprecation, a
+  successor), one row `{"note", "source_urls", "summary"}`. The notes the vault
+  already has are listed under "Already have a note" below.
+- Skip the steps below that extract and generalize new topics, and the
+  coverage-category and diversity rules that go with them.
+{% endif %}
 
 {% if code_first %}
 ## Source-of-Truth Rule (CODE-FIRST)
@@ -175,6 +194,7 @@ this shape:
 - ❌ `"customer_order_calculator_service"` (internal class/service name)
 - ❌ `"OMS Service"` (literal service name — provenance, not concept)
 
+{% if not refresh %}
 **`coverage_category`** must be one of the spec's configured categories so the
 SG-002 diversity gate sees you spreading topics across coverage gaps, not piling
 into one folder. Configured categories for this vault:
@@ -184,6 +204,7 @@ into one folder. Configured categories for this vault:
 {% endfor %}
 {% else %}
 (none configured — use "general")
+{% endif %}
 {% endif %}
 
 **`source_code_topic_ids` / `source_intent_ids`** trace each generalized topic
@@ -337,12 +358,17 @@ The report MUST follow the v2 schema (no extra commentary, JSON only):
 
 Constraints:
 
+{% if refresh %}
+- `topics_found.new` and `topics_from_code` should be `[]` (no new topics are
+  wanted this cycle); report what you found in `topics_found.updates`.
+{% else %}
 - `topics_from_code` MUST be non-empty — code-first ordering violation otherwise.
 - `topics_found.new` MUST be non-empty (SG-001 will fail the cycle otherwise) and
   each row MUST be a dict with `title`, `coverage_category`, `proposed_filename`,
   and `source_code_topic_ids` (≥ 1 `CT-…` id).
 - `topics_found.new[*].coverage_category` values together MUST span at least
   `min(5, unfilled_coverage_categories)` distinct values (SG-002 diversity gate).
+{% endif %}
 - `topics_found.new[*].proposed_filename` MUST NOT start with any forbidden
   prefix listed in Step 4 (SG-003 abstraction gate).
 - Every `intent_from_confluence[*].parent_code_topic_id` MUST match a `topics_from_code[*].id`.
