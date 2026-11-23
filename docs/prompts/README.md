@@ -12,9 +12,9 @@ These are Jinja templates. Their text is rendered into a generated vault, so rea
 
 | Prompt | Source | Role | Dispatched by | sha256 |
 | --- | --- | --- | --- | --- |
-| [`scout-prompt`](scout-prompt.md) | `templates/prompts/scout-prompt.md.j2` | Topic discovery — produces `_pipeline/scout-report.json`. | `pipeline scout` / the cycle runner's scout step | `69be00a8575d67bc` |
-| [`dfs-prompt`](dfs-prompt.md) | `templates/prompts/dfs-prompt.md.j2` | Depth-first research — writes notes, produces `_pipeline/research-report.json`. | `pipeline resume` / the cycle runner's research step | `fd6ee4885391932c` |
-| [`command-ask`](command-ask.md) | `templates/commands/ask.md.j2` | Vault-grounded answering, with the Principle IX two-tier citation block. | `./vault ask` (interactive) | `8aa5a0be24de15a1` |
+| [`scout-prompt`](scout-prompt.md) | `templates/prompts/scout-prompt.md.j2` | Topic discovery — produces `_pipeline/scout-report.json`. | `pipeline scout` / the cycle runner's scout step | `e404a8b2e4e50bf6` |
+| [`dfs-prompt`](dfs-prompt.md) | `templates/prompts/dfs-prompt.md.j2` | Depth-first research — writes notes, produces `_pipeline/research-report.json`. | `pipeline resume` / the cycle runner's research step | `6d534954c10de0f7` |
+| [`command-ask`](command-ask.md) | `templates/commands/ask.md.j2` | Vault-grounded answering, with the Principle IX two-tier citation block. | `./vault ask` (interactive) | `62862d8da8d2c5ba` |
 | [`command-research`](command-research.md) | `templates/commands/research.md.j2` | Operator-facing research entry point. | `/research` inside a vault | `50313370f15ee70e` |
 | [`command-write`](command-write.md) | `templates/commands/write.md.j2` | Document generation, with the Principle IX two-tier citation requirement. | `./vault write` (see spec 077 § D2 — not currently runnable) | `5389c6f98c3ade52` |
 | [`agent-scout`](agent-scout.md) | `src/research_framework/agents/scout.md.j2` | Scout agent definition. | rendered to `.claude/commands/scout.md` | `b3b5e2ac95b41f9a` |
@@ -22,7 +22,7 @@ These are Jinja templates. Their text is rendered into a generated vault, so rea
 | [`agent-verify`](agent-verify.md) | `src/research_framework/agents/verify.md.j2` | Verification agent definition. | rendered to `.claude/commands/verify.md` | `60603bdaa42ab697` |
 | [`agent-report`](agent-report.md) | `src/research_framework/agents/report.md.j2` | Weekly report agent definition — the `report` phase's prompt source (spec 075). | rendered to `.claude/commands/report.md` | `a9a746e4fb96b911` |
 | [`agent-pipeline`](agent-pipeline.md) | `src/research_framework/agents/pipeline.md.j2` | Pipeline shim agent definition — shells out and shows the output verbatim. | rendered to `.claude/commands/pipeline.md` | `6bea7e8c00532965` |
-| [`note-type`](note-type.md) | `templates/note-type.md.j2` | The note scaffold every generated note starts from (spec 079). | note rendering at scaffold time | `262a6b2ffa64ebf4` |
+| [`note-type`](note-type.md) | `templates/note-type.md.j2` | The note scaffold every generated note starts from (spec 079). | note rendering at scaffold time | `fa1fc892c96d542c` |
 
 ## Recorded, not copied
 
@@ -42,9 +42,9 @@ These are already standalone, verbatim, tracked files. Copying them here would m
 | [`install-wizard`](../../.agents/skills/install-wizard/SKILL.md) | `.agents/skills/install-wizard/SKILL.md` | `stages.install_wizard` | `30cead920a44e064` |
 | [`model-router`](../../.agents/skills/model-router/SKILL.md) | `.agents/skills/model-router/SKILL.md` | `stages.model_router` | `db9fe1f82671a2c1` |
 | [`note-tagger`](../../.agents/skills/note-tagger/SKILL.md) | `.agents/skills/note-tagger/SKILL.md` | `stages.note_tagger` | `4bf38b61ee972274` |
-| [`note-writer`](../../.agents/skills/note-writer/SKILL.md) | `.agents/skills/note-writer/SKILL.md` | `stages.note_writer` | `0bfe02a5c8b7e4d5` |
+| [`note-writer`](../../.agents/skills/note-writer/SKILL.md) | `.agents/skills/note-writer/SKILL.md` | `stages.note_writer` | `8f9682aabe45504e` |
 | [`research-plan-narrator`](../../.agents/skills/research-plan-narrator/SKILL.md) | `.agents/skills/research-plan-narrator/SKILL.md` | not selected by any settings.yaml stage | `de814dcd25f6fd93` |
-| [`scout`](../../.agents/skills/scout/SKILL.md) | `.agents/skills/scout/SKILL.md` | `stages.scout` | `99b03bb745bb2b27` |
+| [`scout`](../../.agents/skills/scout/SKILL.md) | `.agents/skills/scout/SKILL.md` | `stages.scout` | `2a262b8f8dfd35c0` |
 | [`source-relevance`](../../.agents/skills/source-relevance/SKILL.md) | `.agents/skills/source-relevance/SKILL.md` | `stages.source_relevance` | `5d4bf430de99f6b0` |
 | [`speckit-git-commit`](../../.agents/skills/speckit-git-commit/SKILL.md) | `.agents/skills/speckit-git-commit/SKILL.md` | not selected by any settings.yaml stage | `5c7bf976944f5ab6` |
 | [`speckit-git-feature`](../../.agents/skills/speckit-git-feature/SKILL.md) | `.agents/skills/speckit-git-feature/SKILL.md` | not selected by any settings.yaml stage | `5a4e239e3c296661` |
@@ -55,7 +55,7 @@ These are already standalone, verbatim, tracked files. Copying them here would m
 | [`topic-classifier`](../../.agents/skills/topic-classifier/SKILL.md) | `.agents/skills/topic-classifier/SKILL.md` | `stages.topic_classifier` | `871c5ddd585aa528` |
 | [`topic-propose`](../../.agents/skills/topic-propose/SKILL.md) | `.agents/skills/topic-propose/SKILL.md` | `stages.topic_propose` | `f97b42dd86ae322d` |
 | [`vault-spec`](../../.agents/skills/vault-spec/SKILL.md) | `.agents/skills/vault-spec/SKILL.md` | `stages.vault_spec` | `ae51c236aceb1d77` |
-| [`verifier`](../../.agents/skills/verifier/SKILL.md) | `.agents/skills/verifier/SKILL.md` | `stages.verifier` | `f482fd2e03cc35b2` |
+| [`verifier`](../../.agents/skills/verifier/SKILL.md) | `.agents/skills/verifier/SKILL.md` | `stages.verifier` | `ecc8d8d432bf7772` |
 
 ## Deliberately not in the corpus
 

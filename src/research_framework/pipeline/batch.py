@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from research_framework._assets import default_settings_path
@@ -13,6 +13,7 @@ from research_framework.pipeline.gates import GateResult
 from research_framework.pipeline.research_plan import (
     PrioritizedTopic,
     ResearchPlan,
+    UpdateTopic,
     is_placeholder_topic,
 )
 from research_framework.pipeline.settings import SettingsError, load_vault_settings
@@ -21,6 +22,8 @@ __all__ = [
     "BatchAssignment",
     "BatchResult",
     "check_pace_at_midpoint",
+    "interleave_batches",
+    "interleave_kinds",
     "slice_topics_into_batches",
 ]
 
@@ -59,6 +62,11 @@ class BatchAssignment:
     batch_number: int
     topics: list[PrioritizedTopic]
     correction_directive: str = ""
+    # Spec 087 FR-005a: ``"new"`` writes new notes; ``"update"`` revisits the
+    # notes in ``updates`` (``topics`` then holds one stand-in row per note, so
+    # everything that counts or serialises a batch's topics keeps working).
+    kind: str = "new"
+    updates: list[UpdateTopic] = field(default_factory=list)
 
 
 @dataclass
@@ -74,6 +82,7 @@ class BatchResult:
     sg_gate_results: list[GateResult]
     topics: list[PrioritizedTopic] | None = None
     correction_directive_in: str = ""
+    kind: str = "new"
 
     def __post_init__(self) -> None:
         if any(
@@ -143,7 +152,7 @@ class BatchResult:
 
         sg = [g.to_dict() for g in self.sg_gate_results]
 
-        return {
+        out = {
             "schema_version": "1",
             "cycle_number": self.cycle_number,
             "batch_number": self.batch_number,
@@ -156,6 +165,9 @@ class BatchResult:
             "accepted": self.accepted,
             "correction_directive_in": self.correction_directive_in,
         }
+        if self.kind != "new":
+            out["kind"] = self.kind
+        return out
 
 
 def _batch_count_denominator(raw_bs: int, clamped: int) -> int:
@@ -208,8 +220,18 @@ def _drop_placeholder_topics(
 def slice_topics_into_batches(
     plan: ResearchPlan,
     batch_size: int | None = None,
+    *,
+    new_count: int | None = None,
+    update_count: int | None = None,
 ) -> list[BatchAssignment]:
-    """Split ``plan.priority_queue`` into sequential batches (priority order).
+    """Split the plan's work into sequential batches (priority order).
+
+    New-topic batches come from ``plan.priority_queue`` capped at the new-topic
+    count; update batches (spec 087 FR-005a) follow, cut from
+    ``plan.update_queue`` in the order the queue gives (oldest first) and capped
+    at ``update_count``. With no ``update_count`` (or 0) the result is exactly
+    what it was before updates existed: the new-topic cap is the cycle quota.
+    ``new_count`` defaults to the quota minus the update count.
 
     Placeholders are dropped from the queue before slicing — see
     :func:`_drop_placeholder_topics` for the rationale. The cycle quota is
@@ -221,16 +243,122 @@ def slice_topics_into_batches(
     )
     clamped = _clamp_batch_size(raw_bs)
     queue = _drop_placeholder_topics(list(plan.priority_queue), plan.cycle_number)
+    update_n = min(max(int(update_count or 0), 0), len(plan.update_queue))
+    if update_n <= 0:
+        return _slice_new_batches(
+            plan, queue, int(plan.cycle_quota), raw_bs=raw_bs, clamped=clamped
+        )
+    new_quota = (
+        int(new_count)
+        if new_count is not None
+        else max(0, int(plan.cycle_quota) - update_n)
+    )
+    new = _slice_new_batches(plan, queue, new_quota, raw_bs=raw_bs, clamped=clamped)
+    updates = _slice_update_batches(
+        plan, plan.update_queue[:update_n], clamped, first_number=1
+    )
+    return interleave_batches(new, updates)
+
+
+def interleave_kinds(n_new: int, n_update: int) -> list[str]:
+    """The dispatch order of ``n_new`` new-topic and ``n_update`` update batches.
+
+    Deterministic, Bresenham-style: after every prefix of ``i`` batches the
+    number of update batches is ``target(i)``, so each kind's share of any prefix
+    is within one batch of its overall share. A cycle cut short by its budget or
+    clock therefore has worked updates in proportion, instead of reaching them
+    last (spec 087).
+
+    * Updates at least a third of the batches: ``target(i) = ceil(i * u / t)``,
+      so the FIRST batch is an update batch (3 of 9: ``U N N U N N U N N``).
+    * Fewer: ``target(i) = floor(i * u / t)``, so the first update batch sits at
+      position ``ceil(t / u)`` exactly (1 of 4: ``N N N U``), never later.
+    * No update batches: all new, as before. No new batches: all updates.
+    """
+    total = n_new + n_update
+    if n_update <= 0 or total == 0:
+        return ["new"] * n_new
+    ceiling = n_update * 3 >= total
+    order: list[str] = []
+    placed = 0
+    for i in range(1, total + 1):
+        scaled = i * n_update
+        target = -(-scaled // total) if ceiling else scaled // total
+        if target > placed:
+            order.append("update")
+            placed += 1
+        else:
+            order.append("new")
+    return order
+
+
+def interleave_batches(
+    new: list[BatchAssignment], updates: list[BatchAssignment]
+) -> list[BatchAssignment]:
+    """Merge the two kinds in :func:`interleave_kinds` order, keeping each
+    kind's own order, and number the result in dispatch order (1..n)."""
+    new_iter, update_iter = iter(new), iter(updates)
+    merged = [
+        next(update_iter if kind == "update" else new_iter)
+        for kind in interleave_kinds(len(new), len(updates))
+    ]
+    return [replace(b, batch_number=n) for n, b in enumerate(merged, start=1)]
+
+
+def _slice_update_batches(
+    plan: ResearchPlan,
+    updates: list[UpdateTopic],
+    clamped: int,
+    *,
+    first_number: int,
+) -> list[BatchAssignment]:
+    out: list[BatchAssignment] = []
+    num_batches = math.ceil(len(updates) / clamped)
+    pos = 0
+    for bn in range(num_batches):
+        remaining = len(updates) - pos
+        chunk = min(clamped, math.ceil(remaining / (num_batches - bn)))
+        rows = updates[pos : pos + chunk]
+        pos += chunk
+        out.append(
+            BatchAssignment(
+                cycle_number=plan.cycle_number,
+                batch_number=first_number + bn,
+                topics=[
+                    PrioritizedTopic(
+                        title=u.stem,
+                        category=u.reason,
+                        priority_score=1.0,
+                        source_hints=list(u.prompted_by),
+                        provenance="update",
+                    )
+                    for u in rows
+                ],
+                kind="update",
+                updates=list(rows),
+            )
+        )
+    return out
+
+
+def _slice_new_batches(
+    plan: ResearchPlan,
+    queue: list[PrioritizedTopic],
+    quota: int,
+    *,
+    raw_bs: int,
+    clamped: int,
+) -> list[BatchAssignment]:
     n = len(queue)
     if n == 0:
         return []
 
-    topic_cap = min(int(plan.cycle_quota), n)
+    topic_cap = min(quota, n)
     if topic_cap <= 0:
         return []
 
     denom = _batch_count_denominator(raw_bs, clamped)
-    num_batches_cap = math.ceil(int(plan.cycle_quota) / clamped)
+    num_batches_cap = math.ceil(quota / clamped)
     num_batches_queue = math.ceil(topic_cap / denom)
     num_batches = min(num_batches_cap, num_batches_queue)
 

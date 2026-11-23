@@ -117,6 +117,37 @@ The cycle architecture is defined across:
 - `src/research_framework/pipeline/orchestrator.py` — multi-cycle
   orchestration + resume logic + budget tracking.
 
+### The update path (spec 087)
+
+A vault revisits the notes it has. The path, and where each part lives:
+
+```text
+scout report  topics_found.updates          steps/scout.py → currency.record_scout_updates
+due sweep     review_after_days, as_of      currency.queue_due_reviews (cycle start, no model)
+      ↓  both write `update:<stem>` entries
+backlog       origin `update`, reason       pipeline/backlog.py  (observe_update / close_update / reopen_update)
+      ↓
+plan          `## Update queue`             research_plan.generate_plan + currency.split_quota
+      ↓  pipeline.cycle_split × research_mode
+update batch  BatchAssignment(kind="update") batch.slice_topics_into_batches, steps/research.py
+      ↓  writer edits notes in place, reports update_outcomes
+UG-001        each outcome against git HEAD pipeline/update_outcomes.py (gates_step.UG001_update_outcomes)
+      ↓  fail: note restored, entry stays open; pass: close_update
+verifier      IX-currency-evidence,          pipeline/verifier.py (no model call)
+              IX-supersession-symmetry       fail: note restored, entry reopened (reopen_update)
+```
+
+The fields live in `vault/note_currency.py`, the one place that spells them:
+`as_of`, `currency` (`emerging`, `current`, `declining`, `superseded`,
+`retracted`), `supersedes`, `superseded_by`, `retraction_reason`. A note without
+them reads as `current` and never due; `countable()` is false for `superseded`
+and `retracted`, which `coverage.recompute_from_disk` then skips.
+`review_after_days` is a `NoteTypeConfig` field. `notes_updated` in the research
+report is derived from passing outcomes, and a `confirmed` outcome counts as no
+content. `vault_health` catches a supersession link that never became symmetric;
+`./vault status` shows the last cycle's outcomes by kind. Existing vaults gain
+the fields through the `stamp_note_currency` step of `layout_migration`.
+
 ### Loop continuation rules (Principle II)
 
 The orchestrator runs another cycle whenever ANY of these is true:

@@ -10,7 +10,7 @@ module).
 
 | Field | Type | Rule |
 | --- | --- | --- |
-| `schema_version` | string `"1.0"` | a newer major ⇒ read-only (spec § Edge Cases); a newer minor ⇒ read and write, unknown fields preserved |
+| `schema_version` | string `"1.1"` (a `1.0` store is read as is and written as `1.1`; `1.1` added the `update` origin, spec 087) | a newer major ⇒ read-only (spec § Edge Cases); a newer minor ⇒ read and write, unknown fields preserved |
 | `entries` | array of Entry | file order is insertion order; ids unique, or the store is malformed |
 
 Anything else at the top level is preserved and ignored.
@@ -21,9 +21,9 @@ Anything else at the top level is preserved and ignored.
 
 | Field | Type | Rule |
 | --- | --- | --- |
-| `id` | string | `topic:<key>`, `quarantine:<stem>` or `migrated:<NNNN>`; `<key>` = title, whitespace collapsed, stripped, case-folded (research R6). An operator entry without an `id` is assigned one on the next write |
+| `id` | string | `topic:<key>`, `quarantine:<stem>`, `migrated:<NNNN>` or `update:<note stem>`; `<key>` = title, whitespace collapsed, stripped, case-folded (research R6). An operator entry without an `id` is assigned one on the next write |
 | `title` | string | display title; for quarantine entries the stem; for migrated entries a 80-character prefix of the line |
-| `origin` | enum | `harvest`, `researcher`, `proposal`, `quarantine`, `operator`, `migrated` — who created the entry |
+| `origin` | enum | `harvest`, `researcher`, `proposal`, `quarantine`, `operator`, `migrated`, `update` — who created the entry |
 | `added` | date (`YYYY-MM-DD`) | creation date |
 | `first_seen_cycle` | integer ≥ 1 or `null` | `null` for operator and migrated entries |
 
@@ -38,6 +38,9 @@ Anything else at the top level is preserved and ignored.
 | `detail` | harvest (researcher flag), propose (justification), quarantine sweep (verifier reason), converter (migrated line) | free text |
 | `relation`, `parent_note`, `scope_warn` | propose | Phase 2 tangent metadata |
 | `stem`, `kind` | quarantine sweep | `kind` ∈ `rewrite`, `retry` |
+| `stem`, `reason`, `prompted_by`, `as_of` | scout, review, research (`update` entries, 1.1) | `reason` ∈ `new_material`, `operator`, `review_due`, strongest first, only ever replaced by a stronger one; `prompted_by` accumulates source URLs, deduplicated; `as_of` is the note's date when last seen |
+| `attempts`, `last_failure` | research (`record_update_failure`, `reopen_update`, 1.1) | `attempts` counts failed attempts (an outcome that did not hold against git, or that the verifier rejected); reset to 0 by a passing outcome (`close_update`) or by a sighting that adds a prompting source not yet recorded, never by a re-sighting that adds none. `last_failure` is `{reason, cycle?}`. At `pipeline.update_max_attempts` (default 2) the entry stays `open` but `update_topics()` no longer returns it; `set_aside_updates()` does |
+| `outcome`, `outcome_cycle` | research (`close_update`, 1.1) | `outcome` ∈ `confirmed`, `revised`, `superseded`, `retracted`; a later sighting that reopens the entry moves them to `outcome_history` (`[{outcome, cycle?, rejected?}]`, oldest first; `rejected` is the verifier's reason when the outcome was reopened by `reopen_update`, spec 087 FR-013) |
 | `updated` | every writer | date of the last module write to this entry |
 
 ### Status
@@ -45,7 +48,7 @@ Anything else at the top level is preserved and ignored.
 | Field | Type | Rule |
 | --- | --- | --- |
 | `status` | enum `open`, `resolved`, `dropped` | — |
-| `status_by` | `operator` or a writer name (`harvest`, `propose`, `quarantine`, `regrade`, `migration`) | who last set `status` |
+| `status_by` | `operator` or a writer name (`harvest`, `propose`, `quarantine`, `regrade`, `migration`, `scout`, `review`, `research`) | who last set `status` |
 | `status_written` | same enum | the `status` the module last wrote; absent or different from `status` ⇒ an operator changed it (research R5) |
 
 Any other field is operator-owned and preserved byte-for-byte in value.
@@ -79,6 +82,9 @@ Any other field is operator-owned and preserved byte-for-byte in value.
 | propose (`scripts/topic_propose.py`) | `observe_topic(cycle, title, origin=proposal, relation, parent_note, scope_warn, detail)` per accepted proposal | `topic:*` |
 | quarantine sweep (`orchestrator._quarantine_rejected_notes`) | `observe_quarantine(stem, kind, detail)` per quarantined note; `resolve_quarantine(live_stems)` | `quarantine:*` |
 | `./vault re-grade` | `resolve_quarantine_stem(stem)` | exactly `quarantine:<stem>` |
+| scout step (spec 087) | `observe_update(stem, "new_material", prompted_by)` per `topics_found.updates` row, and per `new` row dropped for matching an existing note | `update:*` |
+| due sweep (spec 087) | `observe_update(stem, "review_due", as_of=…)` per due note, one transaction | `update:*` |
+| research (spec 087) | `close_update(stem, outcome, cycle)` | exactly `update:<stem>` |
 | scaffold | `create_empty()` | — |
 | conversion step (`083` FR-018 step 2) | `convert_legacy(markdown) → store` | all |
 
@@ -91,7 +97,8 @@ id it creates the entry with the given origin, `status: open`,
 | Reader | Query |
 | --- | --- |
 | planner (`research_plan`) | `planner_topics()` — open, (operator-owned **or** `citation_count ≥ 1`); research R7 |
-| propose dedupe and prompt | `all_titles()` — every entry's key and display title, any status |
+| propose dedupe and prompt | `all_titles()` — every entry's key and display title, any status; `update` entries are not topics and are left out |
+| update queue (spec 087) | `update_topics()` — open `update` entries, `new_material` first, then oldest `as_of` (missing last), then store order; `planner_topics()` never returns them |
 | view renderer | everything, grouped (Entity 4) |
 | continuation trigger | **none** — it reads `cycle-NNN-harvest.json` (Q2) |
 

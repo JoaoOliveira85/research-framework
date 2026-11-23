@@ -192,6 +192,8 @@ def health_header(
     errors: int | None,
     warnings: int | None,
     gate_fail: bool = False,
+    updated: int | None = None,
+    confirmed: int | None = None,
 ) -> str:
     """Pure FR-013 one-line header (also consumed by ``vault status`` + spec 035)."""
     status = _derive_status(
@@ -204,8 +206,12 @@ def health_header(
     elapsed = _format_elapsed(elapsed_s)
     er = "?" if errors is None else str(errors)
     wr = "?" if warnings is None else str(warnings)
+    work = f"{nd} notes drafted, {vp} verifier-passed"
+    if updated is not None or confirmed is not None:
+        # Spec 087: update work is work. Counted only when the cycle had some.
+        work += f", {updated or 0} updated, {confirmed or 0} confirmed"
     return (
-        f"CYCLE {cycle_n}: {status} | {nd} notes drafted, {vp} verifier-passed | "
+        f"CYCLE {cycle_n}: {status} | {work} | "
         f"{sp} spent, {bd} budget | {elapsed} elapsed | {er} errors, {wr} warnings"
     )
 
@@ -293,7 +299,19 @@ def _collect_health_inputs(
     errors = gate_counts.get("FAIL", 0) + incident_errors
     warnings = gate_warn + len(capture_groups) + degraded_count
 
+    updated: int | None = None
+    confirmed: int | None = None
+    rows = [
+        r
+        for r in research.get("update_outcome_results") or []
+        if isinstance(r, dict) and r.get("status") == "passed"
+    ]
+    if rows:
+        confirmed = sum(1 for r in rows if r.get("outcome") == "confirmed")
+        updated = len(rows) - confirmed
     return {
+        "updated": updated,
+        "confirmed": confirmed,
         "exit_code": exit_code,
         "notes_drafted": notes_drafted,
         "verifier_passed": verifier_passed,
@@ -304,6 +322,31 @@ def _collect_health_inputs(
         "warnings": warnings,
         "gate_fail": gate_fail,
     }
+
+
+def _update_outcome_lines(results: object) -> list[str]:
+    """Spec 087: how the cycle's update batches ended, by outcome, and why any
+    failed (the failing notes were restored and their entries left open)."""
+    if not isinstance(results, list) or not results:
+        return []
+    counts: dict[str, int] = {}
+    failures: list[str] = []
+    for row in results:
+        if not isinstance(row, dict):
+            continue
+        if row.get("status") == "passed":
+            key = str(row.get("outcome") or "unknown")
+            counts[key] = counts.get(key, 0) + 1
+        else:
+            counts["failed"] = counts.get("failed", 0) + 1
+            failures.append(f"  - `{row.get('note')}`: {row.get('reason')}")
+    if not counts:
+        return []
+    line = ", ".join(f"{name} {n}" for name, n in sorted(counts.items()))
+    older = sum(1 for r in results if isinstance(r, dict) and r.get("pre_existing"))
+    if older:
+        line += f", {older} note(s) carry older defects"
+    return [f"- Update outcomes: **{line}**", *failures[:10]]
 
 
 def write_summary(
@@ -374,6 +417,7 @@ def write_summary(
                     out.append(f"  - … ({len(notes_updated) - 10} more)")
         else:
             out.append("- _no notes created or updated this cycle_")
+        out.extend(_update_outcome_lines(research.get("update_outcome_results")))
         if topics_new:
             out.append(f"- New scout topics: **{len(topics_new)}**")
         if topics_existing:

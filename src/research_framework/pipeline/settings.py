@@ -28,11 +28,20 @@ _DEFAULT_ESTIMATOR_CALIBRATION: dict[str, float] = {
 }
 _BUDGET_USD_ALIAS_WARNED = False
 
+DEFAULT_UPDATE_MAX_ATTEMPTS = 2
+
 DefaultAgent = Literal["claude", "codex", "cursor-agent", "ollama", "opencode"]
 
 _VALID_AGENTS = frozenset({"claude", "codex", "cursor-agent", "ollama", "opencode"})
 _PIPELINE_TYPED_KEYS = frozenset(
-    {"max_cycles", "cycles_per_run", "budget_usd", "backlog_promotion_threshold"}
+    {
+        "max_cycles",
+        "cycles_per_run",
+        "budget_usd",
+        "backlog_promotion_threshold",
+        "cycle_split",
+        "update_max_attempts",
+    }
 )
 # Stages whose source-module manifest may supply a `default_tier` when the
 # stage sets neither `tier` nor `model` (spec 020 FR-014a). `tier` itself is
@@ -124,6 +133,20 @@ _DEFAULT_COVERAGE_FACTOR: dict[str, float] = {
 }
 _VALID_CADENCE_BUCKETS = frozenset(_DEFAULT_CADENCE_FACTOR)
 _VALID_COVERAGE_BUCKETS = frozenset(_DEFAULT_COVERAGE_FACTOR)
+
+
+@dataclass(frozen=True)
+class CycleSplit:
+    """``pipeline.cycle_split`` (spec 087 FR-015): how a cycle's planned topics
+    are shared between new topics, updates to existing notes, and discovery.
+
+    Three non-negative integers summing to 100. Discovery has no work of its own
+    yet, so its share goes to new topics (:func:`..currency.split_quota`).
+    """
+
+    new: int = 60
+    updates: int = 30
+    discovery: int = 10
 
 
 @dataclass(frozen=True)
@@ -230,6 +253,11 @@ class VaultSettings:
     # (`cli._budget_resolve`) folds it into the resolved ceiling; this typed
     # copy validates it and keeps it out of `extras`.
     cycles_per_run: int | None = None
+    # pipeline.cycle_split (spec 087 FR-015); 60/30/10 when absent.
+    cycle_split: CycleSplit = field(default_factory=CycleSplit)
+    # pipeline.update_max_attempts (spec 087): failed attempts after which an
+    # update entry is set aside instead of retried.
+    update_max_attempts: int = 2
     stages: dict[str, StageSettings] = field(default_factory=dict)
     dimensions: list[str] = field(default_factory=list)
     default_agent: DefaultAgent = "claude"
@@ -371,6 +399,17 @@ def load_vault_settings(vault_dir: Path) -> VaultSettings:
             vault_dir=vault_dir,
         )
 
+        cycle_split = _parse_cycle_split(
+            pipeline.get("cycle_split"), vault_dir=vault_dir
+        )
+
+        update_max_attempts = _require_positive_int(
+            pipeline.get("update_max_attempts", DEFAULT_UPDATE_MAX_ATTEMPTS),
+            key="pipeline.update_max_attempts",
+            vault_dir=vault_dir,
+            label="update_max_attempts must be an integer >= 1",
+        )
+
         threshold_raw = pipeline.get("backlog_promotion_threshold", 2)
         backlog_promotion_threshold = _require_positive_int(
             threshold_raw,
@@ -443,6 +482,8 @@ def load_vault_settings(vault_dir: Path) -> VaultSettings:
     return VaultSettings(
         max_cycles=max_cycles,
         cycles_per_run=cycles_per_run,
+        cycle_split=cycle_split,
+        update_max_attempts=update_max_attempts,
         budget_usd=budget_usd,
         backlog_promotion_threshold=backlog_promotion_threshold,
         stages=stages,
@@ -829,6 +870,52 @@ def _parse_coverage_growth_cap(raw: object, *, vault_dir: Path) -> int:
             key="pipeline.coverage_growth_cap",
         )
     return int(raw)
+
+
+def _parse_cycle_split(raw: object, *, vault_dir: Path) -> CycleSplit:
+    """Parse ``pipeline.cycle_split``. Absent => 60/30/10.
+
+    Strict: the shares decide how much of every cycle goes to revisiting notes,
+    so a typo (``update:`` for ``updates:``, a share of ``"30"``, shares that
+    sum to 99) is an error naming the key, not a silent default.
+    """
+    key = "pipeline.cycle_split"
+    if raw is None:
+        return CycleSplit()
+    if not isinstance(raw, dict):
+        raise SettingsError(
+            f"{key} must be a mapping with new, updates and discovery, got {raw!r}",
+            vault_dir=vault_dir,
+            key=key,
+        )
+    names = ("new", "updates", "discovery")
+    unknown = sorted(str(k) for k in raw if k not in names)
+    missing = [n for n in names if n not in raw]
+    if unknown or missing:
+        raise SettingsError(
+            f"{key} must have exactly the keys new, updates and discovery"
+            + (f" (unknown: {', '.join(unknown)})" if unknown else "")
+            + (f" (missing: {', '.join(missing)})" if missing else ""),
+            vault_dir=vault_dir,
+            key=key,
+        )
+    shares = {
+        name: _require_non_negative_int(
+            raw[name],
+            key=f"{key}.{name}",
+            vault_dir=vault_dir,
+            label=f"{key}.{name} must be an integer >= 0",
+        )
+        for name in names
+    }
+    if sum(shares.values()) != 100:
+        raise SettingsError(
+            f"{key} shares must sum to 100, got {sum(shares.values())} "
+            f"({shares['new']}/{shares['updates']}/{shares['discovery']})",
+            vault_dir=vault_dir,
+            key=key,
+        )
+    return CycleSplit(**shares)
 
 
 def _parse_coverage_growth(raw: object, *, vault_dir: Path) -> float:
@@ -1372,6 +1459,17 @@ class UnknownSettingsKeyWarning(UserWarning):
     """A ``settings.yaml`` key no part of the framework recognises."""
 
 
+# Keys the shipped profiles used to carry and nothing ever read. A vault that
+# still has one loads as before (it is kept in ``extras``) and is told once why
+# it does nothing.
+_RETIRED_KEYS = {
+    "research_modes": (
+        "retired: it was never read. The mode is `research_mode` in "
+        "research.spec.md; `pipeline.cycle_split` shares the cycle"
+    ),
+}
+
+
 @dataclass(frozen=True)
 class UnknownKey:
     """One unrecognised key: its dotted path and the closest known sibling."""
@@ -1383,6 +1481,8 @@ class UnknownKey:
         text = f"unknown settings key {self.path!r}"
         if self.suggestion:
             text += f" - did you mean {self.suggestion!r}?"
+        if self.path in _RETIRED_KEYS:
+            text += f" ({_RETIRED_KEYS[self.path]})"
         return text
 
 
@@ -1403,6 +1503,8 @@ _PIPELINE_FIELDS = frozenset(
     {
         "max_cycles",
         "cycles_per_run",  # issue #33
+        "cycle_split",  # spec 087
+        "update_max_attempts",  # spec 087
         "budget_usd",
         "backlog_promotion_threshold",
         "coverage_growth",
@@ -1486,6 +1588,7 @@ def _build_schema() -> dict[str, Any]:
 
     schema["pipeline"] = {
         **dict.fromkeys(sorted(_PIPELINE_FIELDS)),
+        "cycle_split": {"new": None, "updates": None, "discovery": None},
         # Read from the raw file by the batch scheduler / source signals.
         "note_writer_batch_size": None,
         "max_batches_per_cycle": None,
@@ -1534,7 +1637,6 @@ _INERT_PATHS: tuple[tuple[str, ...], ...] = tuple(
         "schema_version",
         "communication",
         "model_router",
-        "research_modes",
         "exit_invariant",
         "citation",
         "commands",

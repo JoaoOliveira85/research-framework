@@ -420,7 +420,7 @@ catch stale references.
 - `docs/RELEASE.md` — release process (version tags and `workflow_dispatch`
   only; heading date = tag date; the Migration-notes rule;
   what `./vault update` does and does not rewrite).
-- `.specify/memory/constitution.md` — project principles (v1.6.1).
+- `.specify/memory/constitution.md` — project principles (v1.6.2).
   Sync Impact Reports at the top track principle changes.
 - `docs/adr/` — architecture decisions (immutable once accepted).
 - `examples/detailed-vault-spec.md` — the detailed

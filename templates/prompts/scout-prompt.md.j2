@@ -1,8 +1,9 @@
 {%- set primary = spec.data_sources | selectattr('priority', 'equalto', 1) | selectattr('role', 'equalto', 'behaviour') | list -%}
 {%- set code_first = primary and primary[0].repos -%}
+{%- set refresh = spec.research_mode == 'refresh' -%}
 {%- set coverage_cats = (spec.coverage_targets.categories if spec.coverage_targets is defined and spec.coverage_targets else []) -%}
 ---
-_template_version: 4
+_template_version: 7
 ---
 You are running BFS scout cycle {CYCLE_NUM} of a recursive research pass on the
 {{ spec.name }} vault.
@@ -48,8 +49,26 @@ This cycle's research plan is reproduced at the end of this prompt under
 `## Research Plan` (it is also on disk at `_pipeline/research-plan.md`).
 
 - Treat its priority queue as the canonical to-do list for this cycle.
+{% if not refresh %}
 - If it lists cycle focus categories (`## Cycle focus`), then
   at least 70% of your `topics_found.new` entries MUST belong to them.
+{% endif %}
+
+{% if refresh %}
+## This cycle refreshes: NO new topics are wanted
+
+This vault's `research_mode` is `refresh`. The cycle's work is revisiting the
+notes the vault already has, not growing it. So:
+
+- Leave `topics_found.new` EMPTY (`[]`); `topics_from_code` may be `[]` too. An
+  empty list is the correct report here, not a failure.
+- Your job is `topics_found.updates`: for each existing note you find NEW
+  material about (a newer release, a contradiction, a deprecation, a
+  successor), one row `{"note", "source_urls", "summary"}`. The notes the vault
+  already has are listed under "Already have a note" below.
+- Skip the steps below that extract and generalize new topics, and the
+  coverage-category and diversity rules that go with them.
+{% endif %}
 
 {% if code_first %}
 ## Source-of-Truth Rule (CODE-FIRST)
@@ -161,6 +180,7 @@ this shape:
 - ❌ `"customer_order_calculator_service"` (internal class/service name)
 - ❌ `"OMS Service"` (literal service name — provenance, not concept)
 
+{% if not refresh %}
 **`coverage_category`** must be one of the spec's configured categories so the
 SG-002 diversity gate sees you spreading topics across coverage gaps, not piling
 into one folder. Configured categories for this vault:
@@ -170,6 +190,7 @@ into one folder. Configured categories for this vault:
 {% endfor %}
 {% else %}
 (none configured — use "general")
+{% endif %}
 {% endif %}
 
 **`source_code_topic_ids` / `source_intent_ids`** trace each generalized topic
@@ -187,11 +208,11 @@ classes that all implement the same dispatch pattern → 1 topic).
 Scan all available data sources for NEW topics not yet covered in the vault.
 Required data sources — each MUST be consulted or explicitly skipped with a reason:
 
-{% for ds in spec.data_sources if ds.required %}
+{% for ds in spec.data_sources if ds.required and ds.applies_to(spec.research_mode) %}
 - **{{ ds.name }}** ({{ ds.type }}){{ ' — ' ~ ds.description if ds.description else '' }}{{ ' [' ~ ds.access_method ~ ']' if ds.access_method else '' }}
 {% endfor %}
 
-{% for ds in spec.data_sources if not ds.required %}
+{% for ds in spec.data_sources if not ds.required and ds.applies_to(spec.research_mode) %}
 - *(optional)* **{{ ds.name }}** ({{ ds.type }}){{ ' — ' ~ ds.description if ds.description else '' }}
 {% endfor %}
 
@@ -225,10 +246,27 @@ expected filename):
 {% endfor %}
 {% endif %}
 
-{% if exclude_topics is defined and exclude_topics %}
-## Already covered — skip these
+{% if existing_notes is defined and existing_notes %}
+## Already have a note — report new material, never a second note
 
-{% for t in exclude_topics %}
+The vault already has a note for each of these. Do NOT propose any of them in
+`topics_found.new` and do NOT list one in `proposed_filenames`. If your sources
+show something NEW about one — a newer release, a contradiction, a deprecation,
+a successor — report it in `topics_found.updates` (see the output section) with
+the source URL(s). A note with nothing new to report is simply left out.
+
+{% for t in existing_notes %}
+- {{ t }}
+{% endfor %}
+{% endif %}
+
+{% if rejected_topics is defined and rejected_topics %}
+## Rejected by the operator — skip these
+
+The operator rejected these topics for good. Do not propose them, and do not
+report updates for them.
+
+{% for t in rejected_topics %}
 - {{ t }}
 {% endfor %}
 {% endif %}
@@ -285,6 +323,13 @@ The report MUST follow the v2 schema (no extra commentary, JSON only):
       }
     ],
     "existing": ["<topic title that the vault already covers>"],
+    "updates": [
+      {
+        "note": "<existing note filename or stem>",
+        "source_urls": ["<URL of the source showing what is new>"],
+        "summary": "<what is new about it>"
+      }
+    ],
     "total": <int>
   },
   "proposed_filenames": ["<Topic Title>.md"],
@@ -299,12 +344,17 @@ The report MUST follow the v2 schema (no extra commentary, JSON only):
 
 Constraints:
 
+{% if refresh %}
+- `topics_found.new` and `topics_from_code` should be `[]` (no new topics are
+  wanted this cycle); report what you found in `topics_found.updates`.
+{% else %}
 - `topics_from_code` MUST be non-empty — code-first ordering violation otherwise.
 - `topics_found.new` MUST be non-empty (SG-001 will fail the cycle otherwise) and
   each row MUST be a dict with `title`, `coverage_category`, `proposed_filename`,
   and `source_code_topic_ids` (≥ 1 `CT-…` id).
 - `topics_found.new[*].coverage_category` values together MUST span at least
   `min(5, unfilled_coverage_categories)` distinct values (SG-002 diversity gate).
+{% endif %}
 - `topics_found.new[*].proposed_filename` MUST NOT start with any forbidden
   prefix listed in Step 4 (SG-003 abstraction gate).
 - Every `intent_from_confluence[*].parent_code_topic_id` MUST match a `topics_from_code[*].id`.
@@ -319,6 +369,11 @@ Constraints:
 - Do NOT write any vault notes in this phase — scout only.
 - Do NOT self-assess validation. `validate_cycle.py` and the SG-001..SG-005 gates read this JSON and decide CONTINUE/TERMINATE.
 
+- `topics_found.updates` is OPTIONAL (omit it or send `[]` when nothing changed).
+  Each row names a note the vault ALREADY has (`note`: its filename or stem, as
+  listed under "Already have a note"), the `source_urls` that show what is new,
+  and a one-line `summary`. Never propose a second note for the same topic.
+
 Output ONLY the JSON file at the path above. Do not print the JSON to stdout.
 {% else %}
 The report MUST follow this exact schema (no extra commentary, JSON only):
@@ -330,13 +385,16 @@ The report MUST follow this exact schema (no extra commentary, JSON only):
   "timestamp": "<ISO-8601 timestamp>",
   "prompt": "<short recap of this prompt>",
   "sources_consulted": {
-{% for ds in spec.data_sources %}
+{% for ds in spec.data_sources if ds.applies_to(spec.research_mode) %}
     "{{ ds.name | lower | replace(' ', '_') | replace('-', '_') }}": {"searched": true|false, "results_count": N, "reason": "<why skipped — REQUIRED if searched is false>"}{{ ',' if not loop.last else '' }}
 {% endfor %}
   },
   "topics_found": {
     "new": ["<topic title>", "..."],
     "existing": ["<already-covered topic>", "..."],
+    "updates": [
+      {"note": "<existing note filename or stem>", "source_urls": ["<URL>"], "summary": "<what is new>"}
+    ],
     "total": <int>
   },
   "proposed_filenames": ["<Topic Title>.md", "..."],
@@ -365,6 +423,11 @@ Constraints:
   reason, silence is not.
 - Do NOT write any vault notes in this phase — scout only.
 - Do NOT self-assess validation. A separate script reads this JSON and decides CONTINUE/TERMINATE.
+
+- `topics_found.updates` is OPTIONAL (omit it or send `[]` when nothing changed).
+  Each row names a note the vault ALREADY has (`note`: its filename or stem, as
+  listed under "Already have a note"), the `source_urls` that show what is new,
+  and a one-line `summary`. Never propose a second note for the same topic.
 
 Output ONLY the JSON file at the path above. Do not print the JSON to stdout.
 {% endif %}

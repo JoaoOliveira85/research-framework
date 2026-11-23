@@ -168,6 +168,30 @@ class PrioritizedTopic:
         }
 
 
+@dataclass(frozen=True)
+class UpdateTopic:
+    """One note the cycle is asked to revisit (spec 087 FR-004).
+
+    ``path`` is the note's vault-relative path ("" when it could not be found),
+    ``reason`` one of ``backlog.REASONS``, ``as_of`` the note's own date.
+    """
+
+    stem: str
+    path: str
+    reason: str
+    as_of: str | None = None
+    prompted_by: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "note": self.stem,
+            "path": self.path,
+            "reason": self.reason,
+            "as_of": self.as_of,
+            "prompted_by": list(self.prompted_by),
+        }
+
+
 @dataclass
 class ResearchPlan:
     """The hybrid research plan written before each cycle (E-002)."""
@@ -181,11 +205,21 @@ class ResearchPlan:
     cycle_quota: int
     exclusions: list[str]
     narrative_header: str = ""
+    # Spec 087: notes to revisit this cycle, and how the cycle's topics are
+    # shared. ``update_quota`` 0 (the default) means no update work was planned
+    # and the plan is written exactly as before.
+    update_queue: list[UpdateTopic] = field(default_factory=list)
+    new_quota: int | None = None
+    update_quota: int = 0
 
     # ----- serialisation -------------------------------------------------
 
+    @property
+    def plans_updates(self) -> bool:
+        return bool(self.update_quota > 0 and self.update_queue)
+
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "cycle_number": self.cycle_number,
             "generated_at": self.generated_at,
             "framework_version": self.framework_version,
@@ -197,6 +231,11 @@ class ResearchPlan:
             "exclusions": list(self.exclusions),
             "narrative_header": self.narrative_header,
         }
+        if self.plans_updates:
+            out["update_queue"] = [u.to_dict() for u in self.update_queue]
+            out["new_quota"] = self.new_quota
+            out["update_quota"] = self.update_quota
+        return out
 
     def to_markdown(self) -> str:
         """Render the plan to its on-disk Markdown shape.
@@ -214,6 +253,9 @@ class ResearchPlan:
             "cycle_quota": int(self.cycle_quota),
             "schema_version": SCHEMA_VERSION,
         }
+        if self.plans_updates:
+            fm["new_quota"] = int(self.new_quota or 0)
+            fm["update_quota"] = int(self.update_quota)
         fm_yaml = yaml.safe_dump(fm, sort_keys=False, default_flow_style=False).rstrip()
 
         lines: list[str] = ["---", fm_yaml, "---", ""]
@@ -283,6 +325,28 @@ class ResearchPlan:
         else:
             lines.append("- (none)")
         lines.append("")
+
+        # ## Update queue (spec 087): appended after the five contract sections,
+        # and written only when update work was planned, so a plan without it is
+        # byte-for-byte what it was before.
+        if self.plans_updates:
+            lines.append(_UPDATE_SECTION)
+            lines.append("")
+            lines.append(
+                f"This cycle plans {int(self.new_quota or 0)} new topic(s) and "
+                f"{int(self.update_quota)} update(s) to notes the vault already has."
+            )
+            lines.append(
+                "Each entry: `<note> · reason · as_of · path · prompting sources`."
+            )
+            lines.append("")
+            for i, u in enumerate(self.update_queue, start=1):
+                sources = " ".join(u.prompted_by) if u.prompted_by else "—"
+                lines.append(
+                    f"{i}. {u.stem} · {u.reason} · {u.as_of or '—'} "
+                    f"· {u.path or '—'} · {sources}"
+                )
+            lines.append("")
 
         return "\n".join(lines).rstrip() + "\n"
 
@@ -364,7 +428,45 @@ class ResearchPlan:
             cycle_quota=int(fm.get("cycle_quota", 0) or 0),
             exclusions=_parse_exclusion_bullets(section_text["## Exclusions"]),
             narrative_header=narrative_header,
+            update_queue=_parse_update_queue(body),
+            new_quota=(
+                int(fm["new_quota"]) if fm.get("new_quota") is not None else None
+            ),
+            update_quota=int(fm.get("update_quota", 0) or 0),
         )
+
+
+_UPDATE_SECTION = "## Update queue"
+"""Appended after ``## Exclusions``; see ``to_markdown``. Not one of
+:data:`_SECTIONS`, so plans written before spec 087 still parse."""
+
+
+def _parse_update_queue(body: str) -> list[UpdateTopic]:
+    """Rows of ``## Update queue``, as ``to_markdown`` writes them."""
+    at = body.find("\n" + _UPDATE_SECTION)
+    if at < 0:
+        return []
+    out: list[UpdateTopic] = []
+    for raw in body[at + len(_UPDATE_SECTION) + 1 :].splitlines():
+        if raw.startswith("## "):
+            break
+        m = re.match(r"^\d+\.\s+(.+)$", raw.strip())
+        if not m:
+            continue
+        parts = [p.strip() for p in m.group(1).split(" · ")]
+        if len(parts) < 5:
+            continue
+        stem, reason, as_of, path, sources = parts[:5]
+        out.append(
+            UpdateTopic(
+                stem=stem,
+                path="" if path == "—" else path,
+                reason=reason,
+                as_of=None if as_of == "—" else as_of,
+                prompted_by=() if sources == "—" else tuple(sources.split()),
+            )
+        )
+    return out
 
 
 def _parse_coverage_rows(section: str) -> list[CategoryFillState]:
@@ -495,6 +597,13 @@ def generate_plan(
             "or raise pipeline.max_cycles in settings.yaml (or pass --max-cycles)."
         )
 
+    # Spec 087 FR-004/FR-015: the share of this cycle that revisits notes.
+    from .currency import plan_updates
+
+    update_queue, new_quota, update_quota = plan_updates(
+        vault_dir, spec, cycle_quota, len(priority_queue)
+    )
+
     return ResearchPlan(
         cycle_number=cycle_number,
         generated_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -505,6 +614,9 @@ def generate_plan(
         cycle_quota=cycle_quota,
         exclusions=exclusions,
         narrative_header="",
+        update_queue=update_queue,
+        new_quota=new_quota,
+        update_quota=update_quota,
     )
 
 
@@ -804,13 +916,30 @@ at least one cycle. Capping at ``1.0`` keeps the existing
 ``[0.0, 1.0]`` priority-score contract intact."""
 
 
-def merge_scout_topics(
+@dataclass(frozen=True)
+class ScoutMerge:
+    """The result of :func:`merge_scout_topics_detailed`."""
+
+    plan: ResearchPlan
+    existing_note_rows: list[dict[str, Any]]
+    """``new`` rows the merge dropped because they match an existing note:
+    ``{"title", "key", "source_urls"}`` where ``key`` is the matched exclusion
+    slug (resolve it to a note stem with ``currency.resolve_note_stem``)."""
+
+
+def merge_scout_topics_detailed(
     plan: ResearchPlan,
     scout_report_path: Path,
     *,
     exclude_existing_titles: bool = True,
-) -> ResearchPlan:
-    """Return a new ``ResearchPlan`` with scout-discovered topics prepended.
+) -> ScoutMerge:
+    """Merge scout topics into the plan and report what the merge dropped.
+
+    Returns a :class:`ScoutMerge`: the new ``ResearchPlan`` plus the ``new`` rows
+    dropped because they match a note the vault already has (spec 087 FR-002).
+    Rows dropped as persistent rejects or out-of-scope are not reported.
+
+    The plan is a new ``ResearchPlan`` with scout-discovered topics prepended.
 
     Reads ``cycle-NNN-scout.json`` and converts every entry in
     ``topics_found.new`` into a :class:`PrioritizedTopic` carrying
@@ -833,11 +962,12 @@ def merge_scout_topics(
     ``exclude_existing_titles=False`` only when the caller has its own
     dedup pass downstream.
     """
+    existing: list[dict[str, Any]] = []
     if not scout_report_path.is_file():
         _LOG.info(
             "merge_scout_topics: %s not present — plan unchanged", scout_report_path
         )
-        return plan
+        return ScoutMerge(plan, existing)
 
     try:
         doc = json.loads(scout_report_path.read_text(encoding="utf-8"))
@@ -847,21 +977,21 @@ def merge_scout_topics(
             scout_report_path,
             exc,
         )
-        return plan
+        return ScoutMerge(plan, existing)
 
     if not isinstance(doc, dict):
         _LOG.warning(
             "merge_scout_topics: %s did not parse to a dict — plan unchanged",
             scout_report_path,
         )
-        return plan
+        return ScoutMerge(plan, existing)
 
     found = doc.get("topics_found")
     if not isinstance(found, dict):
-        return plan
+        return ScoutMerge(plan, existing)
     raw_new = found.get("new") or []
     if not isinstance(raw_new, list):
-        return plan
+        return ScoutMerge(plan, existing)
 
     seen_titles: set[str] = (
         {t.title.strip().casefold() for t in plan.priority_queue if t.title.strip()}
@@ -870,6 +1000,11 @@ def merge_scout_topics(
     )
     excluded_keys = {_exclusion_slug(e.split(": ", 1)[-1]) for e in plan.exclusions}
 
+    covered_keys = {
+        _exclusion_slug(e.split(": ", 1)[-1])
+        for e in plan.exclusions
+        if e.startswith("already-covered:")
+    }
     scout_topics: list[PrioritizedTopic] = []
     for entry in raw_new:
         # normalise_topic_row (shared with gates_step._topics_found_new_rows)
@@ -897,6 +1032,17 @@ def merge_scout_topics(
         proposed = str(entry.get("proposed_filename") or "")
         check_key = _exclusion_slug(proposed) or _exclusion_slug(title)
         if check_key and check_key in excluded_keys:
+            if check_key in covered_keys:
+                urls = entry.get("source_urls")
+                existing.append(
+                    {
+                        "title": title,
+                        "key": check_key,
+                        "source_urls": [str(u) for u in urls if str(u).strip()]
+                        if isinstance(urls, list)
+                        else [],
+                    }
+                )
             continue
         source_hints: list[str] = []
         for key in ("source_code_topic_ids", "source_intent_ids", "source_urls"):
@@ -916,14 +1062,30 @@ def merge_scout_topics(
         seen_titles.add(cf)
 
     if not scout_topics:
-        return plan
+        return ScoutMerge(plan, existing)
 
     merged_queue = scout_topics + list(plan.priority_queue)
     merged_queue.sort(key=lambda t: (-t.priority_score, t.category, t.title))
 
     import dataclasses as _dc
 
-    return _dc.replace(plan, priority_queue=merged_queue)
+    return ScoutMerge(_dc.replace(plan, priority_queue=merged_queue), existing)
+
+
+def merge_scout_topics(
+    plan: ResearchPlan,
+    scout_report_path: Path,
+    *,
+    exclude_existing_titles: bool = True,
+) -> ResearchPlan:
+    """Return a new ``ResearchPlan`` with scout-discovered topics prepended.
+
+    See :func:`merge_scout_topics_detailed`, which also reports the rows it
+    dropped for matching an existing note; this returns the plan alone.
+    """
+    return merge_scout_topics_detailed(
+        plan, scout_report_path, exclude_existing_titles=exclude_existing_titles
+    ).plan
 
 
 def _pick_orphan_category(coverage_state: list[CategoryFillState]) -> str:

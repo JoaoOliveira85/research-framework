@@ -58,12 +58,12 @@ pytest -m e2e              # tier-5/6 e2e only
 ruff check .               # lint baseline (must be zero)
 ```
 
-<!-- test-count: not_e2e=5078 total=5116 e2e_only=38 refreshed=2026-11-23 -->
+<!-- test-count: not_e2e=5306 total=5366 e2e_only=60 refreshed=2026-11-23 -->
 **This is the one place in the repo a test count is committed** — every
 other doc that mentions a count (README, CLAUDE.md, CONTRIBUTING.md,
 ARCHITECTURE.md, `docs/RELEASE.md`) points here instead of quoting its
-own copy. Today that's **5078** fast-loop tests (`pytest -m "not e2e"`),
-**5116** total (`pytest --collect-only -q`), **38** deselected as `e2e`.
+own copy. Today that's **5306** fast-loop tests (`pytest -m "not e2e"`),
+**5366** total (`pytest --collect-only -q`), **60** deselected as `e2e`.
 `tests/docs/test_one_source_per_fact.py` re-collects the suite and
 fails if the comment above no longer matches — when it fails, update
 the comment **and** the three bolded numbers in this paragraph
@@ -707,12 +707,23 @@ modules, and two uses of the word `quarantine` that are not the state directory
 are allowlisted with a reason, all in the guard's own constants. It cannot see a
 name assembled at run time; a tier-2 test plants a literal to prove it fires.
 
+**Settings key consumers (spec 087 SC-005).** `scripts/guards/settings_key_consumers.py`
+is a named line of the battery. It takes every key under `pipeline:` in the settings
+loader's schema (`pipeline/settings.py::_SCHEMA`: the typed fields and the keys other
+modules read from the raw file) and fails when no module under `src/` or `scripts/`
+other than the loader itself refers to it, as an identifier or a string literal.
+Docstrings and comments do not count, for the reason the parser-flag guard gives:
+prose is how an unread option looks read. Like its sibling it is a floor, not
+dataflow analysis, and it fails closed (a tier-2 test asserts it saw the keys and
+the modules it claims to, and plants an unread key to prove it fires).
+
 **Wrong-checkout package (issue #2).** A guard run as a script gets
 `scripts/guards/` on `sys.path[0]`, not `src/`, so `import research_framework`
 resolves through site-packages: a stale editable install or a sibling worktree
 is judged in place of the checkout under test. `scripts/guards/_checkout_package.py`
 asserts the package resolves under `<repo>/src`; `run_all.py`,
-`check_agent_asset_references.py` and `parser_flag_consumers.py` call it and
+`check_agent_asset_references.py`, `parser_flag_consumers.py` and
+`settings_key_consumers.py` call it and
 exit `2` with "imported research_framework from <X>, expected <repo>/src;
 reinstall with pip install -e ." instead of reporting on another tree. Exit `2`
 means the environment is wrong; `1` still means the guard found a defect.

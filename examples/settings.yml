@@ -102,6 +102,20 @@ pipeline:
   #   ∞   → set to a very high number to disable auto-promotion entirely
   # ---------------------------------------------------------------------
   backlog_promotion_threshold: 2
+  # How each cycle's planned topics are shared (spec 087): new topics, updates
+  # to notes the vault already has, and discovery (no work of its own yet, so
+  # its share goes to new topics). Three integers >= 0 summing to 100. The
+  # spec's `research_mode` decides how it applies: `bootstrap` gives updates 0,
+  # `refresh` gives new topics 0, `expand` (the default) uses it as written. A
+  # share with no work falls to the others.
+  cycle_split:
+    new: 60
+    updates: 30
+    discovery: 10
+  # After this many failed attempts (an outcome that did not hold against git,
+  # or that the verifier rejected) an update entry is set aside instead of
+  # retried every cycle. New material for the note gives it another try.
+  update_max_attempts: 2
 
   # ---------------------------------------------------------------------
   # Feature 017 — vault quality fix.
@@ -324,57 +338,6 @@ cycles:
   max_consecutive_verifier_rejections:
     initial: 6
     update: 3
-
-# ---------------------------------------------------------------------------
-# Research mode defaults.
-# Each run picks exactly one mode (auto-detected or `--mode`-overridden);
-# every cycle inside the run inherits it. The spec can override per-vault;
-# individual fields can also be overridden per-run by CLI flags.
-#
-# Mode semantics:
-#   bootstrap → breadth-first scaffolding of a new vault; creates new notes.
-#   refresh   → depth-first currency; only merges updates into existing
-#               notes. New topics get deferred to `_pipeline/research-backlog.md`.
-#   expand    → mixed: grows coverage AND refreshes. Ends with a tail-refresh
-#               cycle when `auto_tail_refresh` is true.
-#
-# Auto-detection (when --mode is not supplied):
-#   empty data_vault/   → bootstrap
-#   non-empty, no spec scope drift → refresh
-#   non-empty, scope widened or --mode expand → expand
-# ---------------------------------------------------------------------------
-research_modes:
-  bootstrap:
-    exit_condition: coverage_met          # gate against `_pipeline/state/coverage-targets.json`
-    scout_bias: new_topics
-    note_action: create                   # writer creates new notes
-    wind_down:
-      budget_pct_trigger: 0.8             # stop scouting when budget ≥80% spent
-      zero_scout_cycles_trigger: 2        # …or after 2 cycles of zero new topics
-      min_cycles_before_wind_down: 2      # never wind down before cycle 2
-
-  refresh:
-    exit_condition: no_new_deltas         # scout returns 0 deltas, verifier
-                                          #    accepts 0 merges → terminate
-    scout_bias: changes_since_snapshot    # uses `_pipeline/snapshots/` for diff
-    note_action: merge                    # updates existing notes only
-    new_topic_policy: backlog             # never write inline; defer to backlog
-    # refresh never needs wind-down: it doesn't scout for new topics, so the
-    # sprawl-without-substance failure mode doesn't apply.
-
-  expand:
-    exit_condition: coverage_met_or_no_deltas   # whichever fires last per pair
-    scout_bias: both                            # new topics AND deltas each cycle
-    note_action: create_or_merge
-    budget_split:
-      coverage_pct: 0.6                         # 60% of run budget for new notes
-      refresh_pct: 0.4                          # 40% for merging deltas
-    wind_down:
-      budget_pct_trigger: 0.8
-      zero_scout_cycles_trigger: 2
-      min_cycles_before_wind_down: 2
-    auto_tail_refresh: true                     # chain a final refresh cycle
-                                                # so we never exit on a scout
 
 # ---------------------------------------------------------------------------
 # Exit invariant (applies to all modes).

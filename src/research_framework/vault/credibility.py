@@ -366,6 +366,13 @@ def _coi_well_formed(entry: object) -> bool:
     return isinstance(entry.get("coi"), bool)
 
 
+def _subject(entry: object) -> str:
+    """What a violation is ABOUT: the cited URL (else the entry's text), so the
+    same flaw in an older version of the note can be recognised (spec 087)."""
+    url = citation_url(entry)
+    return (url or str(entry)).strip().rstrip("/").lower()
+
+
 def validate_credibility_shape(
     frontmatter: dict[str, Any],
     ctx: CredibilityContext,
@@ -385,6 +392,7 @@ def validate_credibility_shape(
                     "rule_id": "IX-credibility-malformed",
                     "location": location,
                     "message": "coi must be a boolean when present",
+                    "subject": _subject(entry),
                     "severity": "fail",
                 }
             )
@@ -396,6 +404,7 @@ def validate_credibility_shape(
                     "rule_id": "IX-credibility-malformed",
                     "location": location,
                     "message": f"credibility must be one of {sorted(_VALID_LEVEL_STRINGS)}",
+                    "subject": _subject(entry),
                     "severity": "fail",
                 }
             )
@@ -412,6 +421,7 @@ def validate_credibility_shape(
                         "rule_id": "IX-citation-malformed",
                         "location": location,
                         "message": "citation url is malformed (bad scheme or host)",
+                        "subject": _subject(entry),
                         "severity": "fail",
                     }
                 )
@@ -421,6 +431,7 @@ def validate_credibility_shape(
                         "rule_id": "IX-credibility-unresolved",
                         "location": location,
                         "message": "citation lacks credibility and no source default applies",
+                        "subject": _subject(entry),
                         "severity": unresolved_severity,
                     }
                 )
@@ -430,6 +441,7 @@ def validate_credibility_shape(
                     "rule_id": "IX-credibility-malformed",
                     "location": location,
                     "message": "credibility value is not a valid enum member",
+                    "subject": _subject(entry),
                     "severity": "fail",
                 }
             )

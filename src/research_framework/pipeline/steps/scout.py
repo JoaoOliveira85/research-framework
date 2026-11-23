@@ -286,6 +286,9 @@ def _phase(ctx: CycleContext) -> int:
             try:
                 quota = ss._cycle_quota_for_gates(pipeline_dir)
                 unfilled = ss._unfilled_categories_for_gates(vault_dir)
+                wanted, planned = ss._cycle_expectations_for_gates(
+                    vault_dir, spec_for_gates, quota, scout_body
+                )
                 r1 = _evaluate_step_gate(
                     cycles_dir,
                     cycle_num,
@@ -293,6 +296,8 @@ def _phase(ctx: CycleContext) -> int:
                     scout_body,
                     spec_for_gates,
                     quota,
+                    new_wanted=wanted,
+                    updates_planned=planned,
                 )
                 if r1.status == "FAIL":
                     return 2
@@ -421,6 +426,8 @@ def _phase(ctx: CycleContext) -> int:
                             scout_body,
                             spec_for_gates,
                             quota,
+                            new_wanted=wanted,
+                            updates_planned=planned,
                             label=" (post retry)",
                         )
                         if r1b.status == "FAIL":
@@ -468,6 +475,7 @@ def _phase(ctx: CycleContext) -> int:
     # DFS dispatcher loads it. Best-effort: an unreadable scout JSON
     # leaves the plan untouched (and is logged), it does not abort the
     # cycle.
+    dropped_for_existing_note: list[dict] = []
     try:
         plan_md_path = pipeline_dir / "research-plan.md"
         if plan_md_path.is_file() and scout_report.is_file():
@@ -478,7 +486,7 @@ def _phase(ctx: CycleContext) -> int:
                 ResearchPlan as _RP,
             )
             from ..research_plan import (
-                merge_scout_topics as _merge_scout_topics,
+                merge_scout_topics_detailed as _merge_scout_topics,
             )
 
             existing_text = plan_md_path.read_text(encoding="utf-8")
@@ -487,7 +495,9 @@ def _phase(ctx: CycleContext) -> int:
                 existing_plan,
                 priority_queue=sc._parse_priority_queue_from_plan_md(existing_text),
             )
-            merged_plan = _merge_scout_topics(existing_plan, scout_report)
+            merge = _merge_scout_topics(existing_plan, scout_report)
+            merged_plan = merge.plan
+            dropped_for_existing_note = merge.existing_note_rows
             added = sum(
                 1 for t in merged_plan.priority_queue if t.provenance == _SCOUT_PROV
             )
@@ -510,7 +520,62 @@ def _phase(ctx: CycleContext) -> int:
         _LOG.warning(
             f"[plan] WARN: merge_scout_topics failed: {exc} — using original plan"
         )
+
+    # --- Step 2.6: the scout reports on notes the vault already has ---
+    # `topics_found.updates` rows, and `new` rows the merge dropped because
+    # they match an existing note, become `new_material` update entries in the
+    # backlog (spec 087 FR-001/FR-002). Best-effort, like the merge above.
+    try:
+        if spec_for_gates is not None and scout_report.is_file():
+            from ..currency import record_scout_updates
+
+            queued = record_scout_updates(
+                vault_dir,
+                spec_for_gates,
+                scout_report,
+                dropped_for_existing_note,
+                cycle=cycle_num,
+            )
+            if queued:
+                _LOG.info(f"[currency] {queued} note(s) queued for update by the scout")
+                _refresh_plan_update_queue(
+                    pipeline_dir, cycles_dir, cycle_3, vault_dir, spec_for_gates
+                )
+    except Exception as exc:
+        _LOG.warning(f"[currency] WARN: recording scout updates failed: {exc}")
     return __exit
+
+
+def _refresh_plan_update_queue(
+    pipeline_dir: Path, cycles_dir: Path, cycle_3: str, vault_dir: Path, spec
+) -> None:
+    """Rewrite the plan's update queue now that the scout has queued updates.
+
+    The plan was generated before the scout ran, so notes the scout just found
+    new material for are not in it. Same-cycle dispatch (spec 087 US1) reads the
+    plan, so the queue and the split are recomputed against the backlog as it
+    stands, and the plan is written back (it is also what the operator reads).
+    """
+    plan_md_path = pipeline_dir / "research-plan.md"
+    if not plan_md_path.is_file():
+        return
+    from ..atomic_write import write_text as _aw_text
+    from ..currency import plan_updates
+    from ..research_plan import ResearchPlan as _RP
+
+    text = plan_md_path.read_text(encoding="utf-8")
+    plan = _RP.from_markdown(text)
+    plan = dataclasses.replace(
+        plan, priority_queue=sc._parse_priority_queue_from_plan_md(text)
+    )
+    queue, new_quota, update_quota = plan_updates(
+        vault_dir, spec, plan.cycle_quota, len(plan.priority_queue)
+    )
+    plan = dataclasses.replace(
+        plan, update_queue=queue, new_quota=new_quota, update_quota=update_quota
+    )
+    _aw_text(plan_md_path, plan.to_markdown())
+    _aw_text(cycles_dir / f"cycle-{cycle_3}-research-plan.md", plan.to_markdown())
 
 
 def run_scout(ctx: CycleContext) -> ScoutResult:

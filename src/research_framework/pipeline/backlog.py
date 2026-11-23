@@ -6,6 +6,10 @@ never hold a mutable entry: they pass *observations* and the module applies
 them under the field-ownership rule (FR-007). Readers get immutable query
 results. Nothing here parses the view back.
 
+Schema 1.1 (spec 087) adds the ``update`` origin: one ``update:<note stem>``
+entry per note that needs revisiting, written by the ``scout``, ``review`` and
+``research`` writers. A ``1.0`` store is read as is and written as ``1.1``.
+
 Failure policy (spec § Edge Cases): a malformed store, or one whose
 ``schema_version`` has a newer major than this build knows, is never written.
 Writers skip and log ``ERROR`` naming the file; readers return nothing (or, for
@@ -30,7 +34,7 @@ from .atomic_write import write_bytes, write_text
 _LOG = logging.getLogger(__name__)
 
 SCHEMA_MAJOR = 1
-SCHEMA_MINOR = 0
+SCHEMA_MINOR = 1
 SCHEMA_VERSION = f"{SCHEMA_MAJOR}.{SCHEMA_MINOR}"
 
 # The writer name the orchestrator's quarantine sweep uses. Named so that no
@@ -38,10 +42,34 @@ SCHEMA_VERSION = f"{SCHEMA_MAJOR}.{SCHEMA_MINOR}"
 # ``quarantine`` literal as the state directory's name).
 QUARANTINE_WRITER = "quarantine"
 
-WRITERS = ("harvest", "propose", QUARANTINE_WRITER, "regrade", "migration")
-ORIGINS = ("harvest", "researcher", "proposal", "quarantine", "operator", "migrated")
+WRITERS = (
+    "harvest",
+    "propose",
+    QUARANTINE_WRITER,
+    "regrade",
+    "migration",
+    "scout",
+    "review",
+    "research",
+)
+ORIGINS = (
+    "harvest",
+    "researcher",
+    "proposal",
+    "quarantine",
+    "operator",
+    "migrated",
+    "update",
+)
 STATUSES = ("open", "resolved", "dropped")
 KINDS = ("rewrite", "retry")
+# Why a note is queued for an update, strongest first (spec 087 FR-003).
+REASONS = ("new_material", "operator", "review_due")
+# How a worked update ended (spec 087 FR-012).
+OUTCOMES = ("confirmed", "revised", "superseded", "retracted")
+# Writers that may observe an update entry; only ``research`` closes one.
+_UPDATE_OBSERVERS = frozenset({"scout", "review", "research"})
+_UPDATE_CLOSERS = frozenset({"research"})
 
 # The view and its overwritten copy are not state (083 does not register
 # them), so this module spells them.
@@ -50,7 +78,7 @@ _OVERWRITTEN_REL = "_pipeline/research-backlog.md.overwritten"
 _FOOTER_PREFIX = "<!-- research-backlog-view sha256="
 _FOOTER_RE = re.compile(r"<!-- research-backlog-view sha256=([0-9a-f]{64}) -->\n")
 
-_ID_RE = re.compile(r"^(topic|quarantine|migrated):.+$")
+_ID_RE = re.compile(r"^(topic|quarantine|migrated|update):.+$")
 _VERSION_RE = re.compile(r"^(\d+)\.(\d+)$")
 _DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 
@@ -92,6 +120,22 @@ class TopicRef:
     detail: str
 
 
+@dataclass(frozen=True)
+class UpdateRef:
+    """An immutable view of one open note-update entry (spec 087)."""
+
+    id: str
+    stem: str
+    reason: str
+    as_of: str | None
+    prompted_by: tuple[str, ...]
+    first_seen_cycle: int | None
+    last_seen_cycle: int | None
+    attempts: int = 0
+    last_failure: str | None = None
+    last_failure_cycle: int | None = None
+
+
 # ---------------------------------------------------------------------------
 # Paths and identity
 # ---------------------------------------------------------------------------
@@ -120,6 +164,10 @@ def topic_id(title: str) -> str:
 
 def quarantine_id(stem: str) -> str:
     return f"quarantine:{stem}"
+
+
+def update_id(stem: str) -> str:
+    return f"update:{stem}"
 
 
 def migrated_id(number: int) -> str:
@@ -174,7 +222,7 @@ def _validate_entry(entry: Any, index: int, *, lenient_enums: bool) -> str | Non
     if "id" in entry:
         ident = entry["id"]
         if not isinstance(ident, str) or not _ID_RE.match(ident):
-            return f"{where}.id {ident!r} does not match topic:|quarantine:|migrated:"
+            return f"{where}.id {ident!r} does not match topic:|quarantine:|migrated:|update:"
     if entry["origin"] not in ORIGINS and not lenient_enums:
         return f"{where}.origin {entry['origin']!r} is not a known origin"
     if not isinstance(entry["origin"], str):
@@ -203,9 +251,39 @@ def _validate_entry(entry: Any, index: int, *, lenient_enums: bool) -> str | Non
         and all(isinstance(p, str) for p in entry["cited_from"])
     ):
         return f"{where}.cited_from must be an array of strings"
-    for name in ("detail", "relation", "parent_note", "stem"):
+    for name in ("detail", "relation", "parent_note", "stem", "as_of"):
         if name in entry and not isinstance(entry[name], str):
             return f"{where}.{name} must be a string"
+    if "reason" in entry and entry["reason"] not in REASONS and not lenient_enums:
+        return f"{where}.reason {entry['reason']!r} is not a known reason"
+    if "outcome" in entry and entry["outcome"] not in OUTCOMES and not lenient_enums:
+        return f"{where}.outcome {entry['outcome']!r} is not a known outcome"
+    if "outcome_cycle" in entry and not (
+        _is_int(entry["outcome_cycle"]) and entry["outcome_cycle"] >= 1
+    ):
+        return f"{where}.outcome_cycle must be an integer >= 1"
+    if "prompted_by" in entry and not (
+        isinstance(entry["prompted_by"], list)
+        and all(isinstance(p, str) for p in entry["prompted_by"])
+    ):
+        return f"{where}.prompted_by must be an array of strings"
+    if "attempts" in entry and not (
+        _is_int(entry["attempts"]) and entry["attempts"] >= 0
+    ):
+        return f"{where}.attempts must be an integer >= 0"
+    if "last_failure" in entry:
+        failure = entry["last_failure"]
+        if not (
+            isinstance(failure, dict)
+            and isinstance(failure.get("reason"), str)
+            and (failure.get("cycle") is None or _is_int(failure["cycle"]))
+        ):
+            return f"{where}.last_failure must be {{reason: string, cycle?: integer}}"
+    if "outcome_history" in entry and not (
+        isinstance(entry["outcome_history"], list)
+        and all(isinstance(h, dict) for h in entry["outcome_history"])
+    ):
+        return f"{where}.outcome_history must be an array of objects"
     if "scope_warn" in entry and not isinstance(entry["scope_warn"], bool):
         return f"{where}.scope_warn must be a boolean"
     if "kind" in entry and entry["kind"] not in KINDS:
@@ -214,6 +292,10 @@ def _validate_entry(entry: Any, index: int, *, lenient_enums: bool) -> str | Non
         for name in ("stem", "kind"):
             if name not in entry:
                 return f"{where} (quarantine) is missing required field {name!r}"
+    if entry["origin"] == "update":
+        for name in ("stem", "reason"):
+            if name not in entry:
+                return f"{where} (update) is missing required field {name!r}"
     return None
 
 
@@ -230,6 +312,8 @@ def _assign_missing_ids(entries: list[dict[str, Any]]) -> bool:
             continue
         if entry["origin"] == "quarantine":
             entry["id"] = quarantine_id(entry["stem"])
+        elif entry["origin"] == "update":
+            entry["id"] = update_id(entry["stem"])
         elif entry["origin"] == "migrated":
             entry["id"] = migrated_id(next_number)
             next_number += 1
@@ -321,6 +405,18 @@ def _normalize(entries: list[dict[str, Any]]) -> None:
         if entry.get("status") != entry.get("status_written"):
             entry["status_by"] = "operator"
             entry["status_written"] = entry["status"]
+
+
+def _reason_rank(reason: Any) -> int:
+    """Lower is stronger; an unrecognised (newer-minor) reason ranks last."""
+    return REASONS.index(reason) if reason in REASONS else len(REASONS)
+
+
+def _upgrade_minor(data: dict[str, Any]) -> None:
+    """Write an older minor of this major as the current one (1.0 -> 1.1)."""
+    parsed = _parse_version(data.get("schema_version"))
+    if parsed is not None and parsed[0] == SCHEMA_MAJOR and parsed[1] < SCHEMA_MINOR:
+        data["schema_version"] = SCHEMA_VERSION
 
 
 def _dumps(data: dict[str, Any]) -> str:
@@ -511,6 +607,154 @@ class Transaction:
             entry["kind"] = kind
         self._set(entry, "detail", detail)
 
+    def _archive_outcome(self, entry: dict[str, Any]) -> None:
+        """Move a recorded outcome to ``outcome_history`` when the entry reopens."""
+        if "outcome" not in entry:
+            return
+        record: dict[str, Any] = {"outcome": entry.pop("outcome")}
+        cycle = entry.pop("outcome_cycle", None)
+        if cycle is not None:
+            record["cycle"] = cycle
+        entry.setdefault("outcome_history", []).append(record)
+
+    def observe_update(
+        self,
+        stem: str,
+        reason: str,
+        prompted_by: Iterable[str] | None = None,
+        cycle: int | None = None,
+        as_of: str | None = None,
+    ) -> None:
+        """Upsert the one ``update:<stem>`` entry for a note (spec 087 FR-003).
+
+        A second sighting updates the entry. ``new_material`` outranks
+        ``operator``, which outranks ``review_due``: a reason is only ever
+        replaced by a stronger one. ``prompted_by`` accumulates, deduplicated.
+        An entry a writer resolved is reopened, its outcome moved to history.
+        """
+        if self._writer not in _UPDATE_OBSERVERS:
+            raise ValueError(f"writer {self._writer!r} does not observe updates")
+        if reason not in REASONS:
+            raise ValueError(f"reason must be one of {REASONS}, got {reason!r}")
+        if not stem:
+            raise ValueError("update stem is empty")
+        if cycle is not None and (
+            not isinstance(cycle, int) or isinstance(cycle, bool) or cycle < 1
+        ):
+            raise ValueError(f"cycle must be an integer >= 1, got {cycle!r}")
+        sources = [] if prompted_by is None else [str(p) for p in prompted_by if p]
+        entry = self._find(update_id(stem))
+        if entry is None:
+            entry = {
+                "id": update_id(stem),
+                "title": stem,
+                "origin": "update",
+                "status": "open",
+                "status_by": self._writer,
+                "status_written": "open",
+                "added": self._today,
+                "updated": self._today,
+                "first_seen_cycle": cycle,
+                "last_seen_cycle": cycle,
+                "seen_cycles": 0 if cycle is None else 1,
+                "stem": stem,
+                "reason": reason,
+                "prompted_by": [],
+            }
+            self._entries.append(entry)
+        else:
+            self._stamp_seen(entry, cycle)
+            if self._reopen(entry):
+                self._archive_outcome(entry)
+            entry["updated"] = self._today
+            if _reason_rank(reason) < _reason_rank(entry.get("reason")):
+                entry["reason"] = reason
+            entry.setdefault("reason", reason)
+            entry["stem"] = stem
+        known = list(entry.get("prompted_by", []))
+        fresh = [s for s in dict.fromkeys(sources) if s not in known]
+        known.extend(fresh)
+        entry["prompted_by"] = known
+        if fresh and entry.get("attempts"):
+            # New material is a reason to try again; a re-sighting that adds no
+            # source (a review that came due again) is not.
+            entry["attempts"] = 0
+        self._set(entry, "as_of", as_of)
+
+    def close_update(self, stem: str, outcome: str, cycle: int | None = None) -> bool:
+        """Resolve the open ``update:<stem>`` entry and record how it ended.
+
+        Returns ``False`` (nothing changed) when there is no entry or its
+        status is not the module's to change.
+        """
+        if self._writer not in _UPDATE_CLOSERS:
+            raise ValueError(f"writer {self._writer!r} does not close updates")
+        if outcome not in OUTCOMES:
+            raise ValueError(f"outcome must be one of {OUTCOMES}, got {outcome!r}")
+        entry = self._find(update_id(stem))
+        if entry is None or not self._resolve(entry):
+            return False
+        entry["outcome"] = outcome
+        if cycle is not None:
+            entry["outcome_cycle"] = cycle
+        else:
+            entry.pop("outcome_cycle", None)
+        entry.pop("attempts", None)  # a passing outcome settles the note
+        entry.pop("last_failure", None)
+        return True
+
+    def record_update_failure(
+        self, stem: str, reason: str, cycle: int | None = None
+    ) -> bool:
+        """Count one failed attempt on an update entry and remember why.
+
+        A dispatched update that did not pass UG-001 (or that the verifier
+        rejected) used up an attempt; at ``pipeline.update_max_attempts`` the
+        entry is set aside (:func:`update_topics`). Returns ``False`` when
+        there is no such entry.
+        """
+        if self._writer not in _UPDATE_CLOSERS:
+            raise ValueError(f"writer {self._writer!r} does not record failures")
+        entry = self._find(update_id(stem))
+        if entry is None:
+            return False
+        entry["attempts"] = int(entry.get("attempts", 0)) + 1
+        failure: dict[str, Any] = {"reason": reason}
+        if cycle is not None:
+            failure["cycle"] = cycle
+        entry["last_failure"] = failure
+        entry["updated"] = self._today
+        return True
+
+    def reopen_update(self, stem: str, reason: str, cycle: int | None = None) -> bool:
+        """Reopen an update entry whose recorded outcome did not stand.
+
+        The verifier rejected the outcome the entry was closed with (spec 087
+        FR-013), so the note was restored and the work is still owed. The
+        outcome moves to ``outcome_history`` with the reason it was rejected.
+        Only an entry a writer resolved reopens; an operator's status is never
+        touched. Returns ``False`` when nothing changed.
+        """
+        if self._writer not in _UPDATE_CLOSERS:
+            raise ValueError(f"writer {self._writer!r} does not reopen updates")
+        entry = self._find(update_id(stem))
+        if entry is None or not self._reopen(entry):
+            return False
+        record: dict[str, Any] = {"outcome": entry.pop("outcome", None)}
+        entry_cycle = entry.pop("outcome_cycle", cycle)
+        if entry_cycle is not None:
+            record["cycle"] = entry_cycle
+        record["rejected"] = reason
+        entry.setdefault("outcome_history", []).append(record)
+        entry["updated"] = self._today
+        # a rejected outcome is a failed attempt too
+        entry["attempts"] = int(entry.get("attempts", 0)) + 1
+        failure = {"reason": reason}
+        if entry_cycle is not None:
+            failure["cycle"] = entry_cycle
+        entry["last_failure"] = failure
+        return True
+
     def resolve_covered(self, existing_stems: Iterable[str]) -> int:
         """Resolve open harvest/researcher topics whose note now exists."""
         stems = {title_key(s) for s in existing_stems}
@@ -568,6 +812,7 @@ def update(vault_dir: Path, writer: str, fn: Callable[[Transaction], None]) -> b
     before = _dumps(loaded.data) if loaded.path.exists() else None
     _normalize(loaded.entries)
     fn(Transaction(writer, loaded.entries))
+    _upgrade_minor(loaded.data)
     after = _dumps(loaded.data)
     if after != before:
         write_text(loaded.path, after)
@@ -669,6 +914,64 @@ def observe_quarantine(
     )
 
 
+def observe_update(
+    vault_dir: Path,
+    writer: str,
+    *,
+    stem: str,
+    reason: str,
+    prompted_by: Iterable[str] | None = None,
+    cycle: int | None = None,
+    as_of: str | None = None,
+) -> bool:
+    return update(
+        vault_dir,
+        writer,
+        lambda tx: tx.observe_update(
+            stem, reason, prompted_by=prompted_by, cycle=cycle, as_of=as_of
+        ),
+    )
+
+
+def close_update(
+    vault_dir: Path, stem: str, outcome: str, *, cycle: int | None = None
+) -> bool:
+    """Close one update entry as the ``research`` writer; ``True`` if applied."""
+    closed: list[bool] = []
+    applied = update(
+        vault_dir,
+        "research",
+        lambda tx: closed.append(tx.close_update(stem, outcome, cycle)),
+    )
+    return applied and bool(closed and closed[0])
+
+
+def reopen_update(
+    vault_dir: Path, stem: str, reason: str, *, cycle: int | None = None
+) -> bool:
+    """Reopen one update entry as the ``research`` writer; ``True`` if applied."""
+    reopened: list[bool] = []
+    applied = update(
+        vault_dir,
+        "research",
+        lambda tx: reopened.append(tx.reopen_update(stem, reason, cycle)),
+    )
+    return applied and bool(reopened and reopened[0])
+
+
+def record_update_failure(
+    vault_dir: Path, stem: str, reason: str, *, cycle: int | None = None
+) -> bool:
+    """Count a failed attempt on one update entry as the ``research`` writer."""
+    recorded: list[bool] = []
+    applied = update(
+        vault_dir,
+        "research",
+        lambda tx: recorded.append(tx.record_update_failure(stem, reason, cycle)),
+    )
+    return applied and bool(recorded and recorded[0])
+
+
 def resolve_covered(vault_dir: Path, existing_stems: Iterable[str]) -> bool:
     stems = list(existing_stems)
     return update(vault_dir, "harvest", lambda tx: tx.resolve_covered(stems))
@@ -726,10 +1029,90 @@ def planner_topics(vault_dir: Path) -> list[TopicRef]:
     ]
 
 
+def _update_sort_key(item: tuple[int, dict[str, Any]]) -> tuple[int, int, str, int]:
+    index, entry = item
+    as_of = entry.get("as_of") or ""
+    return (
+        0 if entry.get("reason") == "new_material" else 1,
+        0 if as_of else 1,
+        as_of,
+        index,
+    )
+
+
+def max_update_attempts(vault_dir: Path) -> int:
+    """``pipeline.update_max_attempts`` of the vault (the default when unreadable)."""
+    from .settings import (
+        DEFAULT_UPDATE_MAX_ATTEMPTS,
+        SettingsError,
+        load_vault_settings,
+    )
+
+    try:
+        return load_vault_settings(vault_dir).update_max_attempts
+    except SettingsError:
+        return DEFAULT_UPDATE_MAX_ATTEMPTS
+
+
+def _update_ref(e: dict[str, Any]) -> UpdateRef:
+    failure = e.get("last_failure") if isinstance(e.get("last_failure"), dict) else {}
+    return UpdateRef(
+        id=e["id"],
+        stem=e["stem"],
+        reason=e["reason"],
+        as_of=e.get("as_of") or None,
+        prompted_by=tuple(e.get("prompted_by", ())),
+        first_seen_cycle=e.get("first_seen_cycle"),
+        last_seen_cycle=e.get("last_seen_cycle"),
+        attempts=int(e.get("attempts", 0)),
+        last_failure=failure.get("reason") if failure else None,
+        last_failure_cycle=failure.get("cycle") if failure else None,
+    )
+
+
+def _open_updates(
+    vault_dir: Path, *, set_aside: bool, max_attempts: int | None
+) -> list[UpdateRef]:
+    limit = max_update_attempts(vault_dir) if max_attempts is None else max_attempts
+    queued = [
+        (index, entry)
+        for index, entry in enumerate(_read_for_query(vault_dir))
+        if entry["status"] == "open"
+        and entry["origin"] == "update"
+        and (int(entry.get("attempts", 0)) >= limit) is set_aside
+    ]
+    queued.sort(key=_update_sort_key)
+    return [_update_ref(e) for _, e in queued]
+
+
+def update_topics(
+    vault_dir: Path, *, max_attempts: int | None = None
+) -> list[UpdateRef]:
+    """Open ``update`` entries: ``new_material`` first, then oldest ``as_of``.
+
+    A missing ``as_of`` sorts last within its reason group; ties keep store
+    order. An entry that has failed ``max_attempts`` times (default
+    ``pipeline.update_max_attempts``) is set aside: still ``open`` in the store
+    and listed by :func:`set_aside_updates`, but never queued again until new
+    material arrives.
+    """
+    return _open_updates(vault_dir, set_aside=False, max_attempts=max_attempts)
+
+
+def set_aside_updates(
+    vault_dir: Path, *, max_attempts: int | None = None
+) -> list[UpdateRef]:
+    """Open update entries set aside after repeated failed attempts, in the
+    order :func:`update_topics` would have queued them."""
+    return _open_updates(vault_dir, set_aside=True, max_attempts=max_attempts)
+
+
 def all_titles(vault_dir: Path) -> list[TitleRef]:
     """Every entry's key and display title, whatever its status (FR-013)."""
     return [
-        TitleRef(title_key(e["title"]), e["title"]) for e in _read_for_query(vault_dir)
+        TitleRef(title_key(e["title"]), e["title"])
+        for e in _read_for_query(vault_dir)
+        if e["origin"] != "update"  # a note to revisit is not a topic
     ]
 
 
@@ -806,6 +1189,27 @@ def _proposal_line(entry: dict[str, Any]) -> str:
     return f"{line} — {detail}" if detail else line
 
 
+def _update_line(entry: dict[str, Any]) -> str:
+    count = len(entry.get("prompted_by", []))
+    as_of = entry.get("as_of") or "unknown"
+    return (
+        f"- **{_one_line(entry.get('stem', entry['title']))}** — "
+        f"{entry.get('reason', 'unknown')} · as of {as_of} · "
+        f"{_plural(count, 'prompting source')}"
+    )
+
+
+def _set_aside_line(entry: dict[str, Any]) -> str:
+    failure = (
+        entry.get("last_failure") if isinstance(entry.get("last_failure"), dict) else {}
+    )
+    where = f" (cycle {failure['cycle']})" if failure.get("cycle") is not None else ""
+    return (
+        f"{_update_line(entry)} · last failure{where}: "
+        f"{_one_line(failure.get('reason', 'unknown'))}"
+    )
+
+
 def _migrated_line(entry: dict[str, Any]) -> str:
     return f"- {entry.get('detail', entry['title']).replace(chr(10), ' ')}"
 
@@ -830,9 +1234,30 @@ def _coverage_lines(vault_dir: Path) -> list[str]:
     return lines
 
 
+def _update_section_lines(
+    vault_dir: Path, update_entries: list[tuple[int, dict[str, Any]]]
+) -> list[str]:
+    limit = max_update_attempts(vault_dir)
+    active = [e for _, e in update_entries if int(e.get("attempts", 0)) < limit]
+    aside = [e for _, e in update_entries if int(e.get("attempts", 0)) >= limit]
+    lines = [_update_line(e) for e in active]
+    if aside:
+        lines += [
+            "",
+            f"### Set aside after {limit} failed attempts",
+            "",
+            *(_set_aside_line(e) for e in aside),
+        ]
+    return lines
+
+
 def _render_text(vault_dir: Path, entries: list[dict[str, Any]]) -> str:
     open_entries = [(i, e) for i, e in enumerate(entries) if e["status"] == "open"]
     open_entries.sort(key=_first_seen_sort_key)
+    update_entries = sorted(
+        (item for item in open_entries if item[1]["origin"] == "update"),
+        key=_update_sort_key,
+    )
     sections: dict[str, list[str]] = {
         "harvest": [],
         "researcher": [],
@@ -840,6 +1265,7 @@ def _render_text(vault_dir: Path, entries: list[dict[str, Any]]) -> str:
         "operator": [],
         "proposal": [],
         "migrated": [],
+        "update": _update_section_lines(vault_dir, update_entries),
     }
     for _, entry in open_entries:
         origin = entry["origin"]
@@ -856,10 +1282,13 @@ def _render_text(vault_dir: Path, entries: list[dict[str, Any]]) -> str:
             sections["operator"].append(_operator_line(entry))
         elif origin == "proposal":
             sections["proposal"].append(_proposal_line(entry))
+        elif origin == "update":
+            continue  # rendered above, in its own order
         elif origin == "migrated":
             sections["migrated"].append(_migrated_line(entry))
     headings = (
         ("harvest", "Follow-on topics (harvest)"),
+        ("update", "Notes to update"),
         ("researcher", "Flagged by the researcher"),
         ("quarantine", "Quarantined notes"),
         ("operator", "Added by the operator"),

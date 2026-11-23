@@ -114,6 +114,18 @@ def validate(spec: SpecConfig, *, vault_dir: Path | None = None) -> None:
                 f"'{nt.authoritative_role}' (must be one of {list(_AUTHORITY_ROLES)})"
             )
 
+    for nt in spec.note_types:
+        # spec 087 FR-009: the review interval is a positive whole number of
+        # days. ``bool`` is an ``int`` subclass, so refuse it explicitly.
+        days = nt.review_after_days
+        if days is not None and (
+            isinstance(days, bool) or not isinstance(days, int) or days <= 0
+        ):
+            errors.append(
+                f"note_types '{nt.name}' has invalid review_after_days "
+                f"{days!r} (must be a positive integer number of days)"
+            )
+
     # spec 053 FR-001: authoritative_role is opt-in for back-compat with
     # pre-053 specs, but once ANY note_type adopts it the gates resolve every
     # note's claim-type from it — so it must be declared consistently. A

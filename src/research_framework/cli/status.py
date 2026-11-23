@@ -223,6 +223,67 @@ def _render_pipeline_status_block(pipeline_status: dict[str, object]) -> str:
     return "\n".join(lines)
 
 
+_OUTCOME_KINDS = ("confirmed", "revised", "superseded", "retracted")
+
+
+def _update_outcomes(vault_dir: Path) -> dict[str, object] | None:
+    """The last cycle's update outcomes by kind (spec 087 FR-019), or ``None``
+    when that cycle worked no updates.
+
+    Read from the pipeline-owned sidecar ``cycle-NNN-update-outcomes.json``
+    (``update_outcomes.apply_batch``): ``failed`` counts outcomes that did not
+    hold against HEAD or that the verifier rejected, whatever they claimed.
+    """
+    last = _find_last_summary(vault_dir / "_pipeline" / "cycles")
+    if last is None:
+        return None
+    cycle_num = last[0]
+    sidecar = (
+        vault_dir
+        / "_pipeline"
+        / "cycles"
+        / f"cycle-{cycle_num:03d}-update-outcomes.json"
+    )
+    try:
+        results = json.loads(sidecar.read_text(encoding="utf-8")).get("results")
+    except (OSError, ValueError, AttributeError):
+        return None
+    if not isinstance(results, list) or not results:
+        return None
+    counts: dict[str, object] = {"cycle": cycle_num}
+    counts.update({kind: 0 for kind in _OUTCOME_KINDS}, failed=0, older_defects=0)
+    for row in results:
+        if not isinstance(row, dict):
+            continue
+        if row.get("pre_existing"):
+            counts["older_defects"] = int(counts["older_defects"]) + 1  # type: ignore[call-overload]
+        if row.get("status") != "passed":
+            counts["failed"] = int(counts["failed"]) + 1  # type: ignore[call-overload]
+        elif row.get("outcome") in _OUTCOME_KINDS:
+            kind = str(row["outcome"])
+            counts[kind] = int(counts[kind]) + 1  # type: ignore[call-overload]
+    return counts
+
+
+def _set_aside_count(vault_dir: Path) -> int:
+    """Update entries set aside after repeated failed attempts (spec 087)."""
+    from ..pipeline import backlog
+
+    try:
+        return len(backlog.set_aside_updates(vault_dir))
+    except Exception:  # noqa: BLE001 - status never fails
+        return 0
+
+
+def _outcomes_line(outcomes: dict[str, object]) -> str:
+    kinds = (*_OUTCOME_KINDS, "failed")
+    body = ", ".join(f"{kind} {outcomes[kind]}" for kind in kinds)
+    older = int(outcomes.get("older_defects") or 0)  # type: ignore[call-overload]
+    if older:
+        body += f", {older} note(s) carry older defects"
+    return f"  update outcomes (cycle {outcomes['cycle']}): {body}"
+
+
 def render_inactive(vault_dir: Path) -> str:
     """Plain-text NO-active-cycle block (contract §3 FR-011)."""
     pipeline = vault_dir / "_pipeline"
@@ -255,6 +316,12 @@ def render_inactive(vault_dir: Path) -> str:
     if deferred:
         preview = deferred[0]
         lines.append(f"  deferred warnings: {len(deferred)} ({preview})")
+    outcomes = _update_outcomes(vault_dir)
+    if outcomes is not None:
+        lines.append(_outcomes_line(outcomes))
+    aside = _set_aside_count(vault_dir)
+    if aside:
+        lines.append(f"  updates set aside after repeated failures: {aside}")
     return "\n".join(lines)
 
 
@@ -309,6 +376,8 @@ def build_status_json(vault_dir: Path) -> dict[str, object]:
     holding the notice (spec 083 FR-016); a migrated vault's object is unchanged.
     """
     doc = _build_status_json(vault_dir)
+    doc["update_outcomes"] = _update_outcomes(vault_dir)
+    doc["update_set_aside"] = _set_aside_count(vault_dir)
     if state_layout.is_legacy_layout(vault_dir):
         doc["legacy_layout"] = _LEGACY_NOTICE
     return doc

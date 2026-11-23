@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -319,6 +321,30 @@ def _quality_fixture_inputs_fingerprint(
         if fake_agent_responses_src
         else "",
     }
+
+
+def commit_vault(vault: Path, message: str = "test: vault baseline") -> None:
+    """Make ``vault`` a git repository whose HEAD holds everything on disk.
+
+    Update outcomes (spec 087 UG-001) are judged against ``HEAD``, which the
+    framework's auto-commit keeps clean at the start of a cycle; a test vault
+    has to say so itself.
+    """
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "tests",
+        "GIT_AUTHOR_EMAIL": "tests@example.invalid",
+        "GIT_COMMITTER_NAME": "tests",
+        "GIT_COMMITTER_EMAIL": "tests@example.invalid",
+    }
+    for args in (
+        ["init", "-q"],
+        ["add", "-A", "-f", "data_vault"],
+        ["commit", "-q", "-m", message, "--allow-empty"],
+    ):
+        subprocess.run(
+            ["git", *args], cwd=vault, env=env, check=True, capture_output=True
+        )
 
 
 def build_quality_fixture(

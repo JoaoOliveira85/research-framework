@@ -897,6 +897,18 @@ def _check_research_artifact(vault: Path) -> tuple[list[str], dict[str, Any]]:
     if created or updated:
         return ([], summary)
 
+    # Spec 087: an update that held (``confirmed`` writes no note) is the
+    # research phase doing its work.
+    from .currency import update_work_made_progress
+
+    if update_work_made_progress(doc):
+        summary["updates_worked"] = sum(
+            1
+            for r in doc.get("update_outcome_results") or []
+            if isinstance(r, dict) and r.get("status") == "passed"
+        )
+        return ([], summary)
+
     if queue_size == 0:
         # An honest no-op. Record WHY, so "nothing to research" is
         # distinguishable in `pipeline status` from "researched nothing".

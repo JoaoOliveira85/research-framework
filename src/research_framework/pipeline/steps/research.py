@@ -17,6 +17,7 @@ from .._helpers import state as st
 from ..atomic_write import write_json as _atomic_write_json
 from ..gates import GateResult, run_gate
 from ..gates_step import SG004_validate_vault_wrapper, SG005_frontmatter_completeness
+from ..report_reconcile import CycleRecord
 from ._types import CycleContext, ResearchResult, ScoutResult, VerifierRejection
 
 _LOG = logging.getLogger(__name__)
@@ -97,7 +98,29 @@ def _phase(ctx: CycleContext) -> int:
             _LOG.error(f"ERROR: could not load research plan: {exc}")
             return 2
         eff_bs = ss._effective_note_writer_batch_size(vault_dir, plan)
-        assignments = slice_topics_into_batches(plan, eff_bs)
+        # Spec 087: the plan's update queue is shared with new topics against
+        # the queue as it is NOW (the scout has merged its topics since the
+        # plan was written). No update queue: exactly the pre-087 slicing.
+        new_cap: int | None = None
+        update_cap = 0
+        from ..currency import updates_supported
+
+        if plan.update_queue and updates_supported(vault_dir)[0]:
+            from ..currency import cycle_mode, cycle_split_shares, split_quota
+            from ..research_plan import is_placeholder_topic
+
+            new_cap, update_cap = split_quota(
+                int(plan.cycle_quota),
+                cycle_split_shares(vault_dir),
+                mode=cycle_mode(vault_dir),
+                new_available=sum(
+                    1 for t in plan.priority_queue if not is_placeholder_topic(t)
+                ),
+                updates_available=len(plan.update_queue),
+            )
+        assignments = slice_topics_into_batches(
+            plan, eff_bs, new_count=new_cap, update_count=update_cap
+        )
         max_batches_cfg = ss._max_batches_per_cycle(vault_dir)
         data_vault = vault_dir / "data_vault"
         data_vault.mkdir(parents=True, exist_ok=True)
@@ -107,8 +130,18 @@ def _phase(ctx: CycleContext) -> int:
         cumulative_notes = 0
         note_writer_invocations = 0
         cycle_quota = max(1, int(plan.cycle_quota))
-        n_batches_total = len(assignments)
+        if update_cap and new_cap is not None:
+            cycle_quota = max(1, new_cap)  # the new-topic share only
+        updates_worked = 0
+        # The synthetic mid-batch check counts new-topic batches only.
+        n_batches_total = sum(1 for a in assignments if a.kind != "update")
         cap_tripped = False
+        new_ordinal = 0  # position among the NEW-topic batches (updates interleave)
+        new_history: list[tuple[object, BatchResult]] = []
+        # Every note a batch of THIS cycle wrote. An agent rewrites the shared
+        # report on each batch, so a later (update) batch's report drops the
+        # earlier batches' notes_created; they are merged back after every batch.
+        record = CycleRecord(vault_dir)
 
         for i, assignment in enumerate(assignments):
             runtime_state = ctx.runtime_state
@@ -118,8 +151,12 @@ def _phase(ctx: CycleContext) -> int:
                     "degradation threshold tripped"
                 )
                 return 2
-            if cumulative_notes >= cycle_quota:
-                break
+            is_update = assignment.kind == "update"
+            if is_update:
+                if updates_worked >= update_cap:
+                    continue
+            elif cumulative_notes >= cycle_quota:
+                continue
             if note_writer_invocations >= max_batches_cfg:
                 cap_tripped = True
                 if runtime_state is not None:
@@ -131,22 +168,33 @@ def _phase(ctx: CycleContext) -> int:
                 )
                 break
 
-            incoming_gate_correction = correction_text
-            if i > 0:
-                pace_ph = st._empty_batch_result_for_pace(
-                    cycle_num, assignment.batch_number
-                )
-                pace_dir = check_pace_at_midpoint(
-                    plan,
-                    bundled_history + [(assignment, pace_ph)],
-                    assignment.batch_number,
-                )
-                if pace_dir is not None:
-                    correction_text = (
-                        correction_text + "\n\n" + pace_dir.to_prompt_block()
-                    ).strip()
+            if is_update:
+                # A new-topic batch's correction ("write notes, do not edit
+                # existing ones") must not reach a batch that edits them. It is
+                # kept, not dropped: the next NEW batch still gets it.
+                incoming_gate_correction = ""
+            else:
+                new_ordinal += 1
+                incoming_gate_correction = correction_text
+                if new_ordinal > 1:
+                    # The pace and midpoint checks count new-topic batches only;
+                    # update batches interleave with them, so batch numbers are
+                    # replaced by the position among the new ones.
+                    ordinal_assignment = dataclasses.replace(
+                        assignment, batch_number=new_ordinal
+                    )
+                    pace_ph = st._empty_batch_result_for_pace(cycle_num, new_ordinal)
+                    pace_dir = check_pace_at_midpoint(
+                        plan,
+                        new_history + [(ordinal_assignment, pace_ph)],
+                        new_ordinal,
+                    )
+                    if pace_dir is not None:
+                        correction_text = (
+                            correction_text + "\n\n" + pace_dir.to_prompt_block()
+                        ).strip()
 
-            prompt_correction = correction_text
+            prompt_correction = "" if is_update else correction_text
             batch_rendered = (
                 cycles_dir
                 / f"cycle-{cycle_3}-batch-{assignment.batch_number:03d}-dfs.md"
@@ -160,6 +208,7 @@ def _phase(ctx: CycleContext) -> int:
                 batch_topics=assignment.topics,
                 correction_directive=prompt_correction,
                 exclusions=plan.exclusions,
+                update_topics=assignment.updates if is_update else None,
             )
 
             seen_before: set[str] = set()
@@ -215,8 +264,9 @@ def _phase(ctx: CycleContext) -> int:
             new_paths = st._discover_new_markdown_files(data_vault, seen_before)
             note_paths = sorted(new_paths, key=lambda p: p.as_posix())
             note_names = [p.relative_to(vault_dir).as_posix() for p in note_paths]
-            if note_names:
-                st._merge_research_notes(research_report, note_names)
+            record.absorb(research_report, note_names)
+            if record.notes_created:
+                st._merge_research_notes(research_report, record.notes_created)
             # B.2 (post-mortem 2026-05-30): backfill the framework-owned
             # `lifecycle.created_at_cycle` field so orchestrator's
             # "what did this cycle produce?" queries work. Idempotent;
@@ -227,11 +277,17 @@ def _phase(ctx: CycleContext) -> int:
             sg4 = run_gate(SG004_validate_vault_wrapper, vault_dir)
             sg5 = run_gate(SG005_frontmatter_completeness, note_paths)
             sg_results: list[GateResult] = [sg4, sg5]
-            syn = cc._synthetic_mid_batch_empty_sg005(
-                assignment.batch_number,
-                n_batches_total,
-                note_paths,
-                len(assignment.topics),
+            # An update batch is judged on the notes it was assigned, not on new
+            # files: it is never failed for writing none.
+            syn = (
+                None
+                if is_update
+                else cc._synthetic_mid_batch_empty_sg005(
+                    new_ordinal,
+                    n_batches_total,
+                    note_paths,
+                    len(assignment.topics),
+                )
             )
             if syn is not None:
                 sg_results.append(syn)
@@ -241,6 +297,21 @@ def _phase(ctx: CycleContext) -> int:
                 )
                 if fraud is not None:
                     sg_results.append(fraud)
+
+            if is_update:
+                # Spec 087 FR-012: the writer proposes an outcome per assigned
+                # note; UG-001 decides it against HEAD, restores the notes that
+                # fail and closes the entries that pass.
+                from .. import update_outcomes
+
+                judged = update_outcomes.apply_batch(
+                    vault_dir,
+                    cycles_dir,
+                    research_report,
+                    cycle_num,
+                    assignment.updates,
+                )
+                sg_results.append(judged.gate)
 
             ts1 = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
             batch_result = BatchResult(
@@ -253,6 +324,7 @@ def _phase(ctx: CycleContext) -> int:
                 sg_gate_results=sg_results,
                 topics=assignment.topics,
                 correction_directive_in=incoming_gate_correction,
+                kind=assignment.kind,
             )
             bout = (
                 cycles_dir / f"cycle-{cycle_3}-batch-{assignment.batch_number:03d}.json"
@@ -262,9 +334,24 @@ def _phase(ctx: CycleContext) -> int:
                 batch_result.to_dict(),
             )
             bundled_history.append((assignment, batch_result))
+            if not is_update:
+                new_history.append(
+                    (
+                        dataclasses.replace(assignment, batch_number=new_ordinal),
+                        batch_result,
+                    )
+                )
 
-            cumulative_notes += len(note_names)
-            if batch_result.accepted:
+            if is_update:
+                updates_worked += len(assignment.updates)
+            else:
+                cumulative_notes += len(note_names)
+            if is_update:
+                # An update batch's failures are handled by restoring its notes
+                # and leaving their entries open; it neither produces nor
+                # consumes a correction pass, so a pending one is left as it is.
+                pass
+            elif batch_result.accepted:
                 correction_text = ""
             else:
                 failing = [g for g in sg_results if g.status == "FAIL"]
@@ -277,6 +364,9 @@ def _phase(ctx: CycleContext) -> int:
                     )
 
         research_report.parent.mkdir(parents=True, exist_ok=True)
+        if research_report.is_file():
+            # what the last agent wrote is not what the cycle did (see the module)
+            record.apply(cycles_dir, research_report, cycle_num)
         if not research_report.is_file():
             _atomic_write_json(
                 research_report,
@@ -321,6 +411,18 @@ def _phase(ctx: CycleContext) -> int:
             )
     except Exception as e:
         _LOG.warning(f"WARN: verifier stage failed: {e} — continuing")
+
+    # --- Step 3b': record how the cycle's update batches went (spec 087) ---
+    # After the verifier, which can still reject an outcome: the loop-continuation
+    # and Condition B decisions read this, so an update-only cycle is not read as
+    # "nothing happened" and a cycle whose updates all failed is not read as
+    # progress.
+    try:
+        from ..currency import stamp_update_work
+
+        stamp_update_work(vault_dir, cycle_num, research_report)
+    except Exception as e:
+        _LOG.warning(f"WARN: could not record the cycle's update work: {e}")
 
     # --- Step 3c: auto-normalize case-mismatched wikilinks (0.2.31) ---
     # The note-writer agent emits natural-language wikilinks

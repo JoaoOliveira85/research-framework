@@ -108,6 +108,13 @@ use `no_sources`, `exclusion_match`, or another honest reason instead.
   increments that category's `met_count` by 1; picking the wrong one skews
   progress. Pick the category whose description best matches the note's
   primary contribution.
+- MUST stamp `as_of:` (today's date: the day the note was last checked against
+  its sources) and `currency: current` on a new note (`CLAUDE.md` § "Currency").
+- In an UPDATE batch (the prompt carries `## Update topics (JSON)`) the assigned
+  notes ARE the assignment: revise them in place, never write a second note for
+  the same topic, and report one outcome per note in `update_outcomes`; the
+  prompt defines the four outcomes. Outside an update batch, do not edit
+  existing notes.
 - SHOULD fill `applicability:` when the claim is narrower than the vault —
   when it holds for one market, field, audience, product
   version or time window, and would be wrong applied outside it. Use short

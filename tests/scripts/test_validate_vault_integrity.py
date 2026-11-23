@@ -35,6 +35,8 @@ def _valid_note(vault: Path, stem: str, title: str, *, related: str = "[]") -> N
         f"related: {related}\n"
         "created: 2026-01-01\n"
         "updated: 2026-01-01\n"
+        "as_of: 2026-01-01\n"
+        "currency: current\n"
         f"---\n{body}\n",
         encoding="utf-8",
     )

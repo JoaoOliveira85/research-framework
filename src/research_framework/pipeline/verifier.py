@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import difflib
 import json
 import logging
 import re
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -17,11 +19,13 @@ from typing import Any
 import yaml
 
 from research_framework._assets import skill_instructions
+from research_framework.pipeline import update_outcomes
 from research_framework.pipeline.process_tree import (
     popen_session,
     terminate_process_tree,
 )
 from research_framework.pipeline.settings import SettingsError, load_vault_settings
+from research_framework.vault import note_currency as nc
 from research_framework.vault.frontmatter import (
     FrontmatterParseError,
     parse_frontmatter_str,
@@ -36,6 +40,9 @@ class VerifierVerdict:
     status: str  # "verified" | "pending" | "rejected"
     violations: list[dict] = field(default_factory=list)
     suggested_fix: str | None = None
+    # Spec 087: flaws the note already had before the update being judged. They
+    # do not reject it; they are recorded (update-outcomes sidecar) and counted.
+    pre_existing: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -54,6 +61,7 @@ class VerifierSummary:
                     "status": v.status,
                     "violations": v.violations,
                     "suggested_fix": v.suggested_fix,
+                    **({"pre_existing": v.pre_existing} if v.pre_existing else {}),
                 }
                 for v in self.verdicts
             ],
@@ -137,6 +145,7 @@ def deterministic_wikilink_violations(
         {
             "rule_id": "IX-wikilink-title-corruption",
             "location": f"note:{note_rel} first-wikilink:[[{first}]]",
+            "subject": first.strip().lower(),
             "message": (
                 f"first body wikilink [[{first}]] renames this note's own title "
                 f"'{title}' (acronym {upper}) to '{resolved}'"
@@ -145,7 +154,233 @@ def deterministic_wikilink_violations(
     ]
 
 
+def violation_key(violation: dict[str, Any]) -> tuple[str, str]:
+    """Which flaw a violation is, for telling an old one from a new one.
+
+    The key is the rule and its SUBJECT, the thing the rule fired about:
+
+    * ``IX-credibility-*`` / ``IX-citation-malformed``: the cited URL;
+    * ``IX-wikilink-title-corruption``: the offending first wikilink's text;
+    * anything else (model-reported rules, too): the message, whitespace and case
+      folded.
+
+    The location is not part of the key (a note's path and a line move);
+    multiplicity is: see :func:`split_pre_existing`.
+    """
+    subject = violation.get("subject") or violation.get("message") or ""
+    return (
+        str(violation.get("rule_id") or ""),
+        " ".join(str(subject).split()).lower(),
+    )
+
+
+def split_pre_existing(
+    current: list[dict[str, Any]], committed: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """``(new, pre_existing)``: a violation is pre-existing when the committed
+    version fires the same rule about the same subject, once per occurrence it
+    had. A second occurrence, a new subject or a different rule is new."""
+    allowance = Counter(violation_key(v) for v in committed)
+    new: list[dict[str, Any]] = []
+    old: list[dict[str, Any]] = []
+    for v in current:
+        key = violation_key(v)
+        if allowance[key] > 0:
+            allowance[key] -= 1
+            old.append(v)
+        else:
+            new.append(v)
+    return new, old
+
+
+def _pre_existing_record(violation: dict[str, Any]) -> dict[str, str]:
+    rule = str(violation.get("rule_id") or "model")
+    detail = str(violation.get("message") or violation.get("subject") or "")
+    where = str(violation.get("location") or "")
+    return {"rule": rule, "detail": f"{detail} ({where})" if where else detail}
+
+
+CURRENCY_RULE_IDS = ("IX-currency-evidence", "IX-supersession-symmetry")
+"""Spec 087 rules a verdict is reached on without a model (FR-007, FR-013)."""
+
+_EVIDENCE_LEVELS = ("primary", "corroborated")
+
+
+def _head_standing(vault_dir: Path, note_rel: str) -> str | None:
+    """The note's ``currency`` at git HEAD, or ``None`` when it had none there."""
+    from research_framework.pipeline import vault_git
+    from research_framework.vault import note_currency as nc
+
+    head = vault_git.head_content(vault_dir, note_rel)
+    if head is None:
+        return None
+    try:
+        head_fm, _ = parse_frontmatter_str(head)
+    except FrontmatterParseError:
+        return None
+    return nc.effective(head_fm)[0]
+
+
+def _evidence_violation(
+    vault_dir: Path,
+    note_rel: str,
+    fm: dict[str, Any],
+    evidence_url: str | None,
+    standing: str,
+) -> dict[str, str] | None:
+    """IX-currency-evidence: why a changed ``superseded``/``retracted`` standing
+    is not supported, or ``None`` when its evidence stands."""
+    from research_framework.spec.parser import parse as parse_spec
+    from research_framework.vault.credibility import (
+        CredibilityUnresolved,
+        build_credibility_context,
+        citation_url,
+        effective_level,
+        iter_source_url_entries,
+    )
+
+    def violation(message: str) -> dict[str, str]:
+        return {
+            "rule_id": "IX-currency-evidence",
+            "location": f"note:{note_rel}",
+            "message": f"{standing} without supporting evidence: {message}",
+            "severity": "fail",
+        }
+
+    if not evidence_url:
+        return violation("the update outcome cites no evidence_url")
+    cited = next(
+        (
+            entry
+            for entry in iter_source_url_entries(fm)
+            if (citation_url(entry) or "").strip() == evidence_url.strip()
+        ),
+        None,
+    )
+    if cited is None:
+        return violation(f"{evidence_url} is not among the note's source_urls")
+    spec_path = vault_dir / "research.spec.md"
+    try:
+        ctx = build_credibility_context(parse_spec(spec_path), vault_dir)
+        level = effective_level(cited, fm, ctx)
+    except CredibilityUnresolved:
+        return violation(f"the credibility of {evidence_url} cannot be resolved")
+    except Exception as exc:  # no readable spec: nothing to resolve a level with
+        return violation(
+            f"the credibility of {evidence_url} cannot be resolved ({exc})"
+        )
+    if level.value not in _EVIDENCE_LEVELS:
+        return violation(
+            f"{evidence_url} is {level.value}; primary or corroborated is required"
+        )
+    return None
+
+
+def deterministic_currency_violations(
+    vault_dir: Path,
+    note_rel: str,
+    note_text: str,
+    *,
+    evidence_url: str | None = None,
+    pending: frozenset[str] = frozenset(),
+) -> list[dict[str, str]]:
+    """IX-currency-evidence and IX-supersession-symmetry (spec 087; no LLM).
+
+    * **IX-currency-evidence** (fail): a note whose ``currency`` is
+      ``superseded`` or ``retracted`` AND differs from its value at git HEAD must
+      cite the outcome's ``evidence_url`` among its ``source_urls``, and that
+      source must resolve to ``primary`` or ``corroborated``. A note whose
+      standing did not change is not judged.
+    * **IX-supersession-symmetry** (fail): a note naming X in its successor
+      field needs X on disk naming it back in ``supersedes``, and the reverse. A
+      partner that is not on disk but which ``pending`` (the cycle's reported
+      pending wikilinks) names is tolerated THIS cycle with a ``warn``; a link
+      that never becomes symmetric is caught by ``vault_health``'s Currency
+      section, which scans every note.
+    """
+    from research_framework.vault import note_currency as nc
+
+    try:
+        fm, _body = parse_frontmatter_str(note_text)
+    except FrontmatterParseError:
+        return []
+    if not fm:
+        return []
+    out: list[dict[str, str]] = []
+    standing = nc.effective(fm)[0]
+    if standing in (nc.SUPERSEDED, nc.RETRACTED) and standing != _head_standing(
+        vault_dir, note_rel
+    ):
+        found = _evidence_violation(vault_dir, note_rel, fm, evidence_url, standing)
+        if found:
+            out.append(found)
+    out.extend(_symmetry_violations(vault_dir, note_rel, fm, pending))
+    return out
+
+
+def _symmetry_violations(
+    vault_dir: Path, note_rel: str, fm: dict[str, Any], pending: frozenset[str]
+) -> list[dict[str, str]]:
+    from research_framework.vault import note_currency as nc
+
+    mine = nc.ref_slug(Path(note_rel).stem)
+    notes = nc.corpus_notes_by_slug(vault_dir)
+    out: list[dict[str, str]] = []
+    for field_name, back_field in (
+        (nc.SUPERSEDED_BY_FIELD, nc.SUPERSEDES_FIELD),
+        (nc.SUPERSEDES_FIELD, nc.SUPERSEDED_BY_FIELD),
+    ):
+        for ref in nc.refs(fm.get(field_name)):
+            location = f"note:{note_rel} {field_name}:{ref}"
+            partner = notes.get(ref)
+            if partner is None:
+                tolerated = ref in pending
+                out.append(
+                    {
+                        "rule_id": "IX-supersession-symmetry",
+                        "location": location,
+                        "message": (
+                            f"{field_name} names {ref!r}, which is not in the vault"
+                            + (
+                                "; it is reported pending, tolerated for this "
+                                "cycle only"
+                                if tolerated
+                                else ""
+                            )
+                        ),
+                        "severity": "warn" if tolerated else "fail",
+                    }
+                )
+                continue
+            try:
+                partner_fm, _ = parse_frontmatter_str(partner.read_text("utf-8"))
+            except (OSError, FrontmatterParseError):
+                partner_fm = {}
+            if mine not in nc.refs(partner_fm.get(back_field)):
+                out.append(
+                    {
+                        "rule_id": "IX-supersession-symmetry",
+                        "location": location,
+                        "message": (
+                            f"{field_name} names {ref!r}, but that note's "
+                            f"{back_field} does not name this one"
+                        ),
+                        "severity": "fail",
+                    }
+                )
+    return out
+
+
 def _merge_verifier_verdict(
+    agent_verdict: VerifierVerdict,
+    shape_violations: list[dict[str, str]],
+) -> VerifierVerdict:
+    merged_verdict = _merge_shape(agent_verdict, shape_violations)
+    merged_verdict.pre_existing = list(agent_verdict.pre_existing)
+    return merged_verdict
+
+
+def _merge_shape(
     agent_verdict: VerifierVerdict,
     shape_violations: list[dict[str, str]],
 ) -> VerifierVerdict:
@@ -283,14 +518,35 @@ def run_verifier_stage(
     if scripts_dir is None:
         scripts_dir = vault_dir / "scripts"
 
-    note_paths = research_report.get("notes_created", []) + research_report.get(
-        "notes_updated", []
+    note_paths = list(
+        dict.fromkeys(
+            research_report.get("notes_created", [])
+            + research_report.get("notes_updated", [])
+        )
     )
+    # Spec 087: an update outcome that passed UG-001 and changed its note is owed
+    # the verifier whatever the report lists (an agent rewrites the report on each
+    # batch). The sidecar is the pipeline's own record; verify from it and say so.
+    for owed in update_outcomes.verifiable_paths(vault_dir, cycle_num):
+        if owed not in note_paths:
+            _LOG.error(
+                "verifier: update outcome for %s passed UG-001 but the research "
+                "report does not list the note; verifying it from the outcomes "
+                "sidecar",
+                owed,
+            )
+            note_paths.append(owed)
 
     # One sidecar per DISPATCH, not per listed note: a skipped note never
     # calls the agent, so it must not burn a number and leave a gap that reads
     # like a lost cost record.
     call_index = 0
+    pending = frozenset(
+        nc.ref_slug(w)
+        for key in ("new_wikilinks_discovered", "unresolved_wikilinks")
+        for w in (research_report.get(key) or [])
+        if isinstance(w, str)
+    )
     for note_rel in note_paths:
         note_file = vault_dir / note_rel
         if not note_file.exists():
@@ -316,17 +572,68 @@ def run_verifier_stage(
         shape_violations += deterministic_wikilink_violations(
             vault_dir, note_rel, note_text
         )
-        call_index += 1
-        verdict = _call_verifier(
-            vault_dir=vault_dir,
-            note_file=note_file,
-            note_rel=note_rel,
-            scripts_dir=scripts_dir,
-            timeout_s=timeout_s,
-            cycle_num=cycle_num,
-            call_index=call_index,
+        recorded = update_outcomes.recorded_result(vault_dir, cycle_num, note_rel)
+        currency_violations = deterministic_currency_violations(
+            vault_dir,
+            note_rel,
+            note_text,
+            evidence_url=(recorded or {}).get("evidence_url"),
+            pending=pending,
         )
+        shape_violations += currency_violations
+        # Spec 087: an update is judged by what it changed. For a note an update
+        # batch worked, a flaw the committed version already had (same rule, same
+        # subject) does not reject it; it is recorded instead.
+        committed_text: str | None = None
+        pre_existing: list[dict[str, Any]] = []
+        if recorded is not None:
+            from research_framework.pipeline import vault_git
+
+            committed_text = vault_git.head_content(vault_dir, note_rel)
+        if committed_text is not None:
+            old = deterministic_credibility_violations(
+                vault_dir, note_rel, committed_text
+            ) + deterministic_wikilink_violations(vault_dir, note_rel, committed_text)
+            judged = [v for v in shape_violations if v not in currency_violations]
+            judged, pre_existing = split_pre_existing(judged, old)
+            shape_violations = judged + currency_violations
+        if any(
+            v["rule_id"] in CURRENCY_RULE_IDS and v.get("severity", "fail") != "warn"
+            for v in currency_violations
+        ):
+            # Spec 087 FR-013: this verdict needs no model and nothing a model
+            # says can overturn it, so none is asked.
+            verdict = VerifierVerdict(note_path=note_rel, status="pending")
+        else:
+            call_index += 1
+            verdict = _call_verifier(
+                vault_dir=vault_dir,
+                note_file=note_file,
+                note_rel=note_rel,
+                scripts_dir=scripts_dir,
+                timeout_s=timeout_s,
+                cycle_num=cycle_num,
+                call_index=call_index,
+                committed_text=committed_text,
+            )
         verdict = _merge_verifier_verdict(verdict, shape_violations)
+        if committed_text is not None:
+            verdict.pre_existing = [
+                _pre_existing_record(v) for v in pre_existing + verdict.pre_existing
+            ]
+            if verdict.pre_existing:
+                update_outcomes.record_pre_existing(
+                    vault_dir, cycle_num, note_rel, verdict.pre_existing
+                )
+        if verdict.status == "rejected" and recorded is not None:
+            # An update outcome that did not stand: its note goes back to HEAD
+            # with the other rejected notes, and its entry is open again.
+            update_outcomes.reject_outcome(
+                vault_dir,
+                cycle_num,
+                note_rel,
+                "; ".join(v.get("message", "") for v in verdict.violations[:3]),
+            )
 
         try:
             _stamp_frontmatter(note_file, verdict.status, verdict.violations)
@@ -494,12 +801,40 @@ def _verifier_inputs(vault_dir: Path, note_text: str) -> dict[str, Any]:
     }
 
 
+def _update_context(committed_text: str, note_content: str) -> str:
+    """The prompt section for a note an UPDATE revised (spec 087): the diff
+    against the committed version, and the rule that only what the update
+    added or changed can be rejected."""
+    diff = list(
+        difflib.unified_diff(
+            committed_text.splitlines(),
+            note_content.splitlines(),
+            "committed",
+            "revised",
+            lineterm="",
+            n=2,
+        )
+    )
+    shown = "\n".join(diff[:400]) + ("\n… (diff truncated)" if len(diff) > 400 else "")
+    return (
+        "## This note is an UPDATE to an existing note\n\n"
+        "It was revised in place; the committed version is the baseline. The change:\n\n"
+        f"```diff\n{shown or '(no textual change)'}\n```\n\n"
+        "Judge the UPDATE. Reject only for what the update added or changed, and "
+        "for an outcome its evidence does not support. A defect that was already in "
+        "the committed version (an old wikilink, an old citation without a "
+        "credibility level, a truncated token) is NOT a reason to reject: list it "
+        'under `"pre_existing"` in your verdict, never in `"violations"`.\n\n'
+    )
+
+
 def _build_verifier_prompt(
     note_content: str,
     *,
     note_type: str,
     source_policy: str,
     code_url_patterns: Sequence[str],
+    committed_text: str | None = None,
 ) -> str:
     """Wrap the note in the verifier's full instructions and their inputs.
 
@@ -535,14 +870,25 @@ def _build_verifier_prompt(
         '    {"rule_id": "<id>", "location": "<line or section>", "message": "<short>"}\n'
         "  ],\n"
         '  "suggested_fix": "<short string or null>"\n'
-        "}\n"
+        + (
+            ',  "pre_existing": [{"rule_id": "<id>", "location": "<where>", '
+            '"message": "<short>"}]\n'
+            if committed_text is not None
+            else ""
+        )
+        + "}\n"
         "```\n\n"
         "If you must include reasoning, place the JSON inside a "
         "`` ```json `` code fence \u2014 the framework will extract it. Default "
         "to `reject` when uncertain and name the rule that triggered the "
         "concern.\n\n"
         "---\n\n"
-        "## Note under review\n\n"
+        + (
+            _update_context(committed_text, note_content)
+            if committed_text is not None
+            else ""
+        )
+        + "## Note under review\n\n"
         f"{note_content}\n"
     )
 
@@ -575,6 +921,7 @@ def _call_verifier(
     timeout_s: int,
     cycle_num: int,
     call_index: int,
+    committed_text: str | None = None,
 ) -> VerifierVerdict:
     """Invoke agent_call.py for a single note and return a VerifierVerdict.
 
@@ -592,7 +939,11 @@ def _call_verifier(
     none of it. The fake agent hides this in tests because it costs $0.
     """
     note_text = note_file.read_text(encoding="utf-8")
-    prompt = _build_verifier_prompt(note_text, **_verifier_inputs(vault_dir, note_text))
+    prompt = _build_verifier_prompt(
+        note_text,
+        committed_text=committed_text,
+        **_verifier_inputs(vault_dir, note_text),
+    )
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".md", delete=False, encoding="utf-8"
     ) as prompt_f:
@@ -653,6 +1004,13 @@ def _call_verifier(
     if data is None:
         return VerifierVerdict(note_path=note_rel, status="pending")
 
+    return _verdict_from_data(note_rel, data)
+
+
+def _verdict_from_data(note_rel: str, data: dict[str, Any]) -> VerifierVerdict:
+    """The verifier's JSON object as a verdict. ``pre_existing`` (spec 087, the
+    flaws an update did not introduce) is optional and tolerated when absent or
+    malformed."""
     verdict_str = data.get("verdict", "")
     violations_raw = data.get("violations")
     # `null` (or any non-list) is "no violations listed", not a reason to
@@ -666,6 +1024,12 @@ def _call_verifier(
             violations.append(v)
         else:
             violations.append({"message": str(v)})
+    older_raw = data.get("pre_existing")
+    older: list[dict] = (
+        [v if isinstance(v, dict) else {"message": str(v)} for v in older_raw]
+        if isinstance(older_raw, list)
+        else []
+    )
 
     if verdict_str == "accept":
         return VerifierVerdict(
@@ -673,6 +1037,7 @@ def _call_verifier(
             status="verified",
             violations=[],
             suggested_fix=data.get("suggested_fix"),
+            pre_existing=older,
         )
     elif verdict_str == "reject":
         return VerifierVerdict(
@@ -680,6 +1045,7 @@ def _call_verifier(
             status="rejected",
             violations=violations,
             suggested_fix=data.get("suggested_fix"),
+            pre_existing=older,
         )
     else:
         return VerifierVerdict(note_path=note_rel, status="pending")

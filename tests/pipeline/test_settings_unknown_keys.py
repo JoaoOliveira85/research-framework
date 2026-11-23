@@ -197,11 +197,26 @@ def test_inert_but_shipped_keys_are_not_reported(tmp_path: Path):
     """D1 dead keys sit in every profile; reporting them would warn on all."""
     vault = _vault(
         tmp_path,
-        "model_router:\n  enabled: false\n"
-        "research_modes:\n  bootstrap:\n    note_action: create\n"
-        "stages:\n  scout:\n    skill: scout\n",
+        "model_router:\n  enabled: false\nstages:\n  scout:\n    skill: scout\n",
     )
     assert _unknown_warnings(vault) == []
+
+
+def test_the_retired_research_modes_block_loads_and_is_explained_once(
+    tmp_path: Path,
+):
+    """Spec 087 FR-016: the block left the profiles and ``_INERT_PATHS``. A vault
+    generated earlier still carries it: it must load as before, and be told once
+    why it does nothing."""
+    vault = _vault(
+        tmp_path,
+        "research_modes:\n  bootstrap:\n    note_action: create\n",
+    )
+    msgs = _unknown_warnings(vault)
+    assert len(msgs) == 1
+    assert "research_modes" in msgs[0] and "retired" in msgs[0]
+    settings = load_vault_settings(vault)  # no error, key kept in extras
+    assert "research_modes" in settings.extras
 
 
 def test_executor_keys_the_dispatcher_reads_are_not_reported(tmp_path: Path):

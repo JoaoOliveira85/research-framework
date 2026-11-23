@@ -1,6 +1,49 @@
 <!--
 Sync Impact Report
 ==================
+Version change:    1.6.1 → 1.6.2
+Bump rationale:    PATCH — two clarifications that change no principle, gate,
+                   enforcer or architecture decision. Spec 087 makes a vault
+                   revisit what it already knows, and two passages could be read
+                   against it: the coverage gate counted notes, and the
+                   no-duplicates rule did not say that revising a note is not
+                   creating a second one. No Enforcement Register row changes
+                   status.
+
+Modified principles: VI (one sentence: an update to an existing note is not a
+                     second note).
+Modified architecture sections: none. The Immutable Architecture Decisions
+                                section is untouched, so no ADR is required
+                                (`CONTRIBUTING.md` §7.1).
+
+Modified text:
+  - "Coverage Targets as Phase Completion Gate" — a target is met by notes that
+    are current: a `superseded` or `retracted` note does not count toward it.
+  - Principle VI and the matching Never Do bullet — new material on an existing
+    topic is an update to that topic's note; only a second note for the same
+    concept is forbidden.
+
+Enforcement Register re-verified (rule 4): no row changes. Row VI's enforcer
+  (the scout/validate_cycle filename check) is unchanged and still stops a
+  second note; update work edits the existing one.
+
+Cross-repo obligations (rule 5): none changed.
+
+Templates reviewed:
+  .specify/templates/plan-template.md   — UPDATED ✅ Version pointer
+      1.6.1 → 1.6.2. No gate row changes.
+  .specify/templates/spec-template.md   — No structural update needed ✅
+  .specify/templates/tasks-template.md  — No structural update needed ✅
+
+Propagated (non-template):
+  README.md, CLAUDE.md — constitution pointer v1.6.1 → v1.6.2 (guarded by
+                     `tests/docs/test_one_source_per_fact.py`)
+  CHANGELOG.md     — `[Unreleased]` entry.
+
+Deferred items: none.
+
+============================================================
+Earlier Sync Impact Report (preserved for history)
 Version change:    1.6.0 → 1.6.1
 Bump rationale:    PATCH — the document's account of where the coverage targets
                    live is corrected. Spec 083 moves a vault's durable state
@@ -760,6 +803,10 @@ writes any file. `proposed_filenames` in the scout JSON is the coordination mech
 two agents are running in parallel, their topic lists MUST be non-overlapping — not their
 source lists.
 
+Revising the note a topic already has is not creating a second one: new material on an
+existing topic is an update to that note (spec 087), and only a second note for the same
+concept is forbidden.
+
 ### VII. External Sources Are Mandatory
 
 External sources (web, market, competitors) MUST NOT be skipped without a logged reason.
@@ -1144,7 +1191,7 @@ Hard stops. No exceptions.
 - **Never use external libraries or services that persist data outside the host machine.**
   research-framework must be fully operable offline.
 - **Never create two notes for the same concept.** Use `proposed_filenames` in scout JSON
-  as the coordination mechanism.
+  as the coordination mechanism. Revising the existing note is not creating a second one.
 - **Never allow external sources to be skipped without a logged reason.** They are required
   for Condition B termination.
 - **Never accept a flag, key or field the framework does not consume.** Wire it to a
@@ -1209,7 +1256,9 @@ and competitive context is incomplete regardless of how many internal notes it h
 `_pipeline/state/coverage-targets.json` is written at Phase 1 from the spec and updated
 after every research cycle. It lives under `_pipeline/state/`, the part of `_pipeline/`
 git tracks (spec 083), so a clean of the git-ignored scratch beside it does not reset the
-gate. Phase 3 MUST NOT begin until all targets are met. If cycles terminate with
+gate. A target is met by notes that are current: a note whose `currency` is `superseded`
+or `retracted` does not count toward it (spec 087). Phase 3 MUST NOT begin until all
+targets are met. If cycles terminate with
 unmet targets, the generator re-enters Phase 2 with a targeted prompt for the missing
 categories.
 
@@ -1469,4 +1518,4 @@ constitution before any spec, plan, or implementation. Plan compliance is verifi
 the Constitution Check step in `.specify/templates/plan-template.md`, which carries one
 gate per principle.
 
-**Version**: 1.6.1 | **Ratified**: 2026-04-16 | **Last Amended**: 2026-11-23
+**Version**: 1.6.2 | **Ratified**: 2026-04-16 | **Last Amended**: 2026-11-23

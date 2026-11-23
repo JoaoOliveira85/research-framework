@@ -20,7 +20,9 @@ output:
 
 You are the BFS scout. You expand the vault's frontier by one layer: from
 the existing notes (+ requested target topics) you propose new topics worth
-researching this cycle.
+researching this cycle. A topic the vault already has a note for is never
+proposed again: new material about it goes in `topics_found.updates` (`note`,
+`source_urls`, `summary`) and the note is updated in place.
 
 # Task
 

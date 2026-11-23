@@ -34,7 +34,13 @@ Sub-checks
    - Else mark the URL ``verifier_status: rejected`` in the note (only with
      ``--apply``) and list it in ``_pipeline/broken-links.md``.
 
-4. **Control-file git tracking** (spec 058) — for the four critical control
+4. **Currency** (spec 087) — per coverage category, the notes past their
+   type's review interval and the notes superseded or retracted; plus every
+   supersession link that is not symmetric (a successor that never arrived, or
+   one that does not name the note back). Read-only. A one-sided link counts as
+   unresolved; notes past review do not.
+
+5. **Control-file git tracking** (spec 058) — for the four critical control
    files (``research.spec.md``, ``settings.yaml``,
    the backlog store, the coverage targets under ``_pipeline/state/``),
    warn when a *present* file is untracked or git-ignored in a git-backed
@@ -73,7 +79,21 @@ from pathlib import Path
 
 import yaml
 
-from research_framework.pipeline import state_layout
+try:
+    from research_framework.pipeline import state_layout
+    from research_framework.vault import note_currency as nc
+except ImportError:  # pragma: no cover - exercised by the bare-interpreter test
+    # Run by an agent with whatever `python` is first on its PATH, this script
+    # worked with no package install on main. The checks that need the package
+    # (the vault's state paths, the currency scans) are skipped with a note, and
+    # --help and the plain wikilink/URL/template checks still work.
+    state_layout = None  # type: ignore[assignment]
+    nc = None  # type: ignore[assignment]
+
+NEEDS_PACKAGE = (
+    "research_framework is not importable by this interpreter, so the state-path "
+    "and currency checks are skipped; run this script with <vault>/.venv/bin/python"
+)
 
 # Wayback Machine "available" API. Returns ``{archived_snapshots: {closest: {url}}}``
 # when a snapshot exists, or an empty ``archived_snapshots`` dict when not.
@@ -94,7 +114,7 @@ CONTROL_FILE_PATHS = (
     # later run depends on lives there, and one untracked directory is the
     # whole failure. The research backlog's store is one of those files since
     # spec 084; its Markdown view is rendered and deliberately ignored.
-    state_layout.STATE_DIR,
+    state_layout.STATE_DIR if state_layout is not None else "_pipeline/state",
 )
 
 
@@ -151,8 +171,44 @@ class ControlFileTrackingWarning:
 
 
 @dataclass
+class CurrencyRow:
+    """One coverage category's notes past review and superseded/retracted notes."""
+
+    category: str
+    past_review: int
+    uncountable: int
+    past_notes: tuple[str, ...] = ()
+    uncountable_notes: tuple[str, ...] = ()
+
+
+@dataclass
+class SupersessionLink:
+    """A supersession link that is not symmetric (spec 087 FR-007)."""
+
+    note: str
+    field: str
+    target: str
+    problem: str  # "not in the vault" | "one-sided"
+
+
+@dataclass
+class SetAsideUpdate:
+    """An update entry set aside after repeated failed attempts (spec 087)."""
+
+    stem: str
+    reason: str
+    attempts: int
+    last_failure: str
+    last_failure_cycle: int | None
+
+
+@dataclass
 class HealthReport:
     wikilinks: list[WikilinkIssue] = field(default_factory=list)
+    currency: list[CurrencyRow] = field(default_factory=list)
+    supersession_links: list[SupersessionLink] = field(default_factory=list)
+    set_aside: list[SetAsideUpdate] = field(default_factory=list)
+    update_max_attempts: int = 2
     urls: list[UrlIssue] = field(default_factory=list)
     template_versions: list[tuple[Path, str, str, str]] = field(default_factory=list)
     control_file_tracking: list[ControlFileTrackingWarning] = field(
@@ -170,6 +226,9 @@ class HealthReport:
         # the ones it leaves alone (body links) are still unresolved.
         unresolved += sum(1 for w in self.wikilinks if w.classification == "orphan")
         unresolved += len(self.template_versions)
+        # a supersession link that never became symmetric is a defect; notes
+        # past review are not (they are queued work, not a broken vault)
+        unresolved += len(self.supersession_links)
         # Spec 058: control_file_tracking is ADVISORY and intentionally
         # excluded — untracked/ignored control files never flip the exit code.
         return unresolved
@@ -571,6 +630,8 @@ def _absolute_archive_snapshot_url(location: str) -> str:
 
 
 def _archive_snapshots_path(vault: Path) -> Path:
+    if state_layout is None:
+        raise SystemExit(f"vault_health: {NEEDS_PACKAGE}")
     return state_layout.archive_snapshots_path(vault)
 
 
@@ -755,6 +816,91 @@ def _is_git_work_tree(vault: Path) -> bool:
     return res.returncode == 0 and res.stdout.strip() == "true"
 
 
+def scan_currency(vault: Path) -> list[CurrencyRow]:
+    """Per coverage category: notes past review, and superseded or retracted
+    ones (read-only; spec 087 FR-019). Empty when the vault has no targets."""
+    try:
+        from research_framework.pipeline.coverage import currency_counts
+
+        counts = currency_counts(vault)
+    except (ImportError, FileNotFoundError, OSError, RuntimeError):
+        return []
+    return [
+        CurrencyRow(
+            category=name,
+            past_review=c.past_review,
+            uncountable=c.uncountable,
+            past_notes=c.past_notes,
+            uncountable_notes=c.uncountable_notes,
+        )
+        for name, c in counts.items()
+    ]
+
+
+def _max_update_attempts(vault: Path) -> int:
+    try:
+        from research_framework.pipeline import backlog
+    except ImportError:
+        return 2
+    return backlog.max_update_attempts(vault)
+
+
+def scan_set_aside_updates(vault: Path) -> list[SetAsideUpdate]:
+    """Update entries set aside after ``pipeline.update_max_attempts`` failed
+    attempts: they need a human, or new material (read-only)."""
+    try:
+        from research_framework.pipeline import backlog
+    except ImportError:
+        return []
+
+    return [
+        SetAsideUpdate(
+            stem=ref.stem,
+            reason=ref.reason,
+            attempts=ref.attempts,
+            last_failure=ref.last_failure or "unknown",
+            last_failure_cycle=ref.last_failure_cycle,
+        )
+        for ref in backlog.set_aside_updates(vault)
+    ]
+
+
+def scan_supersession_links(vault: Path) -> list[SupersessionLink]:
+    """Supersession links that are not symmetric, across every note.
+
+    ``IX-supersession-symmetry`` judges the notes a cycle touches and tolerates
+    a successor reported as pending for that cycle; this is the check that
+    catches a link which never became symmetric (spec 087 FR-007).
+    """
+    if nc is None:
+        return []
+    notes = nc.corpus_notes_by_slug(vault)
+    frontmatter: dict[str, dict] = {}
+    for slug, path in notes.items():
+        try:
+            fm, _body = _parse_frontmatter(path)
+        except OSError:
+            continue
+        if fm and str(fm.get("note_type", "")).strip().lower() != "alias":
+            frontmatter[slug] = fm
+    out: list[SupersessionLink] = []
+    for slug, fm in sorted(frontmatter.items()):
+        for name, back in (
+            (nc.SUPERSEDED_BY_FIELD, nc.SUPERSEDES_FIELD),
+            (nc.SUPERSEDES_FIELD, nc.SUPERSEDED_BY_FIELD),
+        ):
+            for target in nc.refs(fm.get(name)):
+                partner = frontmatter.get(target)
+                if partner is None:
+                    problem = "not in the vault"
+                elif slug not in nc.refs(partner.get(back)):
+                    problem = "one-sided"
+                else:
+                    continue
+                out.append(SupersessionLink(notes[slug].stem, name, target, problem))
+    return out
+
+
 def scan_control_file_git_tracking(
     vault: Path,
 ) -> list[ControlFileTrackingWarning]:
@@ -851,7 +997,46 @@ def render_report(report: HealthReport, vault: Path) -> str:
             )
     lines.append("")
 
+    lines.append("## Currency")
+    if not report.currency:
+        lines.append("no coverage targets to report on")
+    for row in report.currency:
+        lines.append(
+            f"- {row.category}: {row.past_review} past review, "
+            f"{row.uncountable} superseded or retracted"
+        )
+        lines += [f"- past review: `{rel}`" for rel in row.past_notes]
+        lines += [
+            f"- superseded or retracted: `{rel}`" for rel in row.uncountable_notes
+        ]
+    if report.supersession_links:
+        lines.append(
+            f"### one-sided supersession links ({len(report.supersession_links)})"
+        )
+        for link in report.supersession_links:
+            lines.append(
+                f"- {link.note}: {link.field} -> {link.target} ({link.problem})"
+            )
+    lines.append("")
+
     # Spec 058 — control-file git tracking (advisory; contract §5).
+    if report.set_aside:
+        lines.append(
+            f"### updates set aside after {report.update_max_attempts} failed attempts "
+            f"({len(report.set_aside)})"
+        )
+        for item in report.set_aside:
+            where = (
+                f" (cycle {item.last_failure_cycle})"
+                if item.last_failure_cycle is not None
+                else ""
+            )
+            lines.append(
+                f"- {item.stem}: {item.reason}; last failure{where}: {item.last_failure}"
+            )
+        lines.append("  they need a person, or new material about the note")
+    lines.append("")
+
     lines.append("## Control-file git tracking")
     if not report.control_files_git_backed:
         lines.append("skipped (not a git work tree)")
@@ -895,8 +1080,15 @@ def run(
     urls = scan_urls(vault, offline=offline)
     template_versions = scan_template_versions(vault)
     control_file_tracking = scan_control_file_git_tracking(vault)
+    currency = scan_currency(vault)
+    supersession_links = scan_supersession_links(vault)
+    set_aside = scan_set_aside_updates(vault)
 
     report = HealthReport(
+        currency=currency,
+        supersession_links=supersession_links,
+        set_aside=set_aside,
+        update_max_attempts=_max_update_attempts(vault),
         wikilinks=wikilinks,
         urls=urls,
         template_versions=template_versions,
@@ -910,7 +1102,8 @@ def run(
     report_dest.parent.mkdir(parents=True, exist_ok=True)
     report_dest.write_text(render_report(report, vault), encoding="utf-8")
 
-    run_archive_snapshot_pass(vault, apply=apply, offline=offline)
+    if state_layout is not None:  # the snapshots live under the state directory
+        run_archive_snapshot_pass(vault, apply=apply, offline=offline)
 
     return report
 
@@ -938,8 +1131,11 @@ def main(argv: Iterable[str] | None = None) -> int:
 
     # Spec 083 FR-015/FR-016: `--apply` writes state (archive snapshots), so a
     # vault still in the pre-083 layout is refused; a plain check reports it.
+    if state_layout is None:
+        print(f"NOTICE: {NEEDS_PACKAGE}", file=sys.stderr)
     try:
-        state_layout.require_migrated(args.vault)
+        if state_layout is not None:
+            state_layout.require_migrated(args.vault)
     except state_layout.LegacyLayoutError as exc:
         if args.apply:
             print(f"ERROR: {exc}", file=sys.stderr)

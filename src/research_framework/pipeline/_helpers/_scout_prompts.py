@@ -186,6 +186,14 @@ def _parse_priority_queue_from_plan_md(text: str) -> list:
     return out
 
 
+def _exclusion_key(entry: str) -> str:
+    """The normalised stem of an exclusion line or a note stem (``already-covered:
+    foo`` and ``Foo.md`` both give ``foo``)."""
+    name = entry.split(": ", 1)[-1].strip().lower()
+    name = name.removesuffix(".md")
+    return re.sub(r"[\W_]+", "-", name).strip("-")
+
+
 def _render_batch_note_writer_prompt(
     *,
     dfs_prompt_src: Path,
@@ -196,8 +204,14 @@ def _render_batch_note_writer_prompt(
     batch_topics,
     correction_directive: str,
     exclusions: Sequence[str] | None = None,
+    update_topics: Sequence | None = None,
 ) -> None:
     """Render one note-writer batch prompt.
+
+    ``update_topics`` (spec 087 FR-005a) makes it an UPDATE batch: the
+    assignment is a list of notes the vault already has, rendered under
+    ``## Update topics (JSON)`` instead of ``## Batch topics (JSON)``, and the
+    binding exclusions exempt exactly those notes.
 
     The DFS template's "Your job" section makes the appended
     ``## Batch topics (JSON)`` list the whole assignment and defines the
@@ -205,23 +219,52 @@ def _render_batch_note_writer_prompt(
     exclusion list, appended as ``## Exclusions (binding)`` so the agent does
     not have to read the plan from disk (#12); ``None`` appends nothing.
     """
-    topics_payload = json.dumps([t.to_dict() for t in batch_topics], indent=2)
     parts = [
         dfs_prompt_src.read_text(encoding="utf-8")
         .replace("{CYCLE_NUM}", str(cycle_num))
         .replace("{SCOUT_REPORT}", str(scout_report))
         .replace("{RESEARCH_REPORT}", str(research_report)),
         "",
-        "## Batch topics (JSON)",
-        "",
-        "```json",
-        topics_payload,
-        "```",
-        "",
     ]
+    assigned_keys: set[str] = set()
+    if update_topics is not None:
+        payload = json.dumps([u.to_dict() for u in update_topics], indent=2)
+        assigned_keys = {_exclusion_key(u.stem) for u in update_topics}
+        parts.extend(
+            [
+                "## Update batch",
+                "",
+                "This is an UPDATE batch. The assignment is the existing notes "
+                "listed below, not new topics: there are no batch topics to "
+                "write, and you must not create a note for any of them.",
+                "",
+                "## Update topics (JSON)",
+                "",
+                "```json",
+                payload,
+                "```",
+                "",
+            ]
+        )
+    else:
+        topics_payload = json.dumps([t.to_dict() for t in batch_topics], indent=2)
+        parts.extend(
+            ["## Batch topics (JSON)", "", "```json", topics_payload, "```", ""]
+        )
     if exclusions is not None:
         parts.extend(["## Exclusions (binding)", ""])
-        parts.extend([f"- {ex}" for ex in exclusions] or ["- (none)"])
+        if update_topics is not None:
+            parts.extend(
+                [
+                    "The notes under `## Update topics (JSON)` are the assignment. "
+                    "The exclusions below do NOT forbid editing them. No other "
+                    "existing note may be edited, and no second note for the same "
+                    "topic may be created.",
+                    "",
+                ]
+            )
+        kept = [ex for ex in exclusions if _exclusion_key(ex) not in assigned_keys]
+        parts.extend([f"- {ex}" for ex in kept] or ["- (none)"])
         parts.append("")
     if correction_directive.strip():
         parts.extend(["## Correction directive", "", correction_directive.strip(), ""])
@@ -230,7 +273,11 @@ def _render_batch_note_writer_prompt(
 
 
 def _correction_prompt_text(
-    vault_dir: Path, failing_gates: list[GateResult], *, cycle: int, batch: int | None
+    vault_dir: Path,
+    failing_gates: list[GateResult],
+    *,
+    cycle: int,
+    batch: int | None,
 ) -> str:
     from research_framework.pipeline.correction import (
         CorrectionDirective,

@@ -194,8 +194,10 @@ def test_scaffold_copies_default_settings_yaml(
     settings = vault / "settings.yaml"
     assert settings.exists()
     body = settings.read_text(encoding="utf-8")
-    # Sanity: the copied file contains the research_modes section added in M2.
-    assert "research_modes" in body
+    # Sanity: the copied file carries the cycle split (spec 087) and no longer
+    # the inert research_modes block.
+    assert "cycle_split:" in body
+    assert "research_modes" not in body
 
 
 def test_scaffold_accepts_custom_settings_source(

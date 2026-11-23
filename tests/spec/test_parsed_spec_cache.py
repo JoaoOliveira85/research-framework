@@ -351,13 +351,16 @@ def test_a_version_1_cache_predating_role_declared_is_rebuilt(tmp_path: Path) ->
     assert [ds.get("role_declared") for ds in doc["data_sources"]] == [False]
 
 
-# Always-present top-level keys of SpecConfig.to_dict() at PARSER_VERSION == 2
-# (version 2: DataSourceConfig.to_dict() emits ``role_declared: false``, #17)
+# Always-present top-level keys of SpecConfig.to_dict() at PARSER_VERSION == 4
+# (version 2: DataSourceConfig.to_dict() emits ``role_declared: false``, #17;
+# version 3: NoteTypeConfig.to_dict() emits ``review_after_days`` when declared,
+# spec 087 — nested, so the top-level key set is unchanged; version 4: the
+# default ``research_mode`` is ``expand``, spec 087)
 # (``forbidden_filename_prefixes`` is emitted only when non-empty). Changing the
 # parsed shape means a cache written earlier is wrong about it: bump
 # PARSER_VERSION in spec/parsed.py, then update this set and the version below.
 _SHAPE_AT_VERSION = (
-    2,
+    4,
     frozenset(
         {
             "access_modes",
@@ -391,3 +394,34 @@ def test_parser_version_tracks_the_parsed_shape() -> None:
         "SpecConfig.to_dict() changed shape: bump PARSER_VERSION "
         "in spec/parsed.py and update _SHAPE_AT_VERSION"
     )
+
+
+def test_a_version_2_cache_is_rebuilt_to_carry_review_after_days(
+    tmp_path: Path,
+) -> None:
+    """A cache written before ``review_after_days`` existed is stale (spec 087)."""
+    v = tmp_path / "interval-vault"
+    (v / "_pipeline").mkdir(parents=True)
+    (v / "data_vault").mkdir()
+    (v / "research.spec.md").write_text(
+        "---\n"
+        'name: "Interval Vault"\n'
+        'owner: "alice"\n'
+        'topic: "A topic with a review interval"\n'
+        "note_types:\n"
+        "  - name: concept\n"
+        '    folder: "01 - Concepts"\n'
+        "    review_after_days: 45\n"
+        "---\n\nBody.\n",
+        encoding="utf-8",
+    )
+    load_parsed_spec(v, write_cache=True)
+    stale = _cache(v)["note_types"]
+    for nt in stale:
+        nt.pop("review_after_days", None)
+    _rewrite_cache(v, parser_version=2, note_types=stale)
+
+    doc = load_parsed_spec(v)
+
+    assert doc["parser_version"] == PARSER_VERSION
+    assert doc["note_types"][0]["review_after_days"] == 45

@@ -110,6 +110,11 @@ class NoteTypeConfig:
     authoritative_role: str = ""  # "behaviour" | "intent" | "domain"
     authority_section: str = ""
     complementary_section: str = ""
+    # spec 087 FR-009: days after a note's ``as_of`` that it is due for review.
+    # None = no interval, the note is never due. The raw value is kept as
+    # declared so ``spec/validator.py`` can refuse a bad one with a
+    # field-level message instead of ``from_dict`` guessing at a coercion.
+    review_after_days: int | None = None
 
     def resolved_source_policy(self) -> str:
         if self.source_policy:
@@ -117,7 +122,7 @@ class NoteTypeConfig:
         return "hard" if self.name in HARD_NOTE_TYPES else "soft"
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "name": self.name,
             "description": self.description,
             "folder": self.folder,
@@ -130,6 +135,11 @@ class NoteTypeConfig:
             "authority_section": self.authority_section,
             "complementary_section": self.complementary_section,
         }
+        # Round-trip rule: omit the default (None) so specs and caches written
+        # before the key existed round-trip unchanged.
+        if self.review_after_days is not None:
+            out["review_after_days"] = self.review_after_days
+        return out
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Self:
@@ -147,6 +157,7 @@ class NoteTypeConfig:
             authoritative_role=d.get("authoritative_role", "") or "",
             authority_section=d.get("authority_section", "") or "",
             complementary_section=d.get("complementary_section", "") or "",
+            review_after_days=d.get("review_after_days"),
         )
 
 
@@ -543,10 +554,10 @@ class SpecConfig:
     access_modes: list[str] = field(default_factory=list)
     settings: SpecSettings = field(default_factory=SpecSettings)
     code_source_url_patterns: list[str] = field(default_factory=list)
-    # Default research mode for this vault. The CLI `--mode` flag overrides
-    # at run time; auto-detection (empty vault → bootstrap, non-empty →
-    # refresh) overrides when the user supplies neither.
-    research_mode: str = "bootstrap"
+    # The vault's research mode: how `pipeline.cycle_split` is applied each
+    # cycle (spec 087 FR-016) and which sources (`phases`) the scout consults.
+    # Absent = `expand`.
+    research_mode: str = "expand"
     # Corpus folder name, relative to the vault root. Defaults to the
     # historical value so existing vaults without the spec field are
     # unaffected. Declared per-vault in the spec's `vault.corpus_dir` key.
@@ -618,7 +629,7 @@ class SpecConfig:
             access_modes=list(d.get("access_modes", []) or []),
             settings=SpecSettings.from_dict(d.get("settings") or {}),
             code_source_url_patterns=list(d.get("code_source_url_patterns", []) or []),
-            research_mode=d.get("research_mode", "bootstrap"),
+            research_mode=d.get("research_mode", "expand"),
             # Accept either the flat key written by to_dict / spec-parse.json,
             # or the nested `vault.corpus_dir` key as declared in the YAML
             # frontmatter of both simple and detailed spec files.

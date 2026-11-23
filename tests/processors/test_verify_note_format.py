@@ -33,7 +33,12 @@ from research_framework.processors.verify import (
     verify,
 )
 from research_framework.vault.frontmatter import parse_frontmatter_str
+from research_framework.vault.note_currency import AS_OF_FIELD, CURRENCY_FIELD
 from tests._helpers.vault_factory import build_minimal_vault
+
+# The template's empty slots: SG-005's contract plus the two keys spec 087 adds
+# (when a note was last checked, and its standing). SG-005 itself is unchanged.
+_TEMPLATE_SLOTS = (*_SG005_REQUIRED_KEYS, AS_OF_FIELD, CURRENCY_FIELD)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -66,6 +71,8 @@ def _fill_template(template_text: str, title: str, body: str) -> str:
     fm["summary"] = f"What {title} is."
     fm["coverage_category"] = "cat_a"
     fm["source_urls"] = ["https://synthetic.invalid/source"]
+    fm[AS_OF_FIELD] = "2026-01-01"
+    fm[CURRENCY_FIELD] = "current"
     lines = ["---"]
     for key, value in fm.items():
         if isinstance(value, list):
@@ -94,17 +101,19 @@ class TestTheShippedTemplateSatisfiesItsOwnChecker:
 
         assert "summary" in fm
 
-    def test_the_template_slots_are_exactly_the_sg005_contract(
+    def test_the_template_slots_are_the_sg005_contract_plus_the_currency_pair(
         self, tmp_path: Path
     ) -> None:
         """The framework already had a note-format contract — SG-005's
         ``coverage_category`` / ``source_urls`` / ``summary``. Verify invented
-        a second, different one. One template, one contract, both readers."""
+        a second, different one. One template, one contract, both readers; the
+        template additionally stamps ``as_of`` and ``currency`` (spec 087),
+        which verify requires and SG-005 does not (yet)."""
         vault = build_minimal_vault(tmp_path)
 
         declared = _declared_note_format(vault / "_templates")
 
-        assert set(declared) == set(_SG005_REQUIRED_KEYS)
+        assert set(declared) == set(_TEMPLATE_SLOTS)
 
     def test_a_note_written_from_the_template_passes_verify(
         self, tmp_path: Path
@@ -141,9 +150,7 @@ class TestTheShippedTemplateSatisfiesItsOwnChecker:
 
         result = verify(corpus, auto_fix=False)
 
-        assert _content_checks(result) == {
-            f"missing_{key}" for key in _SG005_REQUIRED_KEYS
-        }
+        assert _content_checks(result) == {f"missing_{key}" for key in _TEMPLATE_SLOTS}
 
 
 # ---------------------------------------------------------------------------
@@ -192,9 +199,7 @@ class TestRequiredFrontmatterPrecedence:
 
         result = verify(vault / "data_vault", auto_fix=False)
 
-        assert _content_checks(result) == {
-            f"missing_{key}" for key in _SG005_REQUIRED_KEYS
-        }
+        assert _content_checks(result) == {f"missing_{key}" for key in _TEMPLATE_SLOTS}
 
     def test_the_report_records_what_was_required(self, tmp_path: Path) -> None:
         """A verdict nobody can reproduce is not a verdict."""

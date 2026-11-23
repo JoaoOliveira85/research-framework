@@ -48,7 +48,7 @@ def _matches_directive(d: dict, schema: dict) -> tuple[bool, str]:
     ra = d.get("required_actions")
     if not isinstance(ra, list) or len(ra) < 1:
         return False, "required_actions"
-    gpat = re.compile(r"^[CS]G-\d{3}$")
+    gpat = re.compile(r"^[CSU]G-\d{3}$")
     for g in fg:
         if not isinstance(g, str) or not gpat.match(g):
             return False, "gate id in list"

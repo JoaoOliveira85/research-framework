@@ -218,7 +218,8 @@ def _render_scout_prompt_template_text(spec: SpecConfig) -> str:
     return env.get_template("prompts/scout-prompt.md.j2").render(
         spec=spec,
         target_topics=[],
-        exclude_topics=[],
+        existing_notes=[],
+        rejected_topics=[],
         forbidden_prefixes=effective_forbidden_filename_prefixes(spec),
     )
 
@@ -230,7 +231,8 @@ def _render_dfs_prompt_template_text(spec: SpecConfig) -> str:
     return env.get_template("prompts/dfs-prompt.md.j2").render(
         spec=spec,
         target_topics=[],
-        exclude_topics=[],
+        existing_notes=[],
+        rejected_topics=[],
     )
 
 

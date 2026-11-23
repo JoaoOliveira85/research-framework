@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 from ..spec.schema import SpecConfig
 from . import (
     backlog,
+    currency,
     cycle_ledger,
     plan_narrator,
     quality_report,
@@ -46,6 +47,7 @@ from .coverage import (
     all_targets_met,
     existing_vault_filenames,
     merge_expected_filenames_from_scan,
+    recompute_from_disk,
     unmet_expected_filenames,
     unmet_targets,
     update_after_cycle,
@@ -143,6 +145,30 @@ def _quarantine_orphan_note(vault_dir: Path, note_path: Path) -> None:
     qdir.mkdir(parents=True, exist_ok=True)
     dest = _free_quarantine_path(qdir, note_path)
     shutil.move(str(note_path), str(dest))
+
+
+def _refresh_before_planning(
+    vault_dir: Path, spec: SpecConfig, cycle_num: int = 0
+) -> None:
+    """Recount coverage from disk and queue due reviews, before the plan is made.
+
+    The planner reads the persisted coverage counts, so they are recomputed
+    first; the sweep (spec 087 FR-010) then records a ``review_due`` update
+    entry for every note past its type's interval. Neither calls a model, and
+    neither may stop the cycle.
+    """
+    try:
+        recompute_from_disk(vault_dir)
+    except Exception as exc:  # noqa: BLE001 - best-effort pre-cycle step
+        _LOG.warning("WARN: coverage recount before planning failed: %s", exc)
+    try:
+        currency.queue_due_reviews(vault_dir, spec, dt.datetime.now(dt.UTC).date())
+    except Exception as exc:  # noqa: BLE001 - best-effort pre-cycle step
+        _LOG.error("[currency] due-review sweep failed: %s", exc)
+    try:
+        currency.warn_if_updates_unsupported(vault_dir, cycle_num)
+    except Exception as exc:  # noqa: BLE001 - a warning must not stop a cycle
+        _LOG.warning("[currency] could not check update support: %s", exc)
 
 
 def _reconcile_orphan_notes_at_cycle_start(vault_dir: Path, cycle_num: int) -> None:
@@ -593,7 +619,7 @@ def run_single_cycle(
 
     When `resume=True` and `spec` is provided, the scout prompt is re-rendered
     with `target_topics` (unmet expected filenames from repo-scan.json) and
-    `exclude_topics` (existing note filenames) so the scout focuses on gaps
+    `existing_notes` (existing note filenames) so the scout focuses on gaps
     rather than rediscovering covered topics (feature 002, FR-015).
 
     ``budget_cap=None`` / ``max_cycles=None`` resolve through the spec-061
@@ -621,6 +647,7 @@ def run_single_cycle(
     )
 
     if spec is not None:
+        _refresh_before_planning(vault_dir, spec, cycle_num)
         try:
             plan = research_plan.generate_plan(vault_dir, spec, cycle_num)
             (vault_dir / "_pipeline").mkdir(parents=True, exist_ok=True)
@@ -1062,7 +1089,16 @@ def run_cycles(
         health_issues = _run_health_gate(vault_dir)
         coverage_met = all_targets_met(vault_dir)
 
-        has_fuel = bool(new_topics or followups or stubs or health_issues)
+        # Spec 087: update work counts as fuel when the cycle worked an update
+        # and more is queued. It stops when a cycle works none (all failed, or
+        # none could run), so it cannot loop on entries that cannot be settled.
+        update_fuel = _update_fuel(vault_dir, cycle)
+        has_fuel = bool(
+            new_topics or followups or stubs or health_issues or update_fuel
+        )
+        if not coverage_met and _cycle_mode(vault_dir, spec) == "refresh":
+            # a refresh run does not pursue coverage targets; it revisits notes
+            coverage_met = True
 
         # Successful exit: no fuel + coverage met → Phase 3.
         if not has_fuel and coverage_met:
@@ -1262,6 +1298,24 @@ def _cycle_commit_summary(vault_dir: Path, cycle_num: int) -> dict[str, object]:
     return summary
 
 
+def _update_fuel(vault_dir: Path, cycle_num: int) -> bool:
+    """True when the cycle worked at least one update and more are queued."""
+    from .currency import update_work_continues
+
+    report_file = _cycle_research_report_path(vault_dir, cycle_num)
+    try:
+        report = json.loads(report_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return isinstance(report, dict) and update_work_continues(report)
+
+
+def _cycle_mode(vault_dir: Path, spec: SpecConfig | None) -> str:
+    from .currency import cycle_mode
+
+    return cycle_mode(vault_dir, spec)
+
+
 def _scout_new_topics(vault_dir: Path, cycle_num: int) -> list[str]:
     """Return the scout's `topics_found.new` list for ``cycle_num``, or [] if
     the scout JSON is missing / malformed. Used as one of the three
@@ -1334,6 +1388,15 @@ def _constrained_exit(
             f"  - {len(new_topics)} new topic(s) the latest scout flagged "
             "but the cycle ran out of budget/cycles to research"
         )
+    try:
+        queued_updates = len(backlog.update_topics(vault_dir))
+    except Exception:  # noqa: BLE001 - a punch list never fails the exit
+        queued_updates = 0
+    if queued_updates:
+        _LOG.warning(
+            f"  - {queued_updates} note(s) queued for update "
+            '(the "Notes to update" section of the research backlog)'
+        )
     if followups:
         _LOG.warning(
             f"  - {len(followups)} orphan wikilink(s) in the latest harvest "
@@ -1376,7 +1439,11 @@ def _cycle_made_progress(vault_dir: Path, cycle_num: int) -> bool:
         return False
     created = report.get("notes_created") or []
     updated = report.get("notes_updated") or []
-    return bool(created) or bool(updated)
+    # An update that held (a ``confirmed`` one writes no note) is progress; one
+    # whose outcome failed is not.
+    from .currency import update_work_made_progress
+
+    return bool(created) or bool(updated) or update_work_made_progress(report)
 
 
 def _run_health_gate(vault_dir: Path) -> list[str]:
@@ -1507,7 +1574,10 @@ def _render_cycle_scout_prompt(
 ) -> None:
     """Re-render the scout prompt for ``cycle_num`` with the current
     target/exclude lists, merging Phase 2 auto-promoted proposals into
-    ``target_topics`` and persistent rejects into ``exclude_topics``.
+    ``target_topics``. The notes the vault already has (``existing_notes``) and
+    the operator's persistent rejects (``rejected_topics``) are passed as two
+    separate lists: the scout reports new material about the first and skips
+    the second.
 
     When ``target_topics`` is supplied (e.g. from ``--target-topics`` CLI),
     those entries are prepended before the coverage-gap and proposal lists.
@@ -1542,7 +1612,7 @@ def _render_cycle_scout_prompt(
             seen.add(t.casefold())
 
     existing = set(existing_vault_filenames(vault_dir))
-    existing.update(_persistent_reject_titles(vault_dir))
+    rejected = set(_persistent_reject_titles(vault_dir))
 
     # Enrich spec sources with active discovered sources from the sources database.
     # Falls back to spec.data_sources unchanged when the sources database doesn't exist.
@@ -1561,7 +1631,8 @@ def _render_cycle_scout_prompt(
             enriched_spec,
             vault_dir,
             target_topics=computed_topics,
-            exclude_topics=sorted(existing),
+            existing_notes=sorted(existing - rejected),
+            rejected_topics=sorted(rejected),
         )
     except Exception as e:
         # Render failure is non-fatal — fall back to the generate-time prompt.

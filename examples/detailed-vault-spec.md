@@ -43,6 +43,8 @@ note_types:
       - "What are its invariants or defining properties?"
       - "Where does it appear in practice?"
     min_word_count: 200
+    # Optional: a note older than this many days (by its `as_of`) is queued for an update.
+    review_after_days: 365
 
   - name: algorithm
     description: "Specific algorithms with complexity characteristics and canonical implementations"

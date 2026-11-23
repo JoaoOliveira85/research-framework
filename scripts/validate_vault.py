@@ -25,6 +25,17 @@ from pathlib import Path
 
 import yaml
 
+try:
+    from research_framework.vault.note_currency import AS_OF_FIELD, CURRENCY_FIELD
+except ImportError:  # pragma: no cover - exercised by the bare-interpreter test
+    # This script is run by the note-writer agent with whatever `python` is first
+    # on its PATH, which may have no usable research_framework install; on main
+    # it imported nothing from the package and must keep working that way. The
+    # names are spelled once in vault/note_currency.py; these two are kept equal
+    # to it by tests/scripts/test_agent_facing_scripts_run_without_the_package.py.
+    AS_OF_FIELD = "as_of"
+    CURRENCY_FIELD = "currency"
+
 REQUIRED_FIELDS = [
     "title",
     "type",
@@ -34,6 +45,9 @@ REQUIRED_FIELDS = [
     "related",
     "created",
     "updated",
+    # spec 087: when the note was last checked and where it stands.
+    AS_OF_FIELD,
+    CURRENCY_FIELD,
 ]
 SUMMARY_MAX = 120
 MIN_WORD_COUNT_DEFAULT = 200

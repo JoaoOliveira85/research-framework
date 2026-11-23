@@ -1,5 +1,5 @@
 ---
-_template_version: 1
+_template_version: 2
 ---
 # {{ spec.name }} — CLAUDE.md
 
@@ -58,6 +58,25 @@ Every note MUST satisfy:
 - `summary` ≤ 120 chars and specific
 - `related` field populated from wikilinks in body
 - Filename matches proposed_filenames from scout JSON
+
+## Currency
+
+Every note carries `as_of` (the date it was last checked against its sources) and
+`currency`, one of `emerging`, `current`, `declining`, `superseded`, `retracted`.
+A new note is `as_of: <today>` and `currency: current`. A note with neither reads
+as `current` and is never due for review.
+
+- New material about a topic the vault already covers is an UPDATE to that
+  topic's note, never a second note. An update ends in one outcome: `confirmed`
+  (nothing changed; only `as_of` moves), `revised` (body changed, new source
+  cited), `superseded` (a successor note replaces it) or `retracted` (its central
+  claim was shown wrong; `retraction_reason` says why).
+- A `superseded` note names its successor in `superseded_by`, and the successor
+  names it back in `supersedes`. Both links are required. A `superseded` or
+  `retracted` note needs a primary or corroborated source for it, and no longer
+  counts toward coverage.
+- A note type may declare `review_after_days` in `research.spec.md`; a note whose
+  `as_of` is older than that is queued for an update.
 
 {%- set ns = namespace(has_hard=false) -%}
 {%- for nt in spec.note_types -%}
