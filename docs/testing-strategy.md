@@ -1,6 +1,6 @@
 # Testing Strategy — Layered Pyramid
 
-**Status**: active (last test-count refresh 2026-09-08, mechanically
+**Status**: active (last test-count refresh 2026-11-23, mechanically
 verified — see § TL;DR; strategy itself unchanged since the 2026-05-22
 Foundation refresh)  
 **Supersedes**: the 0.2.23 edition of this document in spirit; the
@@ -58,12 +58,12 @@ pytest -m e2e              # tier-5/6 e2e only
 ruff check .               # lint baseline (must be zero)
 ```
 
-<!-- test-count: not_e2e=4906 total=4939 e2e_only=33 refreshed=2026-10-30 -->
+<!-- test-count: not_e2e=4990 total=5027 e2e_only=37 refreshed=2026-11-23 -->
 **This is the one place in the repo a test count is committed** — every
 other doc that mentions a count (README, CLAUDE.md, CONTRIBUTING.md,
 ARCHITECTURE.md, `docs/RELEASE.md`) points here instead of quoting its
-own copy. Today that's **4906** fast-loop tests (`pytest -m "not e2e"`),
-**4939** total (`pytest --collect-only -q`), **33** deselected as `e2e`.
+own copy. Today that's **4990** fast-loop tests (`pytest -m "not e2e"`),
+**5027** total (`pytest --collect-only -q`), **37** deselected as `e2e`.
 `tests/docs/test_one_source_per_fact.py` re-collects the suite and
 fails if the comment above no longer matches — when it fails, update
 the comment **and** the three bolded numbers in this paragraph
