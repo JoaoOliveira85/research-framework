@@ -1,7 +1,9 @@
 # Feature Specification: Note currency and updates — an existing topic is researched again
 
 **Status**: planned — drafted 2026-11-22 from #53; clarified the same day
-(owner decisions Q1–Q4, § Clarifications). Not yet on a release row.
+(owner decisions Q1–Q4, § Clarifications); corrected and planned on
+2026-11-23 from a code survey at `1961f9a` (§ Clarifications, Session
+2026-11-23; [`plan.md`](plan.md)). Lands after `083` and `084`.
 
 **Spec**: `087-note-currency-and-updates` · **Builds on**:
 `084-structured-research-backlog` (the queue an update entry lives in; drafted,
@@ -22,10 +24,19 @@ of every domain, at different speeds.
 
 At `1961f9a` (v2.0.1):
 
-- **Existing notes are an exclusion list.** `pipeline/orchestrator.py` passes
-  every existing note filename to `render_scout_prompt(...,
-  exclude_topics=sorted(existing))`, and `templates/prompts/scout-prompt.md.j2`
-  renders them under "Already covered — skip these".
+- **Existing notes are an exclusion list, three times over.**
+  `pipeline/orchestrator.py` passes every existing note filename (mixed with
+  the operator's persistent rejects) to `render_scout_prompt(...,
+  exclude_topics=sorted(existing))`, and
+  `templates/prompts/scout-prompt.md.j2` renders them under "Already covered
+  — skip these". `research_plan._build_exclusions` then lists every existing
+  note as `already-covered:` in the plan, `merge_scout_topics` drops any
+  scout row that matches one, and every note-writer batch prompt carries
+  the list under "Exclusions (binding)".
+- **An in-place edit is penalised, not just never assigned.** Batch
+  accounting counts new files only; a batch that writes no new file fails
+  the synthetic SG-005 check, and its correction hint says "Do NOT edit
+  existing notes" (`_helpers/cosmetic_correction.py`).
 - **Nothing queues an update.** `pipeline/research_plan.py` builds the cycle's
   queue from coverage gaps and harvested orphans and drops excluded titles. The
   writer prompt says "create or deepen" and the research report has
@@ -38,18 +49,26 @@ At `1961f9a` (v2.0.1):
   `pipeline/` reads `spec.research_mode`; `DataSourceConfig.applies_to()` and
   `phases` have no caller; `pipeline/settings.py` lists `research_modes` among
   its inert paths. This is a Principle XIII violation as shipped.
-- **A note carries no date or standing the framework owns.**
+- **A note carries no date or standing that drives anything.**
   `templates/note-type.md.j2` stamps `type`, `template_version`, `source_urls`,
-  `coverage_category`, `summary`. Writers often add `created`, `updated` and
-  `status`; nothing requires them and no gate reads them.
+  `coverage_category`, `summary`. `scripts/validate_vault.py` asks for
+  `created` and `updated` (a WARN through SG-004) and the claims export
+  reads them; the framework itself stamps `lifecycle.created_at_cycle` and
+  `verifier_status`. None of these says when the content was last checked
+  against sources, and no step acts on a note's age.
 - **Coverage counts notes, not current notes.**
   `pipeline/coverage.py::recompute_from_disk` counts every non-alias note, and
   `research_plan._select_cycle_focus` considers only unmet categories, so the
-  most complete areas are the ones never revisited.
+  most complete areas are the ones never revisited. The planner and
+  `./vault coverage` read the persisted counts, which are recomputed only
+  after a cycle.
 - **No relation says "replaced by".** `related` and wikilinks exist;
   nothing links a note to its successor.
 
-The README says a vault "keeps itself current". Today it keeps itself growing.
+The README says a vault "keeps itself current" and that `./vault research`
+"refreshes stale notes"; the shipped settings profiles document a `--mode`
+flag and mode auto-detection that do not exist. Today a vault keeps itself
+growing.
 
 **Why a vault's spec cannot fix it.** A spec author can add scope lines and
 acceptance rules asking writers to state a standing and look for a successor.
@@ -94,6 +113,35 @@ is written.
   proposes the outcome with evidence; the existing verifier must pass it, and a
   supersession or retraction needs a primary or corroborated source. No new
   pipeline stage.
+
+### Session 2026-11-23 (planning, from the code survey)
+
+- Q: Is hiding existing notes from the scout enough? → A: No. The
+  exclusion is applied in the scout prompt, in the plan's exclusions, in
+  the scout merge and in every batch prompt; and batch accounting fails a
+  batch that writes no new file. FR-002 now covers all of them, and FR-005a
+  adds update batches the accounting understands.
+- Q: `research_mode` defaults to `bootstrap` today. If FR-017 makes
+  `bootstrap` mean "no update work", does every vault that declares nothing
+  lose updates? → A: The default becomes `expand` (four sites), and the
+  tests that pin `bootstrap` as the default are changed with it. A vault
+  that wrote `research_mode: bootstrap` by hand gets what it asked for.
+- Q: When do existing notes receive the new fields? → A: In a step of
+  `083`'s ordered migration (after `084`'s), not on a first run: a run
+  never rewrites 700 notes as a side effect. Until a note is stamped, a
+  missing `currency` reads as `current` and a missing `as_of` means the
+  note is never due. FR-021 is reworded.
+- Q: Which of `notes_updated` and the new outcomes is the record? → A: A
+  new `update_outcomes` list in the research report is the record, checked
+  deterministically against git. `notes_updated` keeps its meaning (a note
+  whose body changed) and is derived from it; a `confirmed` outcome is not
+  in `notes_updated`.
+- Q: Coverage is read from the persisted file by the planner. → A: The
+  cycle recounts from disk before it plans, so FR-018 holds where the
+  planner looks.
+- Q: SC-005 needs a guard that does not exist (settings keys parsed and
+  unread). → A: This spec adds it, for the keys it adds and for the inert
+  `research_modes` blocks it removes from the shipped profiles.
 
 ## User Scenarios & Testing
 
@@ -185,7 +233,12 @@ reports the last cycle's outcomes by kind.
   skip. It MUST present them as topics that already have a note, with the
   instruction to report new material against the existing note and never to
   propose a second note (Principle VI is unchanged: the rule is "do not create
-  a duplicate", not "do not look").
+  a duplicate", not "do not look"). The operator's persistent rejects MUST
+  stay a skip list, rendered apart from existing notes. A scout row that
+  matches an existing note MUST become an update entry carrying the row's
+  sources, not be dropped by the merge. The plan's `already-covered`
+  exclusions MUST keep forbidding a second note and MUST NOT forbid editing
+  a note an update batch was assigned.
 - **FR-003**: An update entry MUST be a `084` backlog entry with a new origin
   `update`, keyed on the note's stem (`update:` plus the stem), carrying
   `reason` (one of `new_material`, `review_due`, `operator`) and, for
@@ -195,8 +248,13 @@ reports the last cycle's outcomes by kind.
   topics, within the share FR-015 gives them, ordered by: `new_material`
   before `review_due`; then oldest `as_of` first.
 - **FR-005**: The writer MUST revise the note in place, cite every new source
-  it used, and list the note under `notes_updated`. It MUST NOT create a new
-  note for the same topic.
+  it used, and report one entry per assigned note in the research report's
+  `update_outcomes`. It MUST NOT create a new note for the same topic.
+  `notes_updated` lists exactly the notes whose outcome changed their body.
+- **FR-005a**: Update work MUST be dispatched as update batches, distinct
+  from new-topic batches. A batch's kind decides its accounting: an update
+  batch is measured in outcomes, MUST NOT be failed for writing no new
+  file, and MUST NOT be told that editing existing notes is forbidden.
 
 **Currency fields**
 
@@ -255,7 +313,8 @@ reports the last cycle's outcomes by kind.
   new-topic share goes to updates when every coverage target is met.
 - **FR-017**: `research_mode` MUST change what a cycle does: `bootstrap` — no
   update work; `refresh` — no new-topic work; `expand` — the configured split.
-  The default for a vault that declares none is `expand`. `DataSourceConfig`
+  The default for a vault that declares none is `expand` (today's default
+  is `bootstrap`; it changes with this spec). `DataSourceConfig`
   `phases` MUST either be honoured by the same switch or be refused at parse
   time; it MUST NOT remain accepted and unread (Principle XIII).
 
@@ -275,11 +334,15 @@ reports the last cycle's outcomes by kind.
 - **FR-020**: With the update share set to 0 and no `review_after_days`
   declared, a cycle MUST plan the same work as v2.0.1, except that FR-002's
   prompt wording and FR-006's fields still apply.
-- **FR-021**: On first run against a vault with notes lacking the fields, each
-  such note MUST receive `as_of` from its newest `source_urls[].accessed`
-  date (falling back to `updated`, then `created`, then the file's first
-  commit date) and `currency: current`. No note body may change. The run MUST
-  log one `INFO` line with the count migrated and the date range.
+- **FR-021**: A step of `083`'s ordered migration, after `084`'s, MUST give
+  each note lacking the fields `as_of` from its newest
+  `source_urls[].accessed` date (falling back to `updated`, then `created`,
+  then the file's first commit date) and `currency: current`, as a surgical
+  frontmatter addition. No note body and no existing frontmatter line may
+  change. It MUST honour `--dry-run`, land as its own `framework:` commit,
+  and log one `INFO` line with the count stamped and the date range. Until
+  a note is stamped, a missing `currency` MUST read as `current` and a
+  missing `as_of` MUST mean "never due".
 - **FR-022**: Migration MUST NOT queue more review work than the update share
   allows per cycle; the backlog holds the rest, oldest `as_of` first.
 
@@ -351,6 +414,16 @@ behaviour this spec keeps, which MUST stay green:
 - **D3 — Writers already write `status`, `created` and `updated`.** 237 of 271
   concept notes in one live vault carry a free-text `status`. FR-008 leaves
   those keys alone; FR-021 reads the dates and ignores `status`.
+  `validate_vault.py` requires `created` and `updated` today (WARN); that
+  stays.
+- **D5 — Four places declare required frontmatter.** The note template,
+  `validate_vault.REQUIRED_FIELDS`, `processors/verify.py`'s resolver and
+  SG-005's key list. `082` (planned) would make them one. This spec does
+  not wait for it: it declares the currency fields in one new module and
+  has each of the four read from there.
+- **D6 — `vault-config.yaml`'s `warn_on_deprecated` has no reader.** FR-019's
+  `ask` behaviour is implemented in the `ask` template and its inputs, not
+  by reviving that key; removing the key is left to `076`.
 - **D4 — "Starting from the problem" (FR-011) has no field to read.** No note
   type today declares the problem a note addresses. The plan decides whether
   that is a required section, a frontmatter field, or derived from the note's
