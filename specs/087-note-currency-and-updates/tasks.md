@@ -257,7 +257,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
 ## Phase 5: Existing vaults, and proof
 
-- [ ] T011 The migration step `stamp_note_currency` in
+- [x] T011 The migration step `stamp_note_currency` in
       `layout_migration.MIGRATION_STEPS` (FR-021, FR-022; plan § 13).
 
   ### Testing Requirements

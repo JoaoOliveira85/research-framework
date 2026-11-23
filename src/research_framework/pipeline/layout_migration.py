@@ -18,6 +18,15 @@ archive and a rendered view in place of the Markdown, which leaves the git
 index. It lands as its own ``framework: convert the research backlog to a
 store`` commit, after the layout move's. Each step commits what it changed
 before the next one starts, so the commits stay separate.
+
+The 087 step runs third: every corpus note that lacks ``as_of`` or ``currency``
+gets the missing line(s), added surgically, in its own ``framework: stamp note
+currency`` commit holding only those notes. It is not a layout change, so an
+unstamped vault is NOT legacy: ``state_layout.legacy_paths_present`` and
+``require_migrated`` never look at it, because a note without the fields reads
+as ``current`` and never due (spec 087 FR-006), and refusing runs over it would
+be wrong. The step never queues review work; the due sweep does that, a cycle
+at a time, bounded by the cycle split.
 """
 
 from __future__ import annotations
@@ -34,12 +43,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..generator.scaffold import _render_vault_gitignore
-from . import backlog, backlog_conversion, cycle_ledger, state_layout, vault_commit
+from ..vault.corpus import corpus_dir
+from . import (
+    backlog,
+    backlog_conversion,
+    currency_stamp,
+    cycle_ledger,
+    state_layout,
+    vault_commit,
+)
 
 _LOG = logging.getLogger(__name__)
 
 COMMIT_TITLE = "migrate _pipeline layout"
 BACKLOG_COMMIT_TITLE = "convert the research backlog to a store"
+STAMP_COMMIT_TITLE = "stamp note currency"
 ALREADY_MIGRATED = "already migrated"
 
 # The marker line that opens the ``_pipeline`` stanza in every rendering, and
@@ -110,6 +128,7 @@ class StepPlan:
     commit: StepCommit | None = None
     conversion: backlog_conversion.ConversionResult | None = None
     legacy_bytes: bytes | None = None
+    stamps: currency_stamp.StampPlan | None = None
 
     @property
     def is_noop(self) -> bool:
@@ -119,6 +138,7 @@ class StepPlan:
             or self.gitignore
             or self.backfill_rows
             or self.conversion
+            or (self.stamps is not None and self.stamps.stamps)
         )
 
 
@@ -426,8 +446,61 @@ CONVERT_BACKLOG_STEP = MigrationStep(
     "convert_backlog_to_store", _plan_convert_backlog, _apply_convert_backlog
 )
 
+# ---------------------------------------------------------------------------
+# Step: stamp as_of and currency onto existing notes (spec 087)
+# ---------------------------------------------------------------------------
+
+# One `git add -- <path>...` and one `git commit -- <path>...` carry every path
+# on the command line; past this many bytes the commit names the corpus
+# directory instead (the tree is clean when the step runs, so it holds the same
+# notes), or the shell's argument limit would refuse it.
+_PATHSPEC_LIMIT = 150_000
+
+
+def _plan_stamp_note_currency(vault: Path) -> StepPlan:
+    plan = StepPlan("stamp_note_currency")
+    stamps = currency_stamp.plan_stamps(vault)
+    if not stamps.stamps:
+        return plan
+    plan.stamps = stamps
+    paths = [s.rel for s in stamps.stamps]
+    if sum(len(p) + 1 for p in paths) > _PATHSPEC_LIMIT:
+        paths = [corpus_dir(vault).relative_to(vault).as_posix()]
+    plan.commit = StepCommit(
+        STAMP_COMMIT_TITLE,
+        f"Stamp as_of and currency on {len(stamps.stamps)} existing note(s) "
+        f"(spec 087): as_of from {stamps.oldest} to {stamps.newest}, taken from "
+        "each note's own source dates, else its updated or created date, else "
+        "its first commit; currency: current. Every other line of every note is "
+        "unchanged.",
+        paths,
+    )
+    return plan
+
+
+def _apply_stamp_note_currency(vault: Path, plan: StepPlan) -> None:
+    assert plan.stamps is not None
+    written = currency_stamp.apply_stamps(vault, plan.stamps)
+    _LOG.info(
+        "migrate-layout: stamped %d note(s) with as_of and currency, skipped %d; "
+        "as_of from %s to %s",
+        written,
+        plan.stamps.skipped,
+        plan.stamps.oldest,
+        plan.stamps.newest,
+    )
+
+
+STAMP_NOTE_CURRENCY_STEP = MigrationStep(
+    "stamp_note_currency", _plan_stamp_note_currency, _apply_stamp_note_currency
+)
+
 # Ordered; a later spec appends its step here.
-MIGRATION_STEPS: list[MigrationStep] = [MOVE_STATE_STEP, CONVERT_BACKLOG_STEP]
+MIGRATION_STEPS: list[MigrationStep] = [
+    MOVE_STATE_STEP,
+    CONVERT_BACKLOG_STEP,
+    STAMP_NOTE_CURRENCY_STEP,
+]
 
 
 # ---------------------------------------------------------------------------
@@ -467,6 +540,13 @@ def _describe(plan: StepPlan) -> list[str]:
             f"{state_layout.research_backlog_path(Path()).as_posix()}"
         )
         lines.append("  " + plan.conversion.info_line(archive))
+    if plan.stamps is not None and plan.stamps.stamps:
+        stamps = plan.stamps
+        lines.append(
+            f"  stamp {len(stamps.stamps)} note(s) with as_of and currency "
+            f"(as_of from {stamps.oldest} to {stamps.newest}); "
+            f"skip {stamps.skipped} (no frontmatter, or it does not parse)"
+        )
     lines += [f"  error: {e}" for e in plan.errors]
     lines += [f"  warning: {w}" for w in plan.warnings]
     return lines
