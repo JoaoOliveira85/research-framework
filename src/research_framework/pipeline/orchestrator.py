@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 
 from ..spec.schema import SpecConfig
 from . import (
+    cycle_ledger,
     plan_narrator,
     quality_report,
     research_plan,
@@ -786,6 +787,10 @@ def run_single_cycle(
             _append_budget_log(vault_dir, cycle_num, cycle_report)
         except Exception as e:
             _LOG.warning(f"WARN: failed to append budget log: {e}")
+        try:
+            cycle_ledger.close_cycle(vault_dir, cycle_num)
+        except Exception as e:
+            _LOG.warning(f"WARN: failed to append cycle ledger row: {e}")
 
     _quarantine_out_of_scope_notes(vault_dir, spec)
     _rebuild_indexes_best_effort(vault_dir)
@@ -1647,23 +1652,7 @@ def _sum_sidecar_costs(vault_dir: Path, cycle_num: int) -> float | None:
     ``dispatch()``'s filesystem allocator — this function sums them without
     special-casing retries.
     """
-    agent_calls = (
-        vault_dir / "_pipeline" / "cycles" / f"cycle-{cycle_num:03d}" / "agent-calls"
-    )
-    if not agent_calls.is_dir():
-        return None
-    sidecars = sorted(agent_calls.glob("*.json"))
-    if not sidecars:
-        return None
-    total = 0.0
-    for path in sidecars:
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception as e:
-            _LOG.warning(f"WARN: cost sidecar {path} unreadable: {e}")
-            continue
-        total += float(data.get("cost_usd") or 0.0)
-    return total
+    return cycle_ledger.sum_sidecar_costs(vault_dir, cycle_num)
 
 
 def _append_budget_log(vault_dir: Path, cycle_num: int, report: dict) -> None:
@@ -1720,10 +1709,5 @@ def _append_budget_log(vault_dir: Path, cycle_num: int, report: dict) -> None:
 
 
 def _cumulative_sidecar_cost(vault_dir: Path, *, up_to: int) -> float:
-    """Sum every sidecar cost for cycles ``1..up_to`` (inclusive)."""
-    total = 0.0
-    for cycle in range(1, up_to + 1):
-        cycle_total = _sum_sidecar_costs(vault_dir, cycle)
-        if cycle_total is not None:
-            total += cycle_total
-    return total
+    """Lifetime spend over cycles ``1..up_to``: the ledger, then the scan for the rest."""
+    return cycle_ledger.lifetime_cost(vault_dir, up_to=up_to)

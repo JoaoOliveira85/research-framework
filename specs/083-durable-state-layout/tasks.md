@@ -138,7 +138,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
 ## Phase 2: Facts that used to live in scratch
 
-- [ ] T007 Add `pipeline/cycle_ledger.py`; append a row when a cycle closes;
+- [x] T007 Add `pipeline/cycle_ledger.py`; append a row when a cycle closes;
       make `_resolve_resume_cycle`, `_cumulative_sidecar_cost` and
       `_hours_since_last_cycle` read it under the plan § 3 rule (FR-006).
 

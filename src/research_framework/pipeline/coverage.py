@@ -20,7 +20,7 @@ from research_framework.vault.frontmatter import (
 )
 
 from ..spec.schema import CoverageCategory, CoverageTargets
-from . import state_layout
+from . import cycle_ledger, state_layout
 from .atomic_write import write_json
 from .settings import CycleYieldSettings, SettingsError, load_vault_settings
 
@@ -675,34 +675,8 @@ def _hours_since_last_cycle(
     disk or the timestamp cannot be parsed. Falls back to the scout JSON
     if research.json is absent (e.g. a cycle aborted mid-stream).
     """
-    cycles_dir = vault_dir / "_pipeline" / "cycles"
-    if not cycles_dir.is_dir():
-        return None
-    latest_ts: datetime | None = None
-    for prior in range(current_cycle - 1, 0, -1):
-        cycle_3 = f"{prior:03d}"
-        for fname in (
-            f"cycle-{cycle_3}-research.json",
-            f"cycle-{cycle_3}-scout.json",
-        ):
-            path = cycles_dir / fname
-            if not path.is_file():
-                continue
-            try:
-                doc = json.loads(path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                continue
-            ts = doc.get("timestamp")
-            if not isinstance(ts, str):
-                continue
-            try:
-                parsed = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            except ValueError:
-                continue
-            latest_ts = parsed
-            break
-        if latest_ts is not None:
-            break
+    # Spec 083: the cycle ledger first, the cycles/ scan for cycles it lacks.
+    latest_ts = cycle_ledger.last_finished_at(vault_dir, current_cycle)
     if latest_ts is None:
         return None
     if latest_ts.tzinfo is None:
