@@ -45,7 +45,7 @@ the spec**: `planned`. Task boxes are live. `087` lands first.
 
 ## Phase 2: The pass
 
-- [ ] T003 The scout prompt's discovery section, the report shape, and
+- [x] T003 The scout prompt's discovery section, the report shape, and
       `validate_cycle.py` (FR-001, FR-003, FR-011; plan § 3).
 
   ### Testing Requirements

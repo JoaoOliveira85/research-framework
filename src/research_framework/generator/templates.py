@@ -391,6 +391,8 @@ def render_scout_prompt(
     existing_notes: list[str] | None = None,
     rejected_topics: list[str] | None = None,
     templates_dir: Path | None = None,
+    discovery_areas: list[str] | None = None,
+    discovery_window_start: str | None = None,
 ) -> Path:
     """Re-render just `_pipeline/prompts/scout-prompt.md` with resume context.
 
@@ -398,6 +400,10 @@ def render_scout_prompt(
     the unmet expected filenames (target), the notes the vault already has
     (``existing_notes``: report new material about them, never a second note)
     and the operator's persistent rejects (``rejected_topics``: skipped).
+
+    ``discovery_areas`` (spec 088) are the scope areas this cycle's scout is
+    asked about, outside-in; ``discovery_window_start`` is the ISO date the
+    window opens. With no areas the prompt has no discovery section.
     """
     src = templates_dir or _templates_src()
     env = _env(src)
@@ -411,6 +417,8 @@ def render_scout_prompt(
             rejected_topics=rejected_topics or [],
             forbidden_prefixes=resolve_forbidden_filename_prefixes(spec, vault_dir)
             or [],
+            discovery_areas=discovery_areas or [],
+            discovery_window_start=discovery_window_start,
         ),
         encoding="utf-8",
     )
