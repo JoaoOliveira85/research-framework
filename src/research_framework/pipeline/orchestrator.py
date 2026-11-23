@@ -58,6 +58,7 @@ from .cycle_summary import write_summary as _write_cycle_summary
 from .gates import GateResult, run_gate
 from .gates_cycle import CG001_min_cycle_yield
 from .gates_step import SG005_frontmatter_completeness
+from .rejects import persistent_reject_titles as _persistent_reject_titles
 from .run_report import write_run_report as _write_run_report
 from .settings import (
     UNLIMITED_MAX_CYCLES,
@@ -1541,36 +1542,6 @@ def _phase2_promoted_titles(vault_dir: Path, *, before_cycle: int) -> list[str]:
                 titles.append(t.strip())
         return titles
     return []
-
-
-def _persistent_reject_titles(vault_dir: Path) -> list[str]:
-    """Read the persistent propose rejects and return titles to exclude.
-
-    Format written by ``scripts/topic_propose.py`` is::
-
-        - **<title>** — cycle NNN (YYYY-MM-DD): <reason>
-
-    We parse the bolded title from each bullet. Unknown lines are
-    silently skipped (the file is human-editable — users may add
-    comments or custom annotations).
-    """
-    import re as _re
-
-    path = state_layout.propose_rejects_path(vault_dir)
-    if not path.is_file():
-        return []
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return []
-    out: list[str] = []
-    for line in text.splitlines():
-        m = _re.match(r"^\s*-\s+\*\*([^*\n]+?)\*\*", line)
-        if m:
-            title = m.group(1).strip()
-            if title:
-                out.append(title)
-    return out
 
 
 def _discovery_assignment(

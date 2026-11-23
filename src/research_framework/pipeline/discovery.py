@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any
 
 from ..spec.schema import SpecConfig
-from . import backlog, state_layout
+from . import backlog, rejects, state_layout
 from .atomic_write import write_json
 from .settings import (
     CycleSplit,
@@ -450,12 +450,9 @@ def route_rows(
     notes = currency._corpus_notes(vault_dir, spec)
     rejected = _exclusion_keys(exclusions, "persistent-rejects")
     out_of_scope = _exclusion_keys(exclusions, "out-of-scope")
-    try:
-        from .orchestrator import _persistent_reject_titles
-
-        rejected |= {_exclusion_slug(t) for t in _persistent_reject_titles(vault_dir)}
-    except Exception as exc:  # noqa: BLE001 - a missing reject list drops nothing
-        _LOG.warning("[discovery] could not read the persistent rejects: %s", exc)
+    rejected |= {
+        _exclusion_slug(t) for t in rejects.persistent_reject_titles(vault_dir)
+    }
     planned = {t.strip().casefold() for t in planned_titles}
     seen: set[str] = set()
     routing = Routing()
@@ -506,13 +503,7 @@ def route_rows(
             routing.topics.append({"title": title, "area": str(row["area"])})
 
     if rerouted_rows:
-        currency.record_scout_updates(
-            vault_dir,
-            spec,
-            vault_dir / "_pipeline" / "cycles" / "no-scout-report.json",
-            rerouted_rows,
-            cycle=cycle,
-        )
+        currency.record_new_material(vault_dir, spec, rerouted_rows, cycle=cycle)
     if observe:
 
         def write(tx: backlog.Transaction) -> None:

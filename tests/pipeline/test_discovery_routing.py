@@ -301,3 +301,43 @@ def test_resolve_covered_closes_a_discovery_topic_once_its_note_exists(
     assert entry["status"] == "resolved" and entry["status_by"] == "harvest"
     assert backlog.discovery_topics(vault) == []
     assert _exclusion_slug("Cell Based Routing") == "cell-based-routing"
+
+
+def test_a_row_naming_a_propose_reject_is_dropped_via_the_public_helper(
+    tmp_path: Path,
+) -> None:
+    from research_framework.pipeline import rejects
+
+    vault = _vault(tmp_path)
+    path = state_layout.propose_rejects_path(vault)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "- **Operator Rejected** — cycle 001 (2026-11-01): not wanted\nnotes\n",
+        encoding="utf-8",
+    )
+    assert rejects.persistent_reject_titles(vault) == ["Operator Rejected"]
+    routing = discovery.route_rows(
+        vault, _spec(), [_row("Operator Rejected"), _row("Fine Topic")], cycle=1
+    )
+    assert [d["title"] for d in routing.dropped] == ["Operator Rejected"]
+    assert routing.topics == [{"title": "Fine Topic", "area": AREA}]
+
+
+def test_record_new_material_takes_rows_directly(tmp_path: Path) -> None:
+    from research_framework.pipeline import currency
+
+    vault = _vault(tmp_path)
+    queued = currency.record_new_material(
+        vault,
+        _spec(),
+        [
+            {"key": "kafka-retries", "source_urls": ["https://a", "https://b"]},
+            {"key": "kafka-retries", "source_urls": ["https://b", "https://c"]},
+            {"key": "not-a-note", "source_urls": ["https://x"]},
+        ],
+        cycle=2,
+    )
+    assert queued == 1
+    entry = _entries(vault)["update:kafka-retries"]
+    assert entry["prompted_by"] == ["https://a", "https://b", "https://c"]
+    assert currency.record_new_material(vault, _spec(), []) == 0
