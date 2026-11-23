@@ -572,6 +572,10 @@ def _render_note(
             f'"{title}" in coverage category {category}.'
         ),
         "related": [],
+        # spec 087: the note template stamps both keys empty, so verify
+        # requires them; a fixed date keeps the written note deterministic.
+        "as_of": "2026-01-01",
+        "currency": "current",
         "lifecycle": {"created_at_cycle": cycle},
     }
     if not omit_source_urls:

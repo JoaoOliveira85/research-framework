@@ -22,7 +22,7 @@ These are Jinja templates. Their text is rendered into a generated vault, so rea
 | [`agent-verify`](agent-verify.md) | `src/research_framework/agents/verify.md.j2` | Verification agent definition. | rendered to `.claude/commands/verify.md` | `60603bdaa42ab697` |
 | [`agent-report`](agent-report.md) | `src/research_framework/agents/report.md.j2` | Weekly report agent definition — the `report` phase's prompt source (spec 075). | rendered to `.claude/commands/report.md` | `a9a746e4fb96b911` |
 | [`agent-pipeline`](agent-pipeline.md) | `src/research_framework/agents/pipeline.md.j2` | Pipeline shim agent definition — shells out and shows the output verbatim. | rendered to `.claude/commands/pipeline.md` | `6bea7e8c00532965` |
-| [`note-type`](note-type.md) | `templates/note-type.md.j2` | The note scaffold every generated note starts from (spec 079). | note rendering at scaffold time | `262a6b2ffa64ebf4` |
+| [`note-type`](note-type.md) | `templates/note-type.md.j2` | The note scaffold every generated note starts from (spec 079). | note rendering at scaffold time | `fa1fc892c96d542c` |
 
 ## Recorded, not copied
 

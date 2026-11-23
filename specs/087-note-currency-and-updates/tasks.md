@@ -6,7 +6,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
 ## Phase 1: Fields, entries and the sweep (nothing dispatched differently)
 
-- [ ] T001 `src/research_framework/vault/note_currency.py`: field names,
+- [x] T001 `src/research_framework/vault/note_currency.py`: field names,
       the five values, `effective`, `countable`, `is_due`. The note template
       stamps `as_of` and `currency` empty; `scripts/validate_vault.py`'s
       required list and `processors/verify.py`'s resolver read the names

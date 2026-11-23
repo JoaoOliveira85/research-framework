@@ -25,6 +25,8 @@ from pathlib import Path
 
 import yaml
 
+from research_framework.vault.note_currency import AS_OF_FIELD, CURRENCY_FIELD
+
 REQUIRED_FIELDS = [
     "title",
     "type",
@@ -34,6 +36,9 @@ REQUIRED_FIELDS = [
     "related",
     "created",
     "updated",
+    # spec 087: when the note was last checked and where it stands.
+    AS_OF_FIELD,
+    CURRENCY_FIELD,
 ]
 SUMMARY_MAX = 120
 MIN_WORD_COUNT_DEFAULT = 200

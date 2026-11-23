@@ -7,6 +7,8 @@ source_urls: ["https://example.com/valid-concept"]
 related: []
 created: 2026-04-16
 updated: 2026-04-16
+as_of: 2026-04-16
+currency: current
 ---
 
 # Valid Concept

@@ -7,7 +7,7 @@
 | **Source** | `templates/note-type.md.j2` |
 | **Role** | The note scaffold every generated note starts from (spec 079). |
 | **Dispatched by** | note rendering at scaffold time |
-| **Source sha256** | `262a6b2ffa64ebf4` |
+| **Source sha256** | `fa1fc892c96d542c` |
 
 Reproduced verbatim, including its placeholders. A vault gets this text with the placeholders filled at scaffold or dispatch time.
 
@@ -18,6 +18,8 @@ template_version: "{{ nt.template_version }}"
 source_urls: []
 coverage_category: ""
 summary: ""
+as_of: ""
+currency: ""
 ---
 
 # {{ '{{' }} title {{ '}}' }}

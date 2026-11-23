@@ -38,6 +38,8 @@ source_urls:
 related: []
 created: 2026-06-03
 updated: 2026-06-03
+as_of: 2026-06-03
+currency: current
 lifecycle:
   created_at_cycle: 3
 template_version: "1.0.0"
