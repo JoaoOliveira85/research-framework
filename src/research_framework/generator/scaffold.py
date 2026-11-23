@@ -12,7 +12,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from .. import __version__ as _FRAMEWORK_VERSION
 from .._assets import asset_path, default_settings_path
-from ..pipeline import state_layout
+from ..pipeline import backlog, state_layout
 from ..pipeline.state_layout import STATE_DIR
 from ..spec.parsed import stamp_parsed_spec, write_parsed_spec
 from ..spec.schema import SpecConfig
@@ -267,15 +267,6 @@ def scaffold(
     if not budget_log.exists():
         budget_log.write_text(budget_log_header(), encoding="utf-8")
 
-    # Initialize research-backlog.md
-    backlog = pipeline / "research-backlog.md"
-    if not backlog.exists():
-        backlog.write_text(
-            "---\n_template_version: 1\n---\n"
-            "# Research Backlog\n\nTopics deferred from scout passes.\n",
-            encoding="utf-8",
-        )
-
     # Initialize the coverage targets (state, spec 083) from spec targets. ``display_name`` is
     # carried forward so the per-category classifier in pipeline/coverage.py
     # has the human-readable label to match notes against — without it the
@@ -300,6 +291,10 @@ def scaffold(
     targets_path.write_text(
         json.dumps(coverage_data, indent=2) + "\n", encoding="utf-8"
     )
+
+    # Seed the empty backlog store and render its view (spec 084). After the
+    # coverage targets, because the view lists the unmet categories.
+    backlog.create_empty(vault_dir)
 
     # .tmpl-versions.json — one per directory containing non-markdown scaffold
     # files. Each maps filename → template_version (integer). Written here so
@@ -342,6 +337,7 @@ def scaffold(
             {
                 targets_path.name: 1,
                 state_layout.sources_db_path(vault_dir).name: 1,
+                state_layout.research_backlog_path(vault_dir).name: 1,
             },
             indent=2,
         )

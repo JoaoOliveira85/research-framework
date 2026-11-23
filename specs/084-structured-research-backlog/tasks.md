@@ -228,6 +228,10 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
   - **Test 2**: `tests/generator/test_scaffold_backlog_store.py::test_a_fresh_vault_has_an_empty_store_and_a_rendered_view`
     - Tier: 3
 
+  The scaffold-seed half landed with the writers' move (commit
+  "scaffold seeds the backlog store"); this box stays open for the
+  `.gitignore` line, the control-file list and the manifest.
+
   **TDD discipline**: required.
 
 - [ ] T010 The scout prompt's required-reading item describes the view's

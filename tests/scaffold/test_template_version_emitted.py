@@ -24,6 +24,10 @@ _SKIP_PATHS = {
     "data_vault/_index.md",
     "data_vault/_concepts.md",
     "data_vault/_graph.md",
+    # Spec 084: the backlog view is rendered (and overwritten) by
+    # `pipeline/backlog.py` on every write; it carries a digest footer, not
+    # frontmatter, and the migrator does not manage it.
+    "_pipeline/research-backlog.md",
 }
 
 
