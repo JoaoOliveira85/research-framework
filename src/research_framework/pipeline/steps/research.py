@@ -135,7 +135,8 @@ def _phase(ctx: CycleContext) -> int:
         # The synthetic mid-batch check counts new-topic batches only.
         n_batches_total = sum(1 for a in assignments if a.kind != "update")
         cap_tripped = False
-        previous_was_update = False
+        new_ordinal = 0  # position among the NEW-topic batches (updates interleave)
+        new_history: list[tuple[object, BatchResult]] = []
 
         for i, assignment in enumerate(assignments):
             runtime_state = ctx.runtime_state
@@ -162,27 +163,33 @@ def _phase(ctx: CycleContext) -> int:
                 )
                 break
 
-            if is_update and not previous_was_update:
-                # a new-topic batch's correction ("write notes, do not edit
-                # existing ones") must not reach a batch that edits them
-                correction_text = ""
-            previous_was_update = is_update
-            incoming_gate_correction = correction_text
-            if i > 0 and not is_update:
-                pace_ph = st._empty_batch_result_for_pace(
-                    cycle_num, assignment.batch_number
-                )
-                pace_dir = check_pace_at_midpoint(
-                    plan,
-                    bundled_history + [(assignment, pace_ph)],
-                    assignment.batch_number,
-                )
-                if pace_dir is not None:
-                    correction_text = (
-                        correction_text + "\n\n" + pace_dir.to_prompt_block()
-                    ).strip()
+            if is_update:
+                # A new-topic batch's correction ("write notes, do not edit
+                # existing ones") must not reach a batch that edits them. It is
+                # kept, not dropped: the next NEW batch still gets it.
+                incoming_gate_correction = ""
+            else:
+                new_ordinal += 1
+                incoming_gate_correction = correction_text
+                if new_ordinal > 1:
+                    # The pace and midpoint checks count new-topic batches only;
+                    # update batches interleave with them, so batch numbers are
+                    # replaced by the position among the new ones.
+                    ordinal_assignment = dataclasses.replace(
+                        assignment, batch_number=new_ordinal
+                    )
+                    pace_ph = st._empty_batch_result_for_pace(cycle_num, new_ordinal)
+                    pace_dir = check_pace_at_midpoint(
+                        plan,
+                        new_history + [(ordinal_assignment, pace_ph)],
+                        new_ordinal,
+                    )
+                    if pace_dir is not None:
+                        correction_text = (
+                            correction_text + "\n\n" + pace_dir.to_prompt_block()
+                        ).strip()
 
-            prompt_correction = correction_text
+            prompt_correction = "" if is_update else correction_text
             batch_rendered = (
                 cycles_dir
                 / f"cycle-{cycle_3}-batch-{assignment.batch_number:03d}-dfs.md"
@@ -217,9 +224,7 @@ def _phase(ctx: CycleContext) -> int:
             # correction batches (``incoming_gate_correction`` is non-empty),
             # so the normal happy path pays only the directory walk we were
             # already doing one block above.
-            is_correction_batch = bool(incoming_gate_correction.strip()) and (
-                not is_update
-            )
+            is_correction_batch = bool(incoming_gate_correction.strip())
             body_snapshot_before = (
                 cc._snapshot_note_bodies(data_vault) if is_correction_batch else {}
             )
@@ -272,7 +277,7 @@ def _phase(ctx: CycleContext) -> int:
                 None
                 if is_update
                 else cc._synthetic_mid_batch_empty_sg005(
-                    assignment.batch_number,
+                    new_ordinal,
                     n_batches_total,
                     note_paths,
                     len(assignment.topics),
@@ -323,15 +328,24 @@ def _phase(ctx: CycleContext) -> int:
                 batch_result.to_dict(),
             )
             bundled_history.append((assignment, batch_result))
+            if not is_update:
+                new_history.append(
+                    (
+                        dataclasses.replace(assignment, batch_number=new_ordinal),
+                        batch_result,
+                    )
+                )
 
             if is_update:
                 updates_worked += len(assignment.updates)
             else:
                 cumulative_notes += len(note_names)
-            if batch_result.accepted or is_update:
+            if is_update:
                 # An update batch's failures are handled by restoring its notes
-                # and leaving their entries open; there is no correction pass
-                # whose text could say "write notes, do not edit existing ones".
+                # and leaving their entries open; it neither produces nor
+                # consumes a correction pass, so a pending one is left as it is.
+                pass
+            elif batch_result.accepted:
                 correction_text = ""
             else:
                 failing = [g for g in sg_results if g.status == "FAIL"]

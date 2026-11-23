@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from research_framework._assets import default_settings_path
@@ -22,6 +22,8 @@ __all__ = [
     "BatchAssignment",
     "BatchResult",
     "check_pace_at_midpoint",
+    "interleave_batches",
+    "interleave_kinds",
     "slice_topics_into_batches",
 ]
 
@@ -251,13 +253,56 @@ def slice_topics_into_batches(
         if new_count is not None
         else max(0, int(plan.cycle_quota) - update_n)
     )
-    out = _slice_new_batches(plan, queue, new_quota, raw_bs=raw_bs, clamped=clamped)
-    out.extend(
-        _slice_update_batches(
-            plan, plan.update_queue[:update_n], clamped, first_number=len(out) + 1
-        )
+    new = _slice_new_batches(plan, queue, new_quota, raw_bs=raw_bs, clamped=clamped)
+    updates = _slice_update_batches(
+        plan, plan.update_queue[:update_n], clamped, first_number=1
     )
-    return out
+    return interleave_batches(new, updates)
+
+
+def interleave_kinds(n_new: int, n_update: int) -> list[str]:
+    """The dispatch order of ``n_new`` new-topic and ``n_update`` update batches.
+
+    Deterministic, Bresenham-style: after every prefix of ``i`` batches the
+    number of update batches is ``target(i)``, so each kind's share of any prefix
+    is within one batch of its overall share. A cycle cut short by its budget or
+    clock therefore has worked updates in proportion, instead of reaching them
+    last (spec 087).
+
+    * Updates at least a third of the batches: ``target(i) = ceil(i * u / t)``,
+      so the FIRST batch is an update batch (3 of 9: ``U N N U N N U N N``).
+    * Fewer: ``target(i) = floor(i * u / t)``, so the first update batch sits at
+      position ``ceil(t / u)`` exactly (1 of 4: ``N N N U``), never later.
+    * No update batches: all new, as before. No new batches: all updates.
+    """
+    total = n_new + n_update
+    if n_update <= 0 or total == 0:
+        return ["new"] * n_new
+    ceiling = n_update * 3 >= total
+    order: list[str] = []
+    placed = 0
+    for i in range(1, total + 1):
+        scaled = i * n_update
+        target = -(-scaled // total) if ceiling else scaled // total
+        if target > placed:
+            order.append("update")
+            placed += 1
+        else:
+            order.append("new")
+    return order
+
+
+def interleave_batches(
+    new: list[BatchAssignment], updates: list[BatchAssignment]
+) -> list[BatchAssignment]:
+    """Merge the two kinds in :func:`interleave_kinds` order, keeping each
+    kind's own order, and number the result in dispatch order (1..n)."""
+    new_iter, update_iter = iter(new), iter(updates)
+    merged = [
+        next(update_iter if kind == "update" else new_iter)
+        for kind in interleave_kinds(len(new), len(updates))
+    ]
+    return [replace(b, batch_number=n) for n, b in enumerate(merged, start=1)]
 
 
 def _slice_update_batches(

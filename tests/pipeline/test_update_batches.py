@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -111,7 +112,9 @@ def test_slicing_cuts_update_batches_from_the_update_queue_oldest_first() -> Non
     assert [t.title for b in new for t in b.topics] == ["Alpha", "Beta"]
     assert [u.stem for b in upd for u in b.updates] == ["n1", "n2", "n3", "n4"]
     assert [b.batch_number for b in batches] == list(range(1, len(batches) + 1))
-    assert all(b.kind == "update" for b in batches[len(new) :])
+    # the kinds interleave (test_update_batches_are_interleaved_in_proportion);
+    # within each kind the order is the queue's own
+    assert [b.kind for b in batches] != ["new"] * len(new) + ["update"] * len(upd)
     # without an update count the slicing is the old one
     old = slice_topics_into_batches(_plan(), 3)
     assert all(b.kind == "new" for b in old)
@@ -191,12 +194,20 @@ def test_the_update_prompt_exempts_its_notes_from_the_binding_exclusions(
 # ---------------------------------------------------------------------------
 
 
-def _vault_with_due_notes(tmp_path: Path, *, mode: str = "expand") -> tuple[Path, Any]:
+def _vault_with_due_notes(
+    tmp_path: Path,
+    *,
+    mode: str = "expand",
+    notes: int = 10,
+    targets: int = 20,
+    batch_size: int | None = None,
+) -> tuple[Path, Any]:
     vault = build_minimal_vault(
         tmp_path,
         num_categories=1,
-        num_targets_per_category=20,
+        num_targets_per_category=targets,
         max_cycles=1,
+        note_writer_batch_size=batch_size,
         spec_overrides={
             "research_mode": mode,
             "note_types": [
@@ -217,14 +228,14 @@ def _vault_with_due_notes(tmp_path: Path, *, mode: str = "expand") -> tuple[Path
     folder.mkdir(parents=True, exist_ok=True)
     # as_of descends with the index so "oldest first" is the REVERSE of the
     # file order: n10 is the oldest, n01 the newest
-    for i in range(1, 11):
+    for i in range(1, notes + 1):
         (folder / f"due-note-{i:02d}.md").write_text(
             "---\n"
             "type: concept\n"
             f"summary: Due note {i}\n"
             "source_urls: [https://example.org/s]\n"
             "coverage_category: " + spec.coverage_targets.categories[0].name + "\n"
-            f"as_of: 2020-01-{11 - i:02d}\n"
+            f"as_of: {date(2020, 1, 11) - timedelta(days=i)}\n"
             "currency: current\n"
             "---\n\n" + ("body " * 50) + "\n",
             encoding="utf-8",
@@ -303,3 +314,158 @@ def test_an_update_batch_that_writes_no_new_file_is_not_failed(
     for prompt in _rendered_prompts(vault):
         assert "Do NOT edit existing notes" not in prompt
         assert "do not edit existing notes" not in prompt
+
+
+# ---------------------------------------------------------------------------
+# Dispatch order follows the split (a cycle cut short has still worked updates)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("n_new", "n_update"),
+    [
+        (6, 3),
+        (1, 3),
+        (3, 1),
+        (9, 1),
+        (10, 2),
+        (5, 5),
+        (2, 7),
+        (7, 2),
+        (0, 4),
+        (4, 0),
+        (1, 1),
+    ],
+)
+def test_update_batches_are_interleaved_in_proportion(
+    n_new: int, n_update: int
+) -> None:
+    from math import ceil
+
+    from research_framework.pipeline.batch import interleave_kinds
+
+    order = interleave_kinds(n_new, n_update)
+    total = n_new + n_update
+
+    assert sorted(order) == sorted(["new"] * n_new + ["update"] * n_update)
+    done = 0
+    for i, kind in enumerate(order, start=1):
+        done += kind == "update"
+        # after ANY prefix each kind's share is within one batch of its overall share
+        assert abs(done - i * n_update / total) < 1, (i, order)
+    if n_update:
+        first_update = order.index("update") + 1
+        if n_update * 3 >= total:
+            assert first_update == 1  # updates are a third or more: they lead
+        else:
+            assert first_update <= ceil(total / n_update)
+    if not n_update:
+        assert order == ["new"] * n_new  # exactly what it was before
+    assert interleave_kinds(n_new, n_update) == order  # deterministic
+
+    # through the slicer: numbers sequential in dispatch order, order kept within kinds
+    updates = [
+        UpdateTopic(stem=f"u{i:02d}", path="", reason="review_due", as_of="2020-01-01")
+        for i in range(n_update * 3)
+    ]
+    queue = [
+        PrioritizedTopic(title=f"T{i:02d}", category="c", priority_score=0.9 - i / 1000)
+        for i in range(n_new * 3)
+    ]
+    plan = _plan(
+        priority_queue=queue,
+        update_queue=updates,
+        cycle_quota=max(1, n_new * 3),
+        new_quota=n_new * 3,
+        update_quota=n_update * 3,
+    )
+    batches = slice_topics_into_batches(
+        plan, 3, new_count=n_new * 3, update_count=n_update * 3
+    )
+    assert [b.batch_number for b in batches] == list(range(1, len(batches) + 1))
+    assert [b.kind for b in batches] == order
+    assert [t.title for b in batches if b.kind == "new" for t in b.topics] == [
+        f"T{i:02d}" for i in range(n_new * 3)
+    ]
+    assert [u.stem for b in batches if b.kind == "update" for u in b.updates] == [
+        f"u{i:02d}" for i in range(n_update * 3)
+    ]
+
+
+def _batch_prompts(vault: Path) -> list[str]:
+    return _rendered_prompts(vault)
+
+
+def test_a_cycle_cut_after_three_batches_has_worked_an_update(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FAKE_AGENT_SCENARIO", "happy")
+    vault, spec = _vault_with_due_notes(tmp_path, notes=12, targets=60, batch_size=3)
+    settings = vault / "settings.yaml"  # the cycle is stopped after three batches
+    settings.write_text(
+        settings.read_text().replace(
+            "max_batches_per_cycle: 10", "max_batches_per_cycle: 3"
+        )
+    )
+
+    run_single_cycle(vault, cycle_num=1, budget_cap=10.0, max_cycles=1, spec=spec)
+
+    prompts = _batch_prompts(vault)
+    assert len(prompts) == 3
+    updated = [p for p in prompts if "\n## Update topics (JSON)\n" in p]
+    assert updated, "a cut cycle must have worked an update batch"
+    assert [p for p in prompts if "\n## Batch topics (JSON)\n" in p]
+    first = (vault / "_pipeline/cycles/cycle-001-batch-001.json").read_text("utf-8")
+    assert json.loads(first)["kind"] == "update"  # updates are over a third: they lead
+    # and the update was settled, not left half done
+    assert len(backlog.update_topics(vault)) < 12
+
+
+def test_a_correction_for_a_new_batch_skips_over_an_update_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from research_framework.pipeline import batch as batch_mod
+
+    monkeypatch.setenv("FAKE_AGENT_SCENARIO", "happy")
+    # every new-topic batch is written without source_urls, so SG-005 fails it
+    monkeypatch.setenv("FAKE_AGENT_NOTE_WRITER_SCENARIO", "fail_frontmatter")
+    vault, spec = _vault_with_due_notes(tmp_path, notes=4, targets=40, batch_size=3)
+    real = batch_mod.slice_topics_into_batches
+
+    def new_update_new(*args: Any, **kwargs: Any) -> list[Any]:
+        """Force the order N U N ... so a correction must hop over the update."""
+        import dataclasses
+
+        out = real(*args, **kwargs)
+        news = [b for b in out if b.kind == "new"]
+        ups = [b for b in out if b.kind == "update"]
+        assert len(news) >= 2 and ups
+        order = [news[0], ups[0], *news[1:], *ups[1:]]
+        return [dataclasses.replace(b, batch_number=n) for n, b in enumerate(order, 1)]
+
+    monkeypatch.setattr(batch_mod, "slice_topics_into_batches", new_update_new)
+
+    run_single_cycle(vault, cycle_num=1, budget_cap=10.0, max_cycles=1, spec=spec)
+
+    cycles = vault / "_pipeline" / "cycles"
+    first_new, update, second_new = (
+        json.loads((cycles / f"cycle-001-batch-{n:03d}.json").read_text("utf-8"))
+        for n in (1, 2, 3)
+    )
+    assert (first_new.get("kind"), update["kind"], second_new.get("kind")) == (
+        None,
+        "update",
+        None,
+    )
+    assert first_new["accepted"] is False  # SG-005: no source_urls
+    assert first_new["correction_directive_in"] == ""
+    # the update batch never sees a new batch's correction ...
+    assert update["correction_directive_in"] == ""
+    assert "## Correction directive" not in (
+        cycles / "cycle-001-batch-002-dfs.md"
+    ).read_text("utf-8")
+    # ... and the next NEW batch still does, though an update sat between them
+    assert second_new["correction_directive_in"].strip()
+    assert "## Correction directive" in (
+        cycles / "cycle-001-batch-003-dfs.md"
+    ).read_text("utf-8")
