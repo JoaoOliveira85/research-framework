@@ -254,7 +254,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
 ## Phase 4: Proof
 
-- [ ] T011 The guard, the end-to-end case and the gates.
+- [x] T011 The guard, the end-to-end case and the gates.
 
   ### Testing Requirements
 
@@ -264,6 +264,10 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
   - **Test 2**: `tests/e2e/test_backlog_operator_ownership.py::test_operator_fields_survive_a_cycle_a_sweep_and_a_regrade`
     - Behavior: spec acceptance 4 end to end, with the fake agent.
     - Tier: 5
+
+  Done in this branch: the guard, the e2e case and the `CHANGELOG.md`
+  entries. The test-count refresh, `bash build.sh --quality` and the
+  rehearsal on vault copies are done separately.
 
   Gates, run and reported in the PR: `pytest -m "not e2e"`,
   `pytest -m e2e`, `python scripts/guards/run_all.py`, `ruff check .`,
