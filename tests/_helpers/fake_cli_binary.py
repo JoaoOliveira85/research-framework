@@ -277,7 +277,7 @@ def stub_main(
 # ---------------------------------------------------------------------------
 
 
-_LAUNCHER = '''#!/usr/bin/env python3
+_LAUNCHER = '''#!{python}
 """Fake `{runtime}` CLI — see tests/_helpers/fake_cli_binary.py.
 
 Deliberately thin: all behaviour lives in the importable helper so the tests
@@ -311,8 +311,15 @@ def install(
                 f"{', '.join(SUPPORTED_RUNTIMES)}"
             )
         target = bin_dir / runtime
+        # The stub imports the fake agent, which imports the package (spec 083:
+        # state paths come from ``state_layout``). It must therefore run under
+        # the interpreter the tests run under, not whichever ``python3`` is
+        # first on PATH — that one may have no ``research_framework`` at all,
+        # or a stale one.
         target.write_text(
-            _LAUNCHER.format(runtime=runtime, repo_root=str(REPO_ROOT)),
+            _LAUNCHER.format(
+                python=sys.executable, runtime=runtime, repo_root=str(REPO_ROOT)
+            ),
             encoding="utf-8",
         )
         target.chmod(target.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
