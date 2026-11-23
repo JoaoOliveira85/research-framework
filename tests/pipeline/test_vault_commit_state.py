@@ -13,8 +13,8 @@ from research_framework.generator.scaffold import _render_vault_gitignore
 from research_framework.pipeline import cycle_ledger, state_layout
 from research_framework.pipeline.vault_commit import (
     begin_run,
-    commit_cycle,
     commit_command_output,
+    commit_cycle,
 )
 
 TARGETS = "_pipeline/state/coverage-targets.json"
