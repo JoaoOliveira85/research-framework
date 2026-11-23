@@ -49,6 +49,10 @@ class CycleRow:
     finished_at: str
     cost_usd: float
     sidecars_missing: bool
+    aborted: bool = False
+    """The cycle was abandoned. Its spend counts toward the lifetime cap, but it
+    is not a completed cycle: numbering and the cadence ignore it, so the cycle
+    is retried and its completed row replaces this one."""
 
 
 def _parse_row(path: Path, raw: Any) -> CycleRow:
@@ -58,6 +62,7 @@ def _parse_row(path: Path, raw: Any) -> CycleRow:
     finished_at = raw.get("finished_at")
     cost = raw.get("cost_usd")
     missing = raw.get("sidecars_missing")
+    aborted = raw.get("aborted", False)
     if (
         not isinstance(cycle, int)
         or isinstance(cycle, bool)
@@ -66,9 +71,10 @@ def _parse_row(path: Path, raw: Any) -> CycleRow:
         or not isinstance(cost, int | float)
         or isinstance(cost, bool)
         or not isinstance(missing, bool)
+        or not isinstance(aborted, bool)
     ):
         raise CycleLedgerError(path, f"malformed row: {raw!r}")
-    return CycleRow(cycle, finished_at, float(cost), missing)
+    return CycleRow(cycle, finished_at, float(cost), missing, aborted)
 
 
 def load(vault_dir: Path) -> list[CycleRow]:
@@ -93,11 +99,18 @@ def load(vault_dir: Path) -> list[CycleRow]:
     return [by_cycle[n] for n in sorted(by_cycle)]
 
 
+def _as_json(row: CycleRow) -> dict[str, Any]:
+    doc = asdict(row)
+    if not row.aborted:
+        del doc["aborted"]  # absent means completed: ordinary rows keep four keys
+    return doc
+
+
 def _write(vault_dir: Path, rows: list[CycleRow]) -> None:
     ordered = sorted(rows, key=lambda row: row.cycle)
     write_json(
         state_layout.cycle_ledger_path(vault_dir),
-        {"schema_version": SCHEMA_VERSION, "cycles": [asdict(r) for r in ordered]},
+        {"schema_version": SCHEMA_VERSION, "cycles": [_as_json(r) for r in ordered]},
     )
 
 
@@ -127,6 +140,23 @@ def close_cycle(vault_dir: Path, cycle: int) -> CycleRow:
         cost_usd=cost or 0.0,
         sidecars_missing=cost is None,
     )
+
+
+def record_aborted(vault_dir: Path, cycle: int) -> CycleRow | None:
+    """Keep the spend of an abandoned cycle (spec 083 SC-001).
+
+    Only a cycle with sidecars has spend to keep; otherwise nothing is written.
+    A later :func:`close_cycle` of the same cycle replaces this row.
+    """
+    cost = sum_sidecar_costs(vault_dir, cycle)
+    if cost is None:
+        return None
+    when = datetime.now(UTC)
+    row = CycleRow(cycle, when.strftime(_TS_FMT), cost, False, aborted=True)
+    rows = [r for r in load(vault_dir) if r.cycle != cycle]
+    rows.append(row)
+    _write(vault_dir, rows)
+    return row
 
 
 def _cycles_dir(vault_dir: Path) -> Path:
@@ -208,8 +238,16 @@ def scan_finished_at(vault_dir: Path, cycle: int) -> datetime | None:
 
 
 def highest_completed_cycle(vault_dir: Path) -> int | None:
-    """``max(ledger, scan)``, or ``None`` when neither knows a cycle."""
-    known = [row.cycle for row in load(vault_dir)] + scan_completed_cycles(vault_dir)
+    """``max(ledger, scan)``, or ``None`` when neither knows a cycle.
+
+    Aborted ledger rows do not count, and the scan does not second-guess a
+    cycle the ledger lists.
+    """
+    rows = load(vault_dir)
+    listed = {row.cycle for row in rows}
+    known = [row.cycle for row in rows if not row.aborted] + [
+        n for n in scan_completed_cycles(vault_dir) if n not in listed
+    ]
     return max(known) if known else None
 
 
@@ -233,6 +271,8 @@ def last_finished_at(vault_dir: Path, current_cycle: int) -> datetime | None:
     in_ledger = {row.cycle: row for row in load(vault_dir)}
     for prior in range(current_cycle - 1, 0, -1):
         row = in_ledger.get(prior)
+        if row is not None and row.aborted:
+            continue
         parsed = (
             _parse_ts(row.finished_at)
             if row is not None
@@ -243,33 +283,61 @@ def last_finished_at(vault_dir: Path, current_cycle: int) -> datetime | None:
     return None
 
 
-def backfill_from_cycles(vault_dir: Path) -> int:
-    """Add a row for every completed cycle under ``cycles/`` the ledger lacks.
-
-    Cost and timestamp use the derivations the readers used before the ledger
-    existed: the sum of the cycle's sidecars (``0.0`` and ``sidecars_missing``
-    when it has none), and the research/scout JSON ``timestamp`` (the quality
-    report's mtime when neither carries one). Aborted cycles get no row: a row
-    would make the next cycle number skip a cycle that must be retried.
-    Returns how many rows were added.
-    """
-    rows = load(vault_dir)
-    have = {row.cycle for row in rows}
-    added = 0
+def _backfill_rows(vault_dir: Path) -> list[CycleRow]:
+    """The rows :func:`backfill_from_cycles` would add."""
+    have = {row.cycle for row in load(vault_dir)}
+    cycles_dir = _cycles_dir(vault_dir)
+    new: list[CycleRow] = []
     for cycle in scan_completed_cycles(vault_dir):
         if cycle in have:
             continue
         cost = sum_sidecar_costs(vault_dir, cycle)
         when = scan_finished_at(vault_dir, cycle)
         if when is None:
-            report = _cycles_dir(vault_dir) / f"cycle-{cycle:03d}-quality-report.json"
+            report = cycles_dir / f"cycle-{cycle:03d}-quality-report.json"
             when = datetime.fromtimestamp(report.stat().st_mtime, UTC)
-        rows.append(
+        new.append(
             CycleRow(
                 cycle, when.astimezone(UTC).strftime(_TS_FMT), cost or 0.0, cost is None
             )
         )
-        added += 1
-    if added:
-        _write(vault_dir, rows)
-    return added
+        have.add(cycle)
+    # Abandoned cycles keep their spend (they get no completed row, so they are
+    # retried): any marked-aborted cycle that has sidecars.
+    if cycles_dir.is_dir():
+        for marker in sorted(cycles_dir.glob("cycle-*-aborted.json")):
+            m = re.fullmatch(r"cycle-(\d+)-aborted\.json", marker.name)
+            if m is None or int(m.group(1)) in have or int(m.group(1)) < 1:
+                continue
+            cycle = int(m.group(1))
+            cost = sum_sidecar_costs(vault_dir, cycle)
+            if cost is None:
+                continue
+            when = datetime.fromtimestamp(marker.stat().st_mtime, UTC)
+            new.append(
+                CycleRow(cycle, when.strftime(_TS_FMT), cost, False, aborted=True)
+            )
+            have.add(cycle)
+    return new
+
+
+def pending_backfill(vault_dir: Path) -> int:
+    """How many rows :func:`backfill_from_cycles` would add; writes nothing."""
+    return len(_backfill_rows(vault_dir))
+
+
+def backfill_from_cycles(vault_dir: Path) -> int:
+    """Add the rows the ledger lacks for what ``cycles/`` holds (spec 083 FR-007).
+
+    A completed cycle (quality report, no abort marker) gets a normal row. Cost
+    and timestamp use the derivations the readers used before the ledger
+    existed: the sum of the cycle's sidecars (``0.0`` and ``sidecars_missing``
+    when it has none), and the research/scout JSON ``timestamp`` (the quality
+    report's mtime when neither carries one). An aborted cycle that has sidecars
+    gets an ``aborted`` row, so its spend survives but its number is retried.
+    Returns how many rows were added.
+    """
+    new = _backfill_rows(vault_dir)
+    if new:
+        _write(vault_dir, [*load(vault_dir), *new])
+    return len(new)

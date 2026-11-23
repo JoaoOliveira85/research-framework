@@ -850,6 +850,12 @@ def mark_cycle_aborted(vault_dir: Path, cycle: int, *, reason: str) -> None:
         )
     except OSError as exc:  # pragma: no cover - advisory
         _LOG.warning("[orchestrator] could not write abort marker: %s", exc)
+    # Spec 083 SC-001: what an abandoned cycle spent must survive a clean of
+    # cycles/, or the lifetime cap forgets it. Best-effort, like the marker.
+    try:
+        cycle_ledger.record_aborted(vault_dir, cycle)
+    except Exception as exc:
+        _LOG.warning("[orchestrator] could not record aborted cycle spend: %s", exc)
 
 
 def clear_cycle_aborted(vault_dir: Path, cycle: int) -> None:

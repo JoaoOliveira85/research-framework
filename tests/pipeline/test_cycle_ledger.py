@@ -109,7 +109,7 @@ def test_backfill_adds_only_the_cycles_the_ledger_lacks(tmp_path: Path) -> None:
     assert cycle_ledger.backfill_from_cycles(tmp_path) == 2
     assert cycle_ledger.backfill_from_cycles(tmp_path) == 0
     by = {r.cycle: r for r in cycle_ledger.load(tmp_path)}
-    assert sorted(by) == [1, 2, 3]  # aborted cycle 4 gets no row
+    assert sorted(by) == [1, 2, 3]  # aborted cycle 4 has no sidecars: no row
     assert by[1].cost_usd == 1.0
     assert by[2].finished_at == "2026-01-02T03:04:05Z"
     assert by[2].cost_usd == pytest.approx(0.75) and not by[2].sidecars_missing
@@ -121,3 +121,59 @@ def test_highest_completed_cycle_is_max_of_ledger_and_scan(tmp_path: Path) -> No
     _row(tmp_path, 5, 0.0)
     _scan_cycle(tmp_path, 3, 0.0)
     assert _highest_completed_cycle(tmp_path) == 5
+
+
+def test_aborted_spend_survives_an_empty_cycles_directory(tmp_path: Path) -> None:
+    _row(tmp_path, 1, 1.0)
+    _scan_cycle(tmp_path, 2, 0.75)
+    row = cycle_ledger.record_aborted(tmp_path, 2)
+    assert row is not None and row.aborted
+    import shutil
+
+    shutil.rmtree(tmp_path / "_pipeline" / "cycles")
+    assert _cumulative_sidecar_cost(tmp_path, up_to=2) == pytest.approx(1.75)
+    doc = json.loads(state_layout.cycle_ledger_path(tmp_path).read_text())
+    assert doc["cycles"][1]["aborted"] is True
+    assert "aborted" not in doc["cycles"][0]
+
+
+def test_an_aborted_row_does_not_advance_numbering(tmp_path: Path) -> None:
+    now = datetime.now(UTC)
+    _row(tmp_path, 1, 1.0, now - timedelta(hours=5))
+    _scan_cycle(tmp_path, 2, 0.5)
+    cycle_ledger.record_aborted(tmp_path, 2)
+    # The scan would call cycle 2 completed if it had a quality report and no
+    # marker; the ledger is authoritative about cycle 2.
+    assert _resolve_resume_cycle(_args(tmp_path)) == 2
+    hours = _hours_since_last_cycle(tmp_path, current_cycle=3, now=now)
+    assert hours == pytest.approx(5.0, abs=0.01)
+
+
+def test_a_retried_cycle_replaces_its_aborted_row(tmp_path: Path) -> None:
+    _scan_cycle(tmp_path, 1, 0.5)
+    cycle_ledger.record_aborted(tmp_path, 1)
+    (
+        tmp_path / "_pipeline" / "cycles" / "cycle-001" / "agent-calls" / "b.json"
+    ).write_text(json.dumps({"cost_usd": 0.25}), encoding="utf-8")
+    cycle_ledger.close_cycle(tmp_path, 1)
+    rows = cycle_ledger.load(tmp_path)
+    assert len(rows) == 1 and not rows[0].aborted
+    assert rows[0].cost_usd == pytest.approx(0.75)
+    assert _resolve_resume_cycle(_args(tmp_path)) == 2
+
+
+def test_an_aborted_cycle_without_sidecars_writes_no_row(tmp_path: Path) -> None:
+    assert cycle_ledger.record_aborted(tmp_path, 1) is None
+    assert cycle_ledger.load(tmp_path) == []
+
+
+def test_backfill_adds_aborted_cycles_that_have_sidecars(tmp_path: Path) -> None:
+    _scan_cycle(tmp_path, 1, 0.5)
+    _scan_cycle(tmp_path, 2, 0.4)
+    (_cycles(tmp_path) / "cycle-002-aborted.json").write_text("{}")
+    assert cycle_ledger.pending_backfill(tmp_path) == 2
+    assert cycle_ledger.backfill_from_cycles(tmp_path) == 2
+    by = {r.cycle: r for r in cycle_ledger.load(tmp_path)}
+    assert by[2].aborted and by[2].cost_usd == pytest.approx(0.4)
+    assert not by[1].aborted
+    assert _resolve_resume_cycle(_args(tmp_path)) == 2
