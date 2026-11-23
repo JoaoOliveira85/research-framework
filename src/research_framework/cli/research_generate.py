@@ -104,7 +104,7 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 
     # Spec 083 FR-015: a run writes state; a vault still in the pre-083 layout
     # is migrated first, never half-read.
-    _vault_arg = args.vault_dir or args.output
+    _vault_arg = getattr(args, "vault_dir", None) or getattr(args, "output", None)
     if (
         _vault_arg is not None
         and (legacy_rc := refuse_if_legacy_layout(Path(_vault_arg).expanduser()))
