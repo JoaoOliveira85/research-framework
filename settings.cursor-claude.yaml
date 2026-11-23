@@ -128,6 +128,16 @@ pipeline:
   # 2026-09-07); see settings.yaml for the full rationale.
   budget_usd: 25.00
   backlog_promotion_threshold: 2
+  # How each cycle's planned topics are shared (spec 087): new topics, updates
+  # to notes the vault already has, and discovery (no work of its own yet, so
+  # its share goes to new topics). Three integers >= 0 summing to 100. The
+  # spec's `research_mode` decides how it applies: `bootstrap` gives updates 0,
+  # `refresh` gives new topics 0, `expand` (the default) uses it as written. A
+  # share with no work falls to the others.
+  cycle_split:
+    new: 60
+    updates: 30
+    discovery: 10
 
   note_writer_batch_size: 6
   max_batches_per_cycle: 10
@@ -297,38 +307,6 @@ cycles:
   max_consecutive_verifier_rejections:
     initial: 6
     update: 3
-
-# ---------------------------------------------------------------------------
-# Research mode defaults. Runtime-agnostic.
-# ---------------------------------------------------------------------------
-research_modes:
-  bootstrap:
-    exit_condition: coverage_met
-    scout_bias: new_topics
-    note_action: create
-    wind_down:
-      budget_pct_trigger: 0.8
-      zero_scout_cycles_trigger: 2
-      min_cycles_before_wind_down: 2
-
-  refresh:
-    exit_condition: no_new_deltas
-    scout_bias: changes_since_snapshot
-    note_action: merge
-    new_topic_policy: backlog
-
-  expand:
-    exit_condition: coverage_met_or_no_deltas
-    scout_bias: both
-    note_action: create_or_merge
-    budget_split:
-      coverage_pct: 0.6
-      refresh_pct: 0.4
-    wind_down:
-      budget_pct_trigger: 0.8
-      zero_scout_cycles_trigger: 2
-      min_cycles_before_wind_down: 2
-    auto_tail_refresh: true
 
 # ---------------------------------------------------------------------------
 # Exit invariant. Runtime-agnostic.

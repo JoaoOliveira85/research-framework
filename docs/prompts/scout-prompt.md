@@ -7,7 +7,7 @@
 | **Source** | `templates/prompts/scout-prompt.md.j2` |
 | **Role** | Topic discovery — produces `_pipeline/scout-report.json`. |
 | **Dispatched by** | `pipeline scout` / the cycle runner's scout step |
-| **Source sha256** | `ec188a04f50cd63a` |
+| **Source sha256** | `65bcf6bda91d70f0` |
 
 Reproduced verbatim, including its placeholders. A vault gets this text with the placeholders filled at scaffold or dispatch time.
 
@@ -16,7 +16,7 @@ Reproduced verbatim, including its placeholders. A vault gets this text with the
 {%- set code_first = primary and primary[0].repos -%}
 {%- set coverage_cats = (spec.coverage_targets.categories if spec.coverage_targets is defined and spec.coverage_targets else []) -%}
 ---
-_template_version: 5
+_template_version: 6
 ---
 You are running BFS scout cycle {CYCLE_NUM} of a recursive research pass on the
 {{ spec.name }} vault.
@@ -201,11 +201,11 @@ classes that all implement the same dispatch pattern → 1 topic).
 Scan all available data sources for NEW topics not yet covered in the vault.
 Required data sources — each MUST be consulted or explicitly skipped with a reason:
 
-{% for ds in spec.data_sources if ds.required %}
+{% for ds in spec.data_sources if ds.required and ds.applies_to(spec.research_mode) %}
 - **{{ ds.name }}** ({{ ds.type }}){{ ' — ' ~ ds.description if ds.description else '' }}{{ ' [' ~ ds.access_method ~ ']' if ds.access_method else '' }}
 {% endfor %}
 
-{% for ds in spec.data_sources if not ds.required %}
+{% for ds in spec.data_sources if not ds.required and ds.applies_to(spec.research_mode) %}
 - *(optional)* **{{ ds.name }}** ({{ ds.type }}){{ ' — ' ~ ds.description if ds.description else '' }}
 {% endfor %}
 
@@ -373,7 +373,7 @@ The report MUST follow this exact schema (no extra commentary, JSON only):
   "timestamp": "<ISO-8601 timestamp>",
   "prompt": "<short recap of this prompt>",
   "sources_consulted": {
-{% for ds in spec.data_sources %}
+{% for ds in spec.data_sources if ds.applies_to(spec.research_mode) %}
     "{{ ds.name | lower | replace(' ', '_') | replace('-', '_') }}": {"searched": true|false, "results_count": N, "reason": "<why skipped — REQUIRED if searched is false>"}{{ ',' if not loop.last else '' }}
 {% endfor %}
   },

@@ -351,15 +351,16 @@ def test_a_version_1_cache_predating_role_declared_is_rebuilt(tmp_path: Path) ->
     assert [ds.get("role_declared") for ds in doc["data_sources"]] == [False]
 
 
-# Always-present top-level keys of SpecConfig.to_dict() at PARSER_VERSION == 3
+# Always-present top-level keys of SpecConfig.to_dict() at PARSER_VERSION == 4
 # (version 2: DataSourceConfig.to_dict() emits ``role_declared: false``, #17;
 # version 3: NoteTypeConfig.to_dict() emits ``review_after_days`` when declared,
-# spec 087 — nested, so the top-level key set is unchanged)
+# spec 087 — nested, so the top-level key set is unchanged; version 4: the
+# default ``research_mode`` is ``expand``, spec 087)
 # (``forbidden_filename_prefixes`` is emitted only when non-empty). Changing the
 # parsed shape means a cache written earlier is wrong about it: bump
 # PARSER_VERSION in spec/parsed.py, then update this set and the version below.
 _SHAPE_AT_VERSION = (
-    3,
+    4,
     frozenset(
         {
             "access_modes",

@@ -350,6 +350,12 @@ def _spec_data_sources(
         if phase == "scout" and role not in _SCOUT_PHASE_ROLES:
             # Domain docs source: research-phase enforcement only.
             continue
+        phases = ds.get("phases")
+        mode = spec.get("research_mode") or "expand"
+        if phase == "scout" and phases and mode not in phases:
+            # `phases` excludes this cycle's mode: the scout prompt leaves the
+            # source out (spec 087 FR-017), so it is not owed a mention.
+            continue
         key = source_key(ds["name"])
         if ds.get("required", True):
             required.append(key)

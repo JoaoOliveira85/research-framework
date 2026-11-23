@@ -554,10 +554,10 @@ class SpecConfig:
     access_modes: list[str] = field(default_factory=list)
     settings: SpecSettings = field(default_factory=SpecSettings)
     code_source_url_patterns: list[str] = field(default_factory=list)
-    # Default research mode for this vault. The CLI `--mode` flag overrides
-    # at run time; auto-detection (empty vault → bootstrap, non-empty →
-    # refresh) overrides when the user supplies neither.
-    research_mode: str = "bootstrap"
+    # The vault's research mode: how `pipeline.cycle_split` is applied each
+    # cycle (spec 087 FR-016) and which sources (`phases`) the scout consults.
+    # Absent = `expand`.
+    research_mode: str = "expand"
     # Corpus folder name, relative to the vault root. Defaults to the
     # historical value so existing vaults without the spec field are
     # unaffected. Declared per-vault in the spec's `vault.corpus_dir` key.
@@ -629,7 +629,7 @@ class SpecConfig:
             access_modes=list(d.get("access_modes", []) or []),
             settings=SpecSettings.from_dict(d.get("settings") or {}),
             code_source_url_patterns=list(d.get("code_source_url_patterns", []) or []),
-            research_mode=d.get("research_mode", "bootstrap"),
+            research_mode=d.get("research_mode", "expand"),
             # Accept either the flat key written by to_dict / spec-parse.json,
             # or the nested `vault.corpus_dir` key as declared in the YAML
             # frontmatter of both simple and detailed spec files.

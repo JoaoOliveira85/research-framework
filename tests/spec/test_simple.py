@@ -75,7 +75,7 @@ class TestParseSimpleHappyPath:
         path = _write(tmp_path, MINIMAL_FRONTMATTER)
         simple = parse_simple(path)
         assert simple.growth_mode == "incremental"
-        assert simple.research_mode == "bootstrap"
+        assert simple.research_mode == "expand"
         assert simple.scope_include == []
         assert simple.scope_exclude == []
         assert simple.sources == []
@@ -514,7 +514,7 @@ class TestLoadAutoDetect:
         body = MINIMAL_FRONTMATTER
         spec = load(_write(tmp_path, body))
         assert isinstance(spec, SpecConfig)
-        assert spec.research_mode == "bootstrap"
+        assert spec.research_mode == "expand"
         validate(spec)
 
     def test_load_uses_explicit_location_when_given(self, tmp_path: Path) -> None:

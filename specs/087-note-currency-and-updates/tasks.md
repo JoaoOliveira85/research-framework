@@ -124,7 +124,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
   **TDD discipline**: required.
 
-- [ ] T006 `pipeline.cycle_split` in the settings schema and every shipped
+- [x] T006 `pipeline.cycle_split` in the settings schema and every shipped
       profile; `research_mode` chooses how it applies, default `expand`;
       `phases` filters the scout prompt's sources; the `research_modes`
       blocks leave the profiles and `_INERT_PATHS`; the guard

@@ -69,6 +69,7 @@ GUARD_TEST_PATHS: tuple[str, ...] = (
     "tests/cli/test_parser_flag_consumer_guard.py",
     "tests/guards/test_state_paths_guard.py",
     "tests/cli/test_exit_code_contract.py",
+    "tests/guards/test_settings_key_consumers.py",
     "tests/scripts/test_guard_checkout_package.py",
 )
 
@@ -121,12 +122,21 @@ def _state_paths_guard() -> Guard:
     )
 
 
+def _settings_key_guard() -> Guard:
+    """Spec 087 SC-005: every typed ``pipeline:`` settings key has a reader."""
+    return Guard(
+        name="settings-key-consumers",
+        command=(sys.executable, "scripts/guards/settings_key_consumers.py"),
+    )
+
+
 def guard_battery() -> list[Guard]:
     return [
         _portability_guard(),
         _agent_asset_references_guard(),
         _parser_flag_guard(),
         _state_paths_guard(),
+        _settings_key_guard(),
         _pytest_guard(),
     ]
 

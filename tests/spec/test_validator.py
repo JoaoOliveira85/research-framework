@@ -170,9 +170,9 @@ def test_empty_coverage_categories() -> None:
 
 
 def test_default_research_mode_is_valid() -> None:
-    """Default research_mode ('bootstrap') is always accepted."""
+    """Default research_mode ('expand') is always accepted."""
     spec = _valid_spec()
-    assert spec.research_mode == "bootstrap"
+    assert spec.research_mode == "expand"
     validate(spec)
 
 

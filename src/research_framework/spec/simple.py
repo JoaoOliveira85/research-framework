@@ -113,7 +113,7 @@ class SimpleSpec:
     scope_include: list[str] = field(default_factory=list)
     scope_exclude: list[str] = field(default_factory=list)
     growth_mode: str = "incremental"
-    research_mode: str = "bootstrap"
+    research_mode: str = "expand"
     # `sources` kept as raw dicts here so parse_simple stays a thin YAML
     # reader. The expander is where they become DataSourceConfig objects.
     sources: list[dict[str, Any]] = field(default_factory=list)
@@ -227,7 +227,7 @@ def _simple_spec_from_dict(d: dict[str, Any], spec_path: Path) -> SimpleSpec:
             f"{spec_path}: growth_mode '{growth_mode}' is invalid "
             f"(must be one of {list(GROWTH_MODES)})"
         )
-    research_mode = str(d.get("research_mode", "bootstrap"))
+    research_mode = str(d.get("research_mode", "expand"))
     if research_mode not in RESEARCH_MODES:
         errors.append(
             f"{spec_path}: research_mode '{research_mode}' is invalid "

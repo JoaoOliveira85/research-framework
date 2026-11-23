@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -175,3 +175,69 @@ def record_scout_updates(
     if not backlog.update(vault_dir, "scout", observe):
         return 0
     return len(sightings)
+
+
+def _share(shares: object, name: str) -> int:
+    value = (
+        shares.get(name, 0) if isinstance(shares, Mapping) else getattr(shares, name)
+    )
+    return max(0, int(value))
+
+
+def split_quota(
+    quota: int,
+    shares: object,
+    *,
+    mode: str,
+    new_available: int,
+    updates_available: int,
+) -> tuple[int, int]:
+    """Share a cycle's planned topic count between new topics and updates.
+
+    ``shares`` is ``pipeline.cycle_split`` (``new``/``updates``/``discovery``,
+    attributes or mapping keys). Spec 087 FR-015..FR-017:
+
+    * Discovery has no work of its own yet, so its share always goes to new
+      topics.
+    * ``mode`` applies first: ``bootstrap`` gives updates 0, ``refresh`` gives
+      new topics 0, ``expand`` (and anything else) uses the shares as written.
+    * The two shares are rounded together (largest remainder) so they sum to
+      ``quota``.
+    * A share with no work falls to the other: with fewer open update entries
+      than the update count the rest goes to new topics, and with fewer new
+      topics than the new count the rest goes to updates. A mode's zero is
+      never filled. The result may sum to less than ``quota`` when neither
+      kind has enough work.
+    """
+    quota = max(0, int(quota))
+    new_available = max(0, int(new_available))
+    updates_available = max(0, int(updates_available))
+    new_weight = _share(shares, "new") + _share(shares, "discovery")
+    update_weight = _share(shares, "updates")
+    if mode == "bootstrap":
+        update_weight = 0
+    elif mode == "refresh":
+        new_weight = 0
+    total = new_weight + update_weight
+    if quota == 0 or total == 0:
+        return 0, 0
+    raw_updates = quota * update_weight / total
+    update_n = int(raw_updates)
+    new_n = int(quota * new_weight / total)
+    leftover = quota - update_n - new_n
+    if leftover:  # largest remainder, ties to new topics
+        new_rem = quota * new_weight / total - new_n
+        update_rem = raw_updates - update_n
+        if update_rem > new_rem:
+            update_n += 1
+        else:
+            new_n += 1
+    if update_weight and update_n > updates_available:
+        spare = update_n - updates_available
+        update_n = updates_available
+        new_n += spare if new_weight else 0
+    if new_weight and new_n > new_available:
+        spare = new_n - new_available
+        new_n = new_available
+        update_n += min(spare, updates_available - update_n) if update_weight else 0
+    return new_n, update_n

@@ -57,8 +57,9 @@ _LOG = logging.getLogger(__name__)
 #: History: 1 — content-hash cache (#9); 2 — ``DataSourceConfig.to_dict()``
 #: emits ``role_declared: false`` for a source with no declared ``role`` (#17);
 #: 3 — ``NoteTypeConfig.to_dict()`` emits ``review_after_days`` when declared
-#: (spec 087 FR-009).
-PARSER_VERSION = 3
+#: (spec 087 FR-009); 4 — a spec that declares no ``research_mode`` parses to
+#: ``expand`` (it was ``bootstrap``; spec 087 FR-016).
+PARSER_VERSION = 4
 
 #: Where the cache lives, relative to the vault root.
 SPEC_PARSE_RELPATH = Path("_pipeline") / "spec-parse.json"

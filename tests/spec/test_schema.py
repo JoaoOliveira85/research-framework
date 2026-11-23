@@ -372,11 +372,11 @@ class TestResearchModeAndPhases:
     def test_research_modes_constant(self) -> None:
         assert RESEARCH_MODES == ("bootstrap", "refresh", "expand")
 
-    def test_spec_defaults_to_bootstrap(self) -> None:
+    def test_spec_defaults_to_expand(self) -> None:
         spec = _minimal_spec(
             [DataSourceConfig(name="ds", type="internal", priority=1, role="behaviour")]
         )
-        assert spec.research_mode == "bootstrap"
+        assert spec.research_mode == "expand"
 
     def test_spec_research_mode_round_trips(self) -> None:
         spec = _minimal_spec(
