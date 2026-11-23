@@ -58,14 +58,17 @@ Any other field is operator-owned and preserved byte-for-byte in value.
     ▲  │                                                       │
     │  └──── operator only ──────────────►  dropped            │
     │                                         │                │
-    └────────────── operator only ◄───────────┴────────────────┘
+    ├────────────── operator only ◄───────────┘                │
+    └──── operator, or a writer observing it again ◄───────────┘
+          (a writer only if a writer resolved it)
 ```
 
-- A writer moves only `open → resolved`, and never on an entry whose
-  `status_by` is `operator`.
-- Only an operator moves an entry to `dropped`, or out of `resolved` or
-  `dropped`. The module notices on its next load (`status != status_written`)
-  and records `status_by: operator`.
+- A writer moves `open → resolved`, and `resolved → open` only for an entry
+  a writer resolved, when it observes that entry again. It never changes the
+  status of an entry whose `status_by` is `operator`.
+- Only an operator moves an entry to `dropped` or out of it, or reopens an
+  entry an operator resolved. The module notices an operator's change on its
+  next load (`status != status_written`) and records `status_by: operator`.
 - Nothing deletes an entry.
 
 ## Writer → observation map

@@ -173,15 +173,68 @@ def test_a_dropped_or_operator_reopened_entry_is_never_moved_by_a_writer(
     assert by_id["topic:reopened"]["status"] == "open"
     assert by_id["topic:reopened"]["status_by"] == "operator"
     assert by_id["quarantine:gone"]["status"] == "dropped"
-    # and a resolved entry is never reopened by a later sighting
+
+
+def test_an_entry_a_writer_resolved_reopens_when_it_is_observed_again(
+    tmp_path: Path,
+) -> None:
+    # A topic whose note was written, then removed and cited again.
     backlog.observe_topic(
         tmp_path, "harvest", cycle=1, title="Fresh", origin="harvest", citation_count=1
     )
     backlog.resolve_covered(tmp_path, ["fresh"])
-    backlog.observe_topic(
-        tmp_path, "harvest", cycle=2, title="Fresh", origin="harvest", citation_count=1
-    )
     assert _by_id(tmp_path)["topic:fresh"]["status"] == "resolved"
+    backlog.observe_topic(
+        tmp_path, "harvest", cycle=2, title="Fresh", origin="harvest", citation_count=3
+    )
+    fresh = _by_id(tmp_path)["topic:fresh"]
+    assert (fresh["status"], fresh["status_by"], fresh["status_written"]) == (
+        "open",
+        "harvest",
+        "open",
+    )
+    assert fresh["citation_count"] == 3
+    # A harvest that still finds the note resolves it again in the same pass.
+    backlog.resolve_covered(tmp_path, ["fresh"])
+    assert _by_id(tmp_path)["topic:fresh"]["status"] == "resolved"
+
+    # A note quarantined, reinstated, then quarantined a second time.
+    backlog.observe_quarantine(tmp_path, stem="deseq", kind="rewrite", detail="first")
+    backlog.resolve_quarantine_stem(tmp_path, "deseq")
+    assert _by_id(tmp_path)["quarantine:deseq"]["status"] == "resolved"
+    backlog.observe_quarantine(tmp_path, stem="deseq", kind="retry", detail="second")
+    again = _by_id(tmp_path)["quarantine:deseq"]
+    assert (again["status"], again["kind"], again["detail"]) == (
+        "open",
+        "retry",
+        "second",
+    )
+    assert len(_store(tmp_path)["entries"]) == 2  # reopened, never duplicated
+
+
+def test_an_entry_an_operator_resolved_is_not_reopened_by_a_sighting(
+    tmp_path: Path,
+) -> None:
+    by_hand = _open("topic:settled", "Settled", "harvest")
+    # The operator resolved it in the file; the module last wrote "open".
+    by_hand.update(status="resolved", status_written="open")
+    quar = _open("quarantine:kept", "kept", "quarantine", stem="kept", kind="rewrite")
+    quar.update(status="resolved", status_written="resolved", status_by="operator")
+    _seed(tmp_path, [by_hand, quar])
+    backlog.observe_topic(
+        tmp_path,
+        "harvest",
+        cycle=4,
+        title="Settled",
+        origin="harvest",
+        citation_count=2,
+    )
+    backlog.observe_quarantine(tmp_path, stem="kept", kind="retry")
+    by_id = _by_id(tmp_path)
+    assert by_id["topic:settled"]["status"] == "resolved"
+    assert by_id["topic:settled"]["status_by"] == "operator"
+    assert by_id["quarantine:kept"]["status"] == "resolved"
+    assert by_id["quarantine:kept"]["kind"] == "retry"  # the observation is recorded
 
 
 def test_resolve_covered_resolves_harvest_and_researcher_not_others(

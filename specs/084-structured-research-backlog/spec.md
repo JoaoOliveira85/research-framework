@@ -148,6 +148,13 @@ recommended (§ Decisions keeps the options and the reasoning).
   and adds Q3's operator entries. FR-012 is reworded.
 - Q: Where is the pre-migration archive declared? → A: In `083`'s layout
   registry, as a second state artefact this spec adds (`research.md` R2).
+- Q: A note is quarantined, rewritten (its entry resolved by the sweep) and
+  quarantined again. Does its pointer come back? → A: Yes. "Writers move
+  status only from `open`" read literally would hide the second quarantine
+  for good, which today's sweep does not do. A writer may reopen an entry a
+  writer resolved, on observing it again; it never touches a status an
+  operator set, and never reopens `dropped` (FR-007 reworded, found while
+  implementing T002).
 
 ---
 
@@ -285,8 +292,11 @@ is kept. Running it again changes nothing.
 - **FR-007**: A writer MUST change only the observation fields it owns —
   `last_seen_cycle`, `seen_cycles`, `citation_count`, `cited_from`, `detail`
   and `updated` — on the entry its `id` matches, whatever that entry's
-  origin, and `status` only from `open`. It MUST NOT delete an entry, MUST
-  NOT reopen an entry whose status an operator set, MUST NOT change `title`,
+  origin. It MAY move `status` from `open` to `resolved`, and MAY reopen an
+  entry that a writer resolved when it observes that entry again (a note
+  quarantined a second time, a topic whose note was removed). It MUST NOT
+  delete an entry, MUST NOT change the status of an entry whose status an
+  operator set, MUST NOT reopen a `dropped` entry, MUST NOT change `title`,
   `origin`, `added` or `first_seen_cycle` of an existing entry, and MUST NOT
   touch fields it does not know.
 - **FR-008**: The module MUST record who last set an entry's status

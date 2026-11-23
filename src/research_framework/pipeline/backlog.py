@@ -384,6 +384,20 @@ class Transaction:
         entry["updated"] = self._today
         return True
 
+    def _reopen(self, entry: dict[str, Any]) -> bool:
+        """Reopen an entry a writer resolved, because it was observed again.
+
+        A note quarantined a second time, or a topic whose note was removed,
+        must come back (spec 084 FR-007). An operator's status is never
+        touched, and ``dropped`` is an operator's word by definition.
+        """
+        if entry["status"] != "resolved" or entry.get("status_by") == "operator":
+            return False
+        entry["status"] = "open"
+        entry["status_by"] = self._writer
+        entry["status_written"] = "open"
+        return True
+
     # -- observations -----------------------------------------------------
 
     def observe_topic(
@@ -443,6 +457,7 @@ class Transaction:
             self._entries.append(entry)
         else:
             self._stamp_seen(entry, cycle)
+            self._reopen(entry)
             entry["updated"] = self._today
         for name, value in fields.items():
             if value is None:
@@ -485,6 +500,7 @@ class Transaction:
             self._entries.append(entry)
         else:
             self._stamp_seen(entry, cycle)
+            self._reopen(entry)
             entry["updated"] = self._today
             entry["stem"] = stem
             entry["kind"] = kind
