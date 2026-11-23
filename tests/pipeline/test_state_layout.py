@@ -90,12 +90,28 @@ def test_registry_is_the_spec_table() -> None:
     )
 
 
-def test_legacy_layout_is_detected_from_any_legacy_path_but_the_backlog(
+def test_legacy_layout_is_detected_from_any_legacy_path_and_an_unconverted_backlog(
     tmp_path: Path,
 ) -> None:
+    from research_framework.pipeline import backlog
+
     pipeline = tmp_path / "_pipeline"
     pipeline.mkdir()
-    (pipeline / "research-backlog.md").write_text("# backlog\n", encoding="utf-8")
+    # Spec 084: a Markdown backlog while no store exists is unconverted state.
+    md = pipeline / "research-backlog.md"
+    md.write_text("# backlog\n", encoding="utf-8")
+    assert L.is_legacy_layout(tmp_path) is True
+    assert L.legacy_paths_present(tmp_path) == [md]
+    with pytest.raises(L.LegacyLayoutError) as unconverted:
+        L.require_migrated(tmp_path)
+    assert "./vault migrate-layout" in str(unconverted.value)
+    assert "_pipeline/research-backlog.md" in str(unconverted.value)
+
+    # Converted (a store exists): the Markdown is a view, never legacy.
+    store = L.research_backlog_path(tmp_path)
+    store.parent.mkdir(parents=True)
+    store.write_text('{"schema_version": "1.0", "entries": []}', encoding="utf-8")
+    assert backlog.is_unconverted(tmp_path) is False
     assert L.is_legacy_layout(tmp_path) is False
     L.require_migrated(tmp_path)  # does not raise
 

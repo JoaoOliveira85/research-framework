@@ -291,3 +291,154 @@ def test_a_vault_with_no_legacy_file_is_converted_from_nothing(tmp_path: Path) -
     result = convert_legacy("", today=TODAY)
     assert write_converted(vault, result, original=b"") is True
     assert backlog.planner_topics(vault) == []
+
+
+# -- The migration step (Tests 2-4, 7) -------------------------------------
+
+
+def _legacy_vault(tmp_path: Path, *, git_repo: bool = True) -> Path:
+    from tests._helpers.legacy_layout import build_legacy_vault, git
+
+    vault = build_legacy_vault(tmp_path, git_repo=git_repo)
+    md = vault / "_pipeline" / "research-backlog.md"
+    md.write_bytes(FIXTURE.read_bytes())
+    if git_repo:
+        git(vault, "commit", "-qam", "a real legacy backlog")
+    return vault
+
+
+def test_the_step_archives_byte_for_byte_and_a_second_run_is_a_no_op(
+    tmp_path: Path,
+) -> None:
+    from research_framework.pipeline import layout_migration
+    from tests._helpers.legacy_layout import git
+
+    vault = _legacy_vault(tmp_path)
+    result = layout_migration.migrate(vault)
+    assert result.exit_code == 0
+    archive = state_layout.research_backlog_archive_path(vault)
+    assert archive.read_bytes() == FIXTURE.read_bytes()
+    head = git(vault, "rev-parse", "HEAD")
+    store = state_layout.research_backlog_path(vault).read_bytes()
+
+    again = layout_migration.migrate(vault)
+    assert again.exit_code == 0 and again.committed is None
+    assert any("already migrated" in m for m in again.messages)
+    assert git(vault, "rev-parse", "HEAD") == head
+    assert state_layout.research_backlog_path(vault).read_bytes() == store
+
+
+def test_the_step_commits_the_store_and_drops_the_markdown_from_the_index(
+    tmp_path: Path,
+) -> None:
+    from research_framework.pipeline import layout_migration
+    from tests._helpers.legacy_layout import git
+
+    vault = _legacy_vault(tmp_path)
+    before = git(vault, "rev-list", "--count", "HEAD").strip()
+    result = layout_migration.migrate(vault)
+    assert result.exit_code == 0
+    assert int(git(vault, "rev-list", "--count", "HEAD")) == int(before) + 2
+
+    subjects = git(vault, "log", "-2", "--format=%s").splitlines()
+    assert subjects == [
+        "framework: convert the research backlog to a store",
+        "framework: migrate _pipeline layout",
+    ]
+    status_lines = [
+        line
+        for line in git(
+            vault, "show", "--name-status", "--no-renames", "--format=", "HEAD"
+        ).splitlines()
+        if line.strip()
+    ]
+    changes = {line.split("\t")[1]: line.split("\t")[0] for line in status_lines}
+    assert changes == {
+        "_pipeline/research-backlog.md": "D",
+        "_pipeline/state/research-backlog.json": "A",
+        "_pipeline/state/research-backlog.pre-migration.md": "A",
+    }
+    tracked = git(vault, "ls-files").split()
+    assert "_pipeline/research-backlog.md" not in tracked
+    view = backlog.view_path(vault)
+    assert view.is_file()
+    assert "research-backlog-view sha256=" in view.read_text(encoding="utf-8")
+    assert git(vault, "status", "--porcelain").strip() == ""
+
+
+def test_dry_run_converts_nothing_and_prints_the_counts(tmp_path: Path) -> None:
+    from research_framework.pipeline import layout_migration
+    from tests._helpers.legacy_layout import git
+
+    vault = _legacy_vault(tmp_path)
+    head = git(vault, "rev-parse", "HEAD")
+    md = backlog.view_path(vault).read_bytes()
+    result = layout_migration.migrate(vault, dry_run=True)
+    assert result.exit_code == 0
+    text = "\n".join(result.messages)
+    assert "migrated=12" in text and "harvest=2" in text
+    assert "4 coverage-gap line(s) not carried" in text
+    assert not state_layout.research_backlog_path(vault).exists()
+    assert not state_layout.research_backlog_archive_path(vault).exists()
+    assert backlog.view_path(vault).read_bytes() == md
+    assert git(vault, "rev-parse", "HEAD") == head
+
+
+def test_store_and_markdown_both_present_means_the_markdown_is_a_view(
+    tmp_path: Path,
+) -> None:
+    from research_framework.pipeline import layout_migration
+
+    vault = _legacy_vault(tmp_path, git_repo=False)
+    layout_migration.migrate(vault)
+    store = state_layout.research_backlog_path(vault)
+    stored = store.read_bytes()
+    # A stale writer put footerless text back into the view.
+    backlog.view_path(vault).write_text("- **Sneaky** stale line\n", encoding="utf-8")
+    assert not backlog.is_unconverted(vault)
+
+    plan = layout_migration.CONVERT_BACKLOG_STEP.plan(vault)
+    assert plan.is_noop and plan.conversion is None
+    assert layout_migration.migrate(vault).exit_code == 0
+    assert store.read_bytes() == stored
+    assert backlog.update(vault, "harvest", lambda tx: None) is True
+    assert "Generated from" in backlog.view_path(vault).read_text(encoding="utf-8")
+    assert "Sneaky" in backlog.overwritten_path(vault).read_text(encoding="utf-8")
+
+
+def test_a_legacy_file_that_is_not_utf8_fails_with_exit_2_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    from research_framework.pipeline import layout_migration
+
+    vault = _legacy_vault(tmp_path, git_repo=False)
+    view = backlog.view_path(vault)
+    view.write_bytes(b"# Research Backlog\n\n- caf\xe9\n")
+    before = {p: p.read_bytes() for p in vault.rglob("*") if p.is_file()}
+    result = layout_migration.migrate(vault)
+    assert result.exit_code == 2
+    text = "\n".join(result.messages)
+    assert "_pipeline/research-backlog.md" in text and "UTF-8" in text
+    assert {p: p.read_bytes() for p in vault.rglob("*") if p.is_file()} == before
+
+
+def test_without_git_or_with_commits_disabled_files_are_written_and_nothing_is_committed(
+    tmp_path: Path,
+) -> None:
+    from research_framework.pipeline import layout_migration
+    from tests._helpers.legacy_layout import git
+
+    plain = _legacy_vault(tmp_path / "a", git_repo=False)
+    result = layout_migration.migrate(plain)
+    assert result.exit_code == 0 and result.committed is None
+    assert state_layout.research_backlog_path(plain).is_file()
+    assert state_layout.research_backlog_archive_path(plain).is_file()
+
+    optout = _legacy_vault(tmp_path / "b")
+    (optout / "settings.yaml").write_text("vault_commit:\n  enabled: false\n")
+    git(optout, "commit", "-qam", "opt out")
+    head = git(optout, "rev-parse", "HEAD")
+    result = layout_migration.migrate(optout)
+    assert result.exit_code == 0 and result.committed is None
+    assert git(optout, "rev-parse", "HEAD") == head
+    assert state_layout.research_backlog_path(optout).is_file()

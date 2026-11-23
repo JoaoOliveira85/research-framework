@@ -110,3 +110,33 @@ def test_no_reader_falls_back_to_a_legacy_path(tmp_path: Path) -> None:
     assert (vault / "_pipeline" / "coverage-targets.json").is_file()
     with pytest.raises(FileNotFoundError):
         coverage.load_targets(vault)
+
+
+def test_an_unconverted_backlog_is_refused_like_a_legacy_layout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Spec 084 FR-020: state moved, Markdown backlog not yet converted."""
+    from research_framework.pipeline import layout_migration
+
+    vault = build_legacy_vault(tmp_path)
+    step = layout_migration.MOVE_STATE_STEP
+    step.apply(vault, step.plan(vault))
+    md = vault / "_pipeline" / "research-backlog.md"
+    assert md.is_file()
+    assert not (vault / "_pipeline" / "state" / "research-backlog.json").exists()
+
+    rc = main(["re-grade", "--vault", str(vault)])
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "./vault migrate-layout" in err
+    assert "_pipeline/research-backlog.md" in err
+    assert not (vault / "_pipeline" / "state" / "research-backlog.json").exists()
+
+    # Read-only verbs report it rather than refuse.
+    assert main(["status", "--vault", str(vault), "--json"]) == 0
+    capsys.readouterr()
+
+    # Migrating converts it, and the verb runs again.
+    assert main(["migrate-layout", "--vault", str(vault), "--force"]) == 0
+    capsys.readouterr()
+    assert main(["re-grade", "--vault", str(vault)]) == 0

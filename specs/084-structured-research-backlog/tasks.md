@@ -181,18 +181,17 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
 ## Phase 3: Existing vaults and the surfaces that name the path
 
-- [ ] T008 The converter (`research.md` R8) and the migration step
+- [x] T008 The converter (`research.md` R8) and the migration step
       `convert_backlog_to_store` in `layout_migration.MIGRATION_STEPS`; the
       archive's registry row in `state_layout`; the unconverted-vault
       predicate in the legacy check (FR-020…FR-023).
 
   ### Testing Requirements
 
-  The converter half landed (`pipeline/backlog_conversion.py`:
-  `convert_legacy`, `write_converted`; `backlog.install_store`; the archive's
-  registry row): Tests 1 and 5 and the archive part of Test 2 pass. Still to
-  do: the migration step, `--dry-run`, the commit and index removal (Tests 3,
-  4, 7), and the unconverted-vault refusal (Test 6).
+  The converter (`pipeline/backlog_conversion.py`) and the migration step
+  (`layout_migration.CONVERT_BACKLOG_STEP`, one `framework:` commit after the
+  layout move's) both landed; `state_layout.legacy_paths_present` reports an
+  unconverted backlog so the state-writing verbs refuse it.
 
   All on `tests/fixtures/backlog/legacy-shapes.md`, assembled from the
   shapes in spec § Evidence (invented content).

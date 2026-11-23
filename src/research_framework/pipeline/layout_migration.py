@@ -1,4 +1,5 @@
-"""Move an existing vault's durable state under ``_pipeline/state/`` (spec 083).
+"""Move an existing vault's durable state under ``_pipeline/state/`` (spec 083)
+and convert its Markdown backlog into the structured store (spec 084).
 
 ``MIGRATION_STEPS`` is an ordered list of idempotent steps. A step has
 ``plan(vault) -> StepPlan`` (reads, never writes) and ``apply(vault, plan)``.
@@ -10,10 +11,18 @@ byte for byte (nothing is regenerated or rewritten, so hand-set priorities in
 backfills the cycle ledger. Every move is checked before any is made. In a git
 repository the result lands as one ``framework: migrate _pipeline layout``
 commit holding only what the migration touched.
+
+The 084 step runs after it: an unconverted vault (store absent, a Markdown
+backlog without the view's footer present) gets the store, the byte-for-byte
+archive and a rendered view in place of the Markdown, which leaves the git
+index. It lands as its own ``framework: convert the research backlog to a
+store`` commit, after the layout move's. Each step commits what it changed
+before the next one starts, so the commits stay separate.
 """
 
 from __future__ import annotations
 
+import datetime
 import filecmp
 import logging
 import os
@@ -25,23 +34,28 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..generator.scaffold import _render_vault_gitignore
-from . import cycle_ledger, state_layout, vault_commit
+from . import backlog, backlog_conversion, cycle_ledger, state_layout, vault_commit
 
 _LOG = logging.getLogger(__name__)
 
 COMMIT_TITLE = "migrate _pipeline layout"
+BACKLOG_COMMIT_TITLE = "convert the research backlog to a store"
 ALREADY_MIGRATED = "already migrated"
 
 # The marker line that opens the ``_pipeline`` stanza in every rendering, and
 # the stanza the 2.0.x scaffold wrote (``_render_vault_gitignore`` before 083).
 _STANZA_MARKER = "# `_pipeline/` is regenerable EXCEPT"
+# The Markdown backlog's path before 084, from the registry (spelled once).
+_LEGACY_BACKLOG = next(
+    a.legacy_rel for a in state_layout.STATE_ARTEFACTS if a.name == "research_backlog"
+)
 _LEGACY_STANZA = (
     "# `_pipeline/` is regenerable EXCEPT the two control files below. Git\n"
     "# cannot re-include a path under an excluded directory, hence the\n"
     "# un-ignore / re-exclude / un-exclude sequence.\n"
     "!_pipeline/\n"
     "_pipeline/*\n"
-    "!_pipeline/research-backlog.md\n"
+    f"!{_LEGACY_BACKLOG}\n"
     "!_pipeline/coverage-targets.json\n"
 )
 _REINCLUDE_LINES = (
@@ -69,6 +83,18 @@ class GitignoreChange:
     description: str
 
 
+@dataclass(frozen=True)
+class StepCommit:
+    """What a step's own commit holds (``vault_commit.commit_framework_change``)."""
+
+    title: str
+    body: str
+    paths: list[str]
+    no_add: list[str] = field(default_factory=list)
+    """In the commit's pathspec but never staged with ``git add`` (a path the
+    step already removed from the index)."""
+
+
 @dataclass
 class StepPlan:
     step: str
@@ -79,11 +105,20 @@ class StepPlan:
     gitignore: GitignoreChange | None = None
     backfill_rows: int = 0
     warnings: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    """Reasons the step cannot run; any error stops the migration (exit 2)."""
+    commit: StepCommit | None = None
+    conversion: backlog_conversion.ConversionResult | None = None
+    legacy_bytes: bytes | None = None
 
     @property
     def is_noop(self) -> bool:
         return not (
-            self.moves or self.duplicates or self.gitignore or self.backfill_rows
+            self.moves
+            or self.duplicates
+            or self.gitignore
+            or self.backfill_rows
+            or self.conversion
         )
 
 
@@ -99,6 +134,8 @@ class MigrationResult:
     exit_code: int
     messages: list[str] = field(default_factory=list)
     committed: str | None = None
+    """The last commit made (``None`` when nothing was committed)."""
+    commits: list[str] = field(default_factory=list)
     migrated: bool = False
 
 
@@ -225,6 +262,21 @@ def _plan_move_state(vault: Path) -> StepPlan:
             plan.conflicts.append((pair.src, pair.dst))
     plan.gitignore = _plan_gitignore(vault)
     plan.backfill_rows = cycle_ledger.pending_backfill(vault)
+    tracked_sources = (
+        [
+            m.src
+            for m in plan.moves + plan.duplicates
+            if _is_git(vault) and _is_tracked(vault, m.src)
+        ]
+        if _is_git(vault)
+        else []
+    )
+    plan.commit = StepCommit(
+        COMMIT_TITLE,
+        "Move durable state under _pipeline/state/ (spec 083); "
+        "back-fill the cycle ledger.",
+        [".gitignore", state_layout.STATE_DIR, *sorted(set(tracked_sources))],
+    )
     if (vault / _LEGACY_SETTINGS).is_file():
         plan.warnings.append(
             f"{_LEGACY_SETTINGS} is an operator override this layout does not "
@@ -309,8 +361,72 @@ MOVE_STATE_STEP = MigrationStep(
     "move_state_into_state_dir", _plan_move_state, _apply_move_state
 )
 
+
+# ---------------------------------------------------------------------------
+# Step: convert the Markdown backlog into the structured store (spec 084)
+# ---------------------------------------------------------------------------
+
+
+def _plan_convert_backlog(vault: Path) -> StepPlan:
+    plan = StepPlan("convert_backlog_to_store")
+    if not backlog.is_unconverted(vault):
+        return plan  # already converted, or no backlog at all
+    legacy = backlog.view_path(vault)
+    rel = legacy.relative_to(vault).as_posix()
+    raw = legacy.read_bytes()
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        plan.errors.append(
+            f"{rel} is not valid UTF-8 ({exc}); the research backlog was not converted"
+        )
+        return plan
+    plan.legacy_bytes = raw
+    plan.conversion = backlog_conversion.convert_legacy(
+        text, today=datetime.datetime.now(datetime.UTC).date().isoformat()
+    )
+    store = backlog.store_path(vault).relative_to(vault).as_posix()
+    archive = (
+        state_layout.research_backlog_archive_path(vault).relative_to(vault).as_posix()
+    )
+    paths = [store, archive]
+    no_add: list[str] = []
+    if _is_git(vault) and _is_tracked(vault, rel):
+        paths.append(rel)
+        no_add.append(rel)
+    plan.commit = StepCommit(
+        BACKLOG_COMMIT_TITLE,
+        f"Convert the Markdown backlog into {store} (spec 084); the original is kept at "
+        f"{archive}, and {rel} is now a rendered view that git ignores.",
+        paths,
+        no_add,
+    )
+    return plan
+
+
+def _apply_convert_backlog(vault: Path, plan: StepPlan) -> None:
+    assert plan.conversion is not None and plan.legacy_bytes is not None
+    rel = backlog.view_path(vault).relative_to(vault).as_posix()
+    try:
+        backlog_conversion.write_converted(
+            vault, plan.conversion, original=plan.legacy_bytes
+        )
+    except (OSError, ValueError) as exc:
+        raise MigrationError(f"could not convert the research backlog: {exc}") from exc
+    if _is_git(vault) and _is_tracked(vault, rel):
+        result = _git(vault, "rm", "-q", "--cached", "--", rel)
+        if result.returncode != 0:
+            raise MigrationError(
+                f"git rm --cached {rel} failed: {result.stderr.strip()}"
+            )
+
+
+CONVERT_BACKLOG_STEP = MigrationStep(
+    "convert_backlog_to_store", _plan_convert_backlog, _apply_convert_backlog
+)
+
 # Ordered; a later spec appends its step here.
-MIGRATION_STEPS: list[MigrationStep] = [MOVE_STATE_STEP]
+MIGRATION_STEPS: list[MigrationStep] = [MOVE_STATE_STEP, CONVERT_BACKLOG_STEP]
 
 
 # ---------------------------------------------------------------------------
@@ -343,6 +459,14 @@ def _describe(plan: StepPlan) -> list[str]:
         lines.append(f"  .gitignore: {plan.gitignore.description}")
     if plan.backfill_rows:
         lines.append(f"  cycle ledger: backfill {plan.backfill_rows} row(s)")
+    if plan.conversion is not None:
+        archive = state_layout.research_backlog_archive_path(Path()).as_posix()
+        lines.append(
+            "  convert the Markdown backlog into "
+            f"{state_layout.research_backlog_path(Path()).as_posix()}"
+        )
+        lines.append("  " + plan.conversion.info_line(archive))
+    lines += [f"  error: {e}" for e in plan.errors]
     lines += [f"  warning: {w}" for w in plan.warnings]
     return lines
 
@@ -360,6 +484,7 @@ def migrate(
 
     plans = [(step, step.plan(vault)) for step in MIGRATION_STEPS]
     conflicts = [c for _, plan in plans for c in plan.conflicts]
+    errors = [e for _, plan in plans for e in plan.errors]
     for _, plan in plans:
         for warning in plan.warnings:
             _LOG.warning("migrate-layout: %s", warning)
@@ -367,12 +492,17 @@ def migrate(
     if dry_run:
         for _, plan in plans:
             result.messages.extend(_describe(plan))
-        if conflicts:
+        if conflicts or errors:
             result.exit_code = 2
-        if all(plan.is_noop for _, plan in plans) and not conflicts:
+        if all(plan.is_noop for _, plan in plans) and not conflicts and not errors:
             say(f"{ALREADY_MIGRATED}: nothing to do")
         else:
             say("dry-run: nothing was changed")
+        return result
+
+    if errors:
+        result.messages += [f"error: {e}" for e in errors]
+        result.exit_code = 2
         return result
 
     if conflicts:
@@ -398,22 +528,40 @@ def migrate(
         result.exit_code = 2
         return result
 
-    tracked_sources: list[str] = []
-    if git:
-        for _, plan in plans:
-            tracked_sources += [
-                m.src for m in plan.moves + plan.duplicates if _is_tracked(vault, m.src)
-            ]
-
     try:
         for step, plan in plans:
+            if plan.is_noop:
+                continue
             step.apply(vault, plan)
+            result.migrated = True
+            if not git:
+                continue
+            if not committing:
+                continue
+            if plan.commit is None:
+                continue
+            commit = vault_commit.commit_framework_change(
+                vault,
+                title=plan.commit.title,
+                body=plan.commit.body,
+                paths=plan.commit.paths,
+                no_add=plan.commit.no_add,
+            )
+            if not commit.ok:
+                say(
+                    f"error: the {step.name} step ran but the commit failed: {commit.error}"
+                )
+                result.exit_code = 2
+                return result
+            if commit.sha:
+                result.commits.append(commit.sha)
+                result.committed = commit.sha
+                say(f"{step.name}: committed {commit.sha}")
     except MigrationError as exc:
         say(f"error: {exc}")
         result.exit_code = 2
         return result
 
-    result.migrated = True
     if not git:
         _LOG.info(
             "migrate-layout: not a git repository; files moved, nothing committed"
@@ -425,20 +573,11 @@ def migrate(
         )
         say("moved on disk; vault_commit is disabled, nothing committed")
     else:
-        paths = [".gitignore", state_layout.STATE_DIR, *sorted(set(tracked_sources))]
-        commit = vault_commit.commit_framework_change(
-            vault,
-            title=COMMIT_TITLE,
-            body="Move durable state under _pipeline/state/ (spec 083); "
-            "back-fill the cycle ledger.",
-            paths=paths,
+        say(
+            f"migrated: committed {result.committed}"
+            if result.committed
+            else "migrated"
         )
-        if not commit.ok:
-            say(f"error: moved the files but the commit failed: {commit.error}")
-            result.exit_code = 2
-            return result
-        result.committed = commit.sha
-        say(f"migrated: committed {commit.sha}" if commit.sha else "migrated")
     for _, plan in plans:
         result.messages += [f"warning: {w}" for w in plan.warnings]
     return result
