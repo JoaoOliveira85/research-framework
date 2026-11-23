@@ -88,6 +88,8 @@ note_types:
       - "How does it manifest differently at macro magnifications vs. normal distances?"
       - "What's the mathematical or physical relationship behind it?"
     min_word_count: 200
+    # Optional: a concept note older than this many days (by its `as_of`) is queued for an update.
+    review_after_days: 365
 
   - name: technique
     description: "A practical workflow you actually execute — exposure calculation, focus stacking, reversing a lens, etc."

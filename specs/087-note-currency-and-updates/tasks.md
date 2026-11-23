@@ -277,7 +277,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
   **TDD discipline**: required.
 
-- [ ] T012 Docs: `README.md` (what "keeps itself current" now means),
+- [x] T012 Docs: `README.md` (what "keeps itself current" now means),
       `ARCHITECTURE.md`, `examples/` specs gain `review_after_days` on one
       type, `CHANGELOG.md` `[Unreleased]` with `### Migration notes`, the
       ROADMAP row, the constitution's coverage-gate text if it says "note

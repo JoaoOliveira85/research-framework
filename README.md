@@ -136,8 +136,28 @@ When you (or an agent) query the vault:
   whether to build it or delete the verb). The `/write` prompt it would use
   is rendered in `docs/prompts/`.
 - `./vault research`
-  → runs the next research cycle. Discovers new topics, refreshes stale
-  notes, fills coverage gaps, never duplicates.
+  → runs the next research cycle. Discovers new topics, fills coverage gaps,
+  revisits notes it already has (see below), never duplicates.
+### Keeping a vault current
+
+A vault does not just grow; it revisits what it knows.
+
+- **New material on an existing topic is an update to its note**, never a
+  second note. The scout reports it, and the note is revised in place.
+- **A note type can declare `review_after_days`** in `research.spec.md`. A
+  note whose `as_of` date (the day it was last checked) is older than that is
+  queued for review at the start of the next cycle.
+- **A share of every cycle goes to updates** (`pipeline.cycle_split` in
+  `settings.yaml`, default 60 new / 30 updates / 10 discovery; the spec's
+  `research_mode` can turn either side off).
+- **Every update ends in one of four outcomes**: `confirmed` (nothing
+  changed, only `as_of` moves), `revised`, `superseded` or `retracted`. The
+  framework checks each against git, and a claim it cannot support is undone and
+  stays queued.
+- **A superseded note points at its successor** and stops counting toward
+  coverage; `./vault ask` follows the pointer and says when an answer rests on
+  a note past its review date.
+
 - `./vault audit`
   → runs the validators + an LLM-assisted source-relevance check, produces
   a markdown report.
@@ -465,7 +485,7 @@ After that, you're current.
 - [`docs/TODO.md`](./docs/TODO.md) — scratchpad for un-triaged ideas (often empty)
 - [`docs/testing-strategy.md`](./docs/testing-strategy.md) — the seven-tier test pyramid (ADR-0008) + tier decision flow
 - [`dist-templates/README.md`](./dist-templates/README.md) — end-user bundle documentation
-- [`.specify/memory/constitution.md`](./.specify/memory/constitution.md) — immutable project constraints (v1.6.1)
+- [`.specify/memory/constitution.md`](./.specify/memory/constitution.md) — immutable project constraints (v1.6.2)
 - [`CHANGELOG.md`](./CHANGELOG.md) — release-by-release notes (current stable: **2.0.0**)
 - Example spec: [`examples/research.spec.md`](./examples/research.spec.md) (+ [`examples/settings.yml`](./examples/settings.yml)); [`examples/detailed-vault-spec.md`](./examples/detailed-vault-spec.md) is a detailed-format example
 

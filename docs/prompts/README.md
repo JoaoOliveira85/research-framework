@@ -42,9 +42,9 @@ These are already standalone, verbatim, tracked files. Copying them here would m
 | [`install-wizard`](../../.agents/skills/install-wizard/SKILL.md) | `.agents/skills/install-wizard/SKILL.md` | `stages.install_wizard` | `30cead920a44e064` |
 | [`model-router`](../../.agents/skills/model-router/SKILL.md) | `.agents/skills/model-router/SKILL.md` | `stages.model_router` | `db9fe1f82671a2c1` |
 | [`note-tagger`](../../.agents/skills/note-tagger/SKILL.md) | `.agents/skills/note-tagger/SKILL.md` | `stages.note_tagger` | `4bf38b61ee972274` |
-| [`note-writer`](../../.agents/skills/note-writer/SKILL.md) | `.agents/skills/note-writer/SKILL.md` | `stages.note_writer` | `0bfe02a5c8b7e4d5` |
+| [`note-writer`](../../.agents/skills/note-writer/SKILL.md) | `.agents/skills/note-writer/SKILL.md` | `stages.note_writer` | `8f9682aabe45504e` |
 | [`research-plan-narrator`](../../.agents/skills/research-plan-narrator/SKILL.md) | `.agents/skills/research-plan-narrator/SKILL.md` | not selected by any settings.yaml stage | `de814dcd25f6fd93` |
-| [`scout`](../../.agents/skills/scout/SKILL.md) | `.agents/skills/scout/SKILL.md` | `stages.scout` | `99b03bb745bb2b27` |
+| [`scout`](../../.agents/skills/scout/SKILL.md) | `.agents/skills/scout/SKILL.md` | `stages.scout` | `2a262b8f8dfd35c0` |
 | [`source-relevance`](../../.agents/skills/source-relevance/SKILL.md) | `.agents/skills/source-relevance/SKILL.md` | `stages.source_relevance` | `5d4bf430de99f6b0` |
 | [`speckit-git-commit`](../../.agents/skills/speckit-git-commit/SKILL.md) | `.agents/skills/speckit-git-commit/SKILL.md` | not selected by any settings.yaml stage | `5c7bf976944f5ab6` |
 | [`speckit-git-feature`](../../.agents/skills/speckit-git-feature/SKILL.md) | `.agents/skills/speckit-git-feature/SKILL.md` | not selected by any settings.yaml stage | `5a4e239e3c296661` |
