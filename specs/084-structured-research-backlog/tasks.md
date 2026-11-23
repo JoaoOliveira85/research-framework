@@ -163,7 +163,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
   **TDD discipline**: required.
 
-- [ ] T007 The planner reads `planner_topics()`; `_parse_orphans` and its
+- [x] T007 The planner reads `planner_topics()`; `_parse_orphans` and its
       regular expression are deleted (FR-012).
 
   ### Testing Requirements

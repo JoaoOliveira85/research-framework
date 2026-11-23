@@ -13,8 +13,8 @@ control-flow decision is made off the deterministic body below it.
 Inputs (per ``research.md`` R-009):
 
 - the coverage targets under ``_pipeline/state/`` — current met/target per category.
-- ``_pipeline/research-backlog.md`` — orphan wikilinks emitted by
-  ``scripts/topic_harvest.py``; we re-rank them with the citation
+- the backlog store (``pipeline/backlog.py``) — open topics that are
+  operator-owned or cited by notes (spec 084 FR-012); we re-rank them with the citation
   formula ``0.3 + 0.1 * citation_count`` capped at ``1.0``.
 - ``_pipeline/rejects.json`` — verifier persistent-reject ledger; topics
   with ``reject_count >= 2`` enter the exclusion list so the next cycle
@@ -61,6 +61,7 @@ import yaml
 
 from .. import __version__ as _FRAMEWORK_VERSION
 from ..spec.schema import CoverageTargets, SpecConfig, SpecValidationError
+from . import backlog
 from .coverage import existing_vault_filenames, grow_targets_if_met, load_targets
 from .gates_step import normalise_topic_row
 from .settings import (
@@ -95,17 +96,6 @@ _PERSISTENT_REJECT_THRESHOLD = 2
 """Reject-count threshold at which a topic is dropped into
 ``exclusions``. Matches ``research.md`` R-009: "persistent rejects (notes
 the verifier rejected ≥ 2 times)"."""
-
-_ORPHAN_BULLET_RE = re.compile(
-    r"^\s*-\s+\*\*([^*]+)\*\*\s+—\s+cited by\s+(\d+)\s+note",
-    re.MULTILINE,
-)
-"""Match the orphan bullet emitted by ``scripts/topic_harvest.py``::
-
-    - **Orphan Title** — cited by N note(s): `sample`
-
-We only need ``title`` and ``citation_count``; the source samples after
-the colon are informational and not propagated into the plan."""
 
 _SECTIONS = (
     "## Focus rationale",
@@ -674,36 +664,6 @@ def _spec_gap_score(priority: int, fill_gap: float) -> float:
     return (p / 100.0) * g
 
 
-def _parse_orphans(vault_dir: Path) -> list[tuple[str, int]]:
-    """Return ``(title, citation_count)`` per unique orphan in the
-    backlog, oldest blocks first.
-
-    Title comparison is case-insensitive so two cycles citing the same
-    orphan with different casing still collapse to one queue entry.
-    """
-    path = vault_dir / "_pipeline" / "research-backlog.md"
-    if not path.is_file():
-        return []
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return []
-    seen: set[str] = set()
-    out: list[tuple[str, int]] = []
-    for match in _ORPHAN_BULLET_RE.finditer(text):
-        title = match.group(1).strip()
-        try:
-            count = int(match.group(2))
-        except ValueError:
-            continue
-        key = title.lower()
-        if not title or key in seen:
-            continue
-        seen.add(key)
-        out.append((title, count))
-    return out
-
-
 PLACEHOLDER_PROVENANCE = "spec_gap_placeholder"
 """Distinct provenance for ``_placeholder_titles`` stubs so the batch dispatcher
 can drop them before they reach a note-writer agent. Real ``spec_gap`` topics
@@ -806,17 +766,17 @@ def _build_priority_queue(
             )
 
     orphan_category = _pick_orphan_category(coverage_state)
-    for title, count in _parse_orphans(vault_dir):
-        if _normalize_exclusion_key(title) in excluded_keys:
+    for topic in backlog.planner_topics(vault_dir):
+        if _normalize_exclusion_key(topic.title) in excluded_keys:
             continue
         queue.append(
             PrioritizedTopic(
-                title=title,
+                title=topic.title,
                 category=orphan_category,
-                priority_score=_orphan_score(count),
+                priority_score=_orphan_score(topic.citation_count),
                 source_hints=[],
                 provenance="harvest_orphan",
-                citation_count=int(count),
+                citation_count=topic.citation_count,
             )
         )
 
