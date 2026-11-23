@@ -33,7 +33,9 @@ REL = "data_vault/01 - Concepts/retry-notes.md"
 PROBE = "Zanzibar Quokka Handshake"  # shares no term with any note, label or area
 
 
-def _vault(tmp_path: Path, *, split: str = "") -> tuple[Path, SpecConfig]:
+def _vault(
+    tmp_path: Path, *, split: str = "", review_days: int | None = None
+) -> tuple[Path, SpecConfig]:
     vault = build_minimal_vault(
         tmp_path,
         num_categories=1,
@@ -52,6 +54,7 @@ def _vault(tmp_path: Path, *, split: str = "") -> tuple[Path, SpecConfig]:
                     description="d",
                     folder="01 - Concepts",
                     min_word_count=30,
+                    review_after_days=review_days,
                 )
             ],
         },
@@ -242,3 +245,42 @@ def test_share_zero_runs_no_pass(
         for e in json.loads(backlog.store_path(vault).read_text("utf-8"))["entries"]
         if e["origin"] == "discovery"
     ]
+
+
+def test_a_cycle_with_only_discovery_and_update_work_is_not_aborted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A scout that reports no ``topics_found.new`` at all, but a discovery topic
+    and a note due for review, still runs both kinds of work: SG-001 treats the
+    discovery topic and the update as the cycle's work (spec 088 with 087
+    FR-017)."""
+    monkeypatch.setenv("FAKE_AGENT_SCENARIO", "happy")
+    monkeypatch.setenv(fake_agent.SCOUT_NEW_ENV, "0")
+    monkeypatch.setenv(fake_agent.UPDATE_SCENARIO_ENV, "confirmed")
+    monkeypatch.setenv(fake_agent.DISCOVERY_ENV, json.dumps({"new": [PROBE]}))
+    vault, spec = _vault(tmp_path, review_days=30)
+
+    code = run_single_cycle(
+        vault, cycle_num=1, budget_cap=10.0, max_cycles=1, spec=spec
+    )
+
+    assert code != 2, "the cycle must not abort"
+    assert _scout(vault)["topics_found"]["new"] == []
+    gates = {
+        g["gate_id"]: g
+        for g in json.loads(
+            (vault / "_pipeline" / "cycles" / "cycle-001-step-gates.json").read_text(
+                "utf-8"
+            )
+        )
+    }
+    assert gates["SG-001"]["status"] in ("PASS", "WARN")
+    # the discovery topic was dispatched and the due note was worked
+    assert any("zanzibar" in stem.lower() for stem in _notes(vault))
+    report = json.loads(
+        (vault / "_pipeline" / "cycles" / "cycle-001-research.json").read_text("utf-8")
+    )
+    assert [r["note"] for r in report["update_outcomes"]] == ["retry-notes"]
+    assert report["update_work"]["worked"] == 1
+    (record,) = _ledger(vault)["cycles"]
+    assert record["topics"] == [{"title": PROBE, "area": AREAS[0]}]

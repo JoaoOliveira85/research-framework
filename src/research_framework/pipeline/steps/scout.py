@@ -288,7 +288,11 @@ def _phase(ctx: CycleContext) -> int:
                 quota = ss._cycle_quota_for_gates(pipeline_dir)
                 unfilled = ss._unfilled_categories_for_gates(vault_dir)
                 wanted, planned = ss._cycle_expectations_for_gates(
-                    vault_dir, spec_for_gates, quota, scout_body
+                    vault_dir,
+                    spec_for_gates,
+                    quota,
+                    scout_body,
+                    _discovery_available(vault_dir, cycle_num, scout_body),
                 )
                 r1 = _evaluate_step_gate(
                     cycles_dir,
@@ -564,6 +568,24 @@ def _phase(ctx: CycleContext) -> int:
     except Exception as exc:
         _LOG.warning(f"[discovery] WARN: the discovery pass failed: {exc}")
     return __exit
+
+
+def _discovery_available(vault_dir: Path, cycle_num: int, scout_body: dict) -> int:
+    """Discovery topics this cycle could dispatch, for SG-001's expectations
+    (spec 088): open backlog topics plus this report's discovery rows, when the
+    cycle's prompt assigned areas; 0 otherwise."""
+    from .. import discovery
+
+    try:
+        if discovery.read_assignment(vault_dir, cycle_num) is None:
+            return 0
+        found = scout_body.get("topics_found") if isinstance(scout_body, dict) else None
+        rows = found.get("discovery") if isinstance(found, dict) else None
+        return len(backlog.discovery_topics(vault_dir)) + (
+            len(rows) if isinstance(rows, list) else 0
+        )
+    except Exception:  # noqa: BLE001 - an expectation never stops a cycle
+        return 0
 
 
 def _load_plan(pipeline_dir: Path):

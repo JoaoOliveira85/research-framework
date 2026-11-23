@@ -381,12 +381,17 @@ def _new_topics_wanted(pipeline_dir: Path | None) -> bool:
 
 def _has_update_work(report: dict, pipeline_dir: Path | None) -> bool:
     """Whether the cycle has updates to do: the scout reported some, or the plan
-    (``update_quota`` in ``_pipeline/research-plan.md``) allots a share to them.
+    (``update_quota`` in ``_pipeline/research-plan.md``) allots a share to them,
+    or it reported discovery rows (spec 088).
     A scout with no new topics is then reporting what it should, not breaking
     the trunk-seed ordering."""
     found = report.get("topics_found")
     rows = found.get("updates") if isinstance(found, dict) else None
     if isinstance(rows, list) and rows:
+        return True
+    # Spec 088: discovery rows are work the cycle dispatches besides new topics.
+    discovered = found.get("discovery") if isinstance(found, dict) else None
+    if isinstance(discovered, list) and discovered:
         return True
     if pipeline_dir is None:
         return False

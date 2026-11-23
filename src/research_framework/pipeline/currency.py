@@ -126,35 +126,53 @@ def record_scout_updates(
       carrying the row's ``source_urls``.
     """
     notes = _corpus_notes(vault_dir, spec)
-    sightings: dict[str, list[str]] = {}
-
-    def add(stem_path: Path, urls: Iterable[Any]) -> None:
-        sightings.setdefault(stem_path.stem, [])
-        for url in urls:
-            text = str(url).strip()
-            if text and text not in sightings[stem_path.stem]:
-                sightings[stem_path.stem].append(text)
-
+    rows: list[dict[str, Any]] = []
     try:
         doc = json.loads(scout_report.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         doc = {}
     found = doc.get("topics_found") if isinstance(doc, dict) else None
-    rows = found.get("updates") if isinstance(found, dict) else None
-    for row in rows if isinstance(rows, list) else []:
+    updates = found.get("updates") if isinstance(found, dict) else None
+    for row in updates if isinstance(updates, list) else []:
         name = str(row.get("note") or "").strip() if isinstance(row, dict) else ""
-        path = notes.get(_exclusion_slug(name)) if name else None
-        if path is None:
+        key = _exclusion_slug(name) if name else ""
+        if not key or key not in notes:
             _LOG.warning(
                 "[currency] scout update names no existing note, ignored: %r", row
             )
             continue
         urls = row.get("source_urls")
-        add(path, urls if isinstance(urls, list) else [])
-    for row in dropped_new_rows:
+        rows.append({"key": key, "source_urls": urls if isinstance(urls, list) else []})
+    rows.extend(dropped_new_rows)
+    return record_new_material(vault_dir, spec, rows, cycle=cycle)
+
+
+def record_new_material(
+    vault_dir: Path,
+    spec: SpecConfig,
+    rows: Iterable[Mapping[str, Any]],
+    cycle: int | None = None,
+) -> int:
+    """Queue a ``new_material`` update per existing note the rows point at.
+
+    Each row is ``{"key": <normalised note slug>, "source_urls": [...]}``; a row
+    whose key names no existing note is skipped. Sightings of one note merge
+    (urls deduplicated, in order). One transaction as the ``scout`` writer;
+    returns how many notes were queued. Used by the scout step (its ``updates``
+    rows and the ``new`` rows the plan merge dropped) and by the discovery
+    routing (a finding about a note the vault holds, spec 088).
+    """
+    notes = _corpus_notes(vault_dir, spec)
+    sightings: dict[str, list[str]] = {}
+    for row in rows:
         path = notes.get(str(row.get("key") or ""))
-        if path is not None:
-            add(path, row.get("source_urls") or [])
+        if path is None:
+            continue
+        known = sightings.setdefault(path.stem, [])
+        for url in row.get("source_urls") or []:
+            text = str(url).strip()
+            if text and text not in known:
+                known.append(text)
     if not sightings:
         return 0
     by_stem = {p.stem: p for p in notes.values()}
@@ -387,29 +405,43 @@ def plan_updates(
 
 
 def cycle_expectations(
-    vault_dir: Path, spec: SpecConfig, quota: int, scout_updates: int = 0
+    vault_dir: Path,
+    spec: SpecConfig,
+    quota: int,
+    scout_updates: int = 0,
+    discovery_available: int = 0,
 ) -> tuple[int, int]:
-    """``(new topics wanted, updates planned)`` for a cycle, for the scout gates.
+    """``(new topics wanted, other work planned)`` for a cycle, for the scout gates.
 
     The same split the plan makes (:func:`split_quota`), but computed when the
     scout has just reported: ``scout_updates`` is the number of
     ``topics_found.updates`` rows it returned, which add to the open entries.
     New topics are treated as plentiful (the scout is the one finding them), so
     ``new wanted`` is 0 only when the mode (``refresh``) or the shares ask for
-    none, and ``updates planned`` is 0 when the vault cannot run update batches.
+    none, and the second count is 0 when the vault cannot run update batches.
+
+    Spec 088: ``discovery_available`` is how many discovery topics could be
+    dispatched this cycle (open backlog topics plus the rows in this report).
+    Discovery topics are not ``topics_found.new`` rows, so the slots they take
+    are taken OFF ``new wanted`` (SG-001 must not expect rows in
+    ``topics_found.new`` for work the discovery share will do) and ADDED to the
+    second count, which is "work the cycle will do besides new topics": updates
+    plus discovery topics. With none available this is exactly the spec-087
+    ``(new wanted, updates planned)``.
     """
     supported = updates_supported(vault_dir)[0]
     available = 0
     if supported:
         available = len(backlog.update_topics(vault_dir)) + max(0, scout_updates)
-    new_n, update_n = split_quota(
+    new_n, update_n, discovery_n = split_quota(
         max(1, quota),
         cycle_split_shares(vault_dir),
         mode=cycle_mode(vault_dir, spec),
         new_available=max(1, quota),
         updates_available=available,
+        discovery_available=discovery_available,
     )
-    return new_n, update_n
+    return new_n, update_n + discovery_n
 
 
 def update_work_continues(report: Mapping[str, Any]) -> bool:
