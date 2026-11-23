@@ -7,7 +7,7 @@
 | **Source** | `templates/prompts/scout-prompt.md.j2` |
 | **Role** | Topic discovery — produces `_pipeline/scout-report.json`. |
 | **Dispatched by** | `pipeline scout` / the cycle runner's scout step |
-| **Source sha256** | `69be00a8575d67bc` |
+| **Source sha256** | `ec188a04f50cd63a` |
 
 Reproduced verbatim, including its placeholders. A vault gets this text with the placeholders filled at scaffold or dispatch time.
 
@@ -16,7 +16,7 @@ Reproduced verbatim, including its placeholders. A vault gets this text with the
 {%- set code_first = primary and primary[0].repos -%}
 {%- set coverage_cats = (spec.coverage_targets.categories if spec.coverage_targets is defined and spec.coverage_targets else []) -%}
 ---
-_template_version: 4
+_template_version: 5
 ---
 You are running BFS scout cycle {CYCLE_NUM} of a recursive research pass on the
 {{ spec.name }} vault.
@@ -239,10 +239,27 @@ expected filename):
 {% endfor %}
 {% endif %}
 
-{% if exclude_topics is defined and exclude_topics %}
-## Already covered — skip these
+{% if existing_notes is defined and existing_notes %}
+## Already have a note — report new material, never a second note
 
-{% for t in exclude_topics %}
+The vault already has a note for each of these. Do NOT propose any of them in
+`topics_found.new` and do NOT list one in `proposed_filenames`. If your sources
+show something NEW about one — a newer release, a contradiction, a deprecation,
+a successor — report it in `topics_found.updates` (see the output section) with
+the source URL(s). A note with nothing new to report is simply left out.
+
+{% for t in existing_notes %}
+- {{ t }}
+{% endfor %}
+{% endif %}
+
+{% if rejected_topics is defined and rejected_topics %}
+## Rejected by the operator — skip these
+
+The operator rejected these topics for good. Do not propose them, and do not
+report updates for them.
+
+{% for t in rejected_topics %}
 - {{ t }}
 {% endfor %}
 {% endif %}
@@ -299,6 +316,13 @@ The report MUST follow the v2 schema (no extra commentary, JSON only):
       }
     ],
     "existing": ["<topic title that the vault already covers>"],
+    "updates": [
+      {
+        "note": "<existing note filename or stem>",
+        "source_urls": ["<URL of the source showing what is new>"],
+        "summary": "<what is new about it>"
+      }
+    ],
     "total": <int>
   },
   "proposed_filenames": ["<Topic Title>.md"],
@@ -333,6 +357,11 @@ Constraints:
 - Do NOT write any vault notes in this phase — scout only.
 - Do NOT self-assess validation. `validate_cycle.py` and the SG-001..SG-005 gates read this JSON and decide CONTINUE/TERMINATE.
 
+- `topics_found.updates` is OPTIONAL (omit it or send `[]` when nothing changed).
+  Each row names a note the vault ALREADY has (`note`: its filename or stem, as
+  listed under "Already have a note"), the `source_urls` that show what is new,
+  and a one-line `summary`. Never propose a second note for the same topic.
+
 Output ONLY the JSON file at the path above. Do not print the JSON to stdout.
 {% else %}
 The report MUST follow this exact schema (no extra commentary, JSON only):
@@ -351,6 +380,9 @@ The report MUST follow this exact schema (no extra commentary, JSON only):
   "topics_found": {
     "new": ["<topic title>", "..."],
     "existing": ["<already-covered topic>", "..."],
+    "updates": [
+      {"note": "<existing note filename or stem>", "source_urls": ["<URL>"], "summary": "<what is new>"}
+    ],
     "total": <int>
   },
   "proposed_filenames": ["<Topic Title>.md", "..."],
@@ -379,6 +411,11 @@ Constraints:
   reason, silence is not.
 - Do NOT write any vault notes in this phase — scout only.
 - Do NOT self-assess validation. A separate script reads this JSON and decides CONTINUE/TERMINATE.
+
+- `topics_found.updates` is OPTIONAL (omit it or send `[]` when nothing changed).
+  Each row names a note the vault ALREADY has (`note`: its filename or stem, as
+  listed under "Already have a note"), the `source_urls` that show what is new,
+  and a one-line `summary`. Never propose a second note for the same topic.
 
 Output ONLY the JSON file at the path above. Do not print the JSON to stdout.
 {% endif %}

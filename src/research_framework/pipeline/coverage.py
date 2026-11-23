@@ -659,7 +659,7 @@ def unmet_expected_filenames(vault_dir: Path) -> dict[str, list[str]]:
 
 
 def existing_vault_filenames(vault_dir: Path) -> list[str]:
-    """All note filenames currently in data_vault/ — for scout `exclude_topics`."""
+    """All note filenames currently in data_vault/ — for the scout's `existing_notes`."""
     data_vault = corpus_dir(vault_dir)
     if not data_vault.exists():
         return []

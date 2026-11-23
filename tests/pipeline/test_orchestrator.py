@@ -549,7 +549,7 @@ def test_render_cycle_scout_prompt_focuses_on_unmet(tmp_path: Path) -> None:
     vault = tmp_path / "vault"
     (vault / "data_vault").mkdir(parents=True)
     (vault / "_pipeline" / "prompts").mkdir(parents=True)
-    # Existing note — should be in exclude_topics
+    # Existing note — should be listed as "already have a note"
     (vault / "data_vault" / "ExistingNote.md").write_text("---\n---\n")
     # Coverage targets with expected_filenames (one unmet)
     save_targets(
@@ -569,15 +569,15 @@ def test_render_cycle_scout_prompt_focuses_on_unmet(tmp_path: Path) -> None:
     _render_cycle_scout_prompt(_cf_spec(vault), vault, cycle_num=2)
     prompt = (vault / "_pipeline" / "prompts" / "scout-prompt.md").read_text()
     assert "MissingNote.md" in prompt
-    # Exclude block lists the already-covered note
-    assert "## Already covered" in prompt
-    assert "ExistingNote.md" in prompt
+    # The existing note is reported against, not skipped
+    assert "## Already have a note" in prompt
+    assert "ExistingNote.md" in prompt.split("## Already have a note")[1]
 
 
 def test_phase2_promoted_titles_merge_into_target_topics(tmp_path: Path) -> None:
     """Phase 2: accepted proposals from cycle N-1 should appear as target_topics
-    in cycle N's scout prompt, and scope-rejected titles should appear as
-    exclude_topics."""
+    in cycle N's scout prompt, and scope-rejected titles should appear in the
+    operator's reject list (separate from the notes the vault already has)."""
     from research_framework.pipeline.orchestrator import _render_cycle_scout_prompt
 
     vault = tmp_path / "vault"
@@ -599,7 +599,9 @@ def test_phase2_promoted_titles_merge_into_target_topics(tmp_path: Path) -> None
     _render_cycle_scout_prompt(_cf_spec(vault), vault, cycle_num=2)
     prompt = (vault / "_pipeline" / "prompts" / "scout-prompt.md").read_text()
     assert "Gas Oven" in prompt, "auto-promoted proposal should be a target topic"
-    assert "Thermodynamics" in prompt, "persistent reject should be an exclude"
+    assert "## Rejected by the operator — skip these" in prompt
+    rejected = prompt.split("## Rejected by the operator — skip these")[1]
+    assert "Thermodynamics" in rejected, "persistent reject should be skipped"
 
 
 def test_phase2_older_cycles_not_re_injected(tmp_path: Path) -> None:

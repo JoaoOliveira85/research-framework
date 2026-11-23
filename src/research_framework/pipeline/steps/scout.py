@@ -468,6 +468,7 @@ def _phase(ctx: CycleContext) -> int:
     # DFS dispatcher loads it. Best-effort: an unreadable scout JSON
     # leaves the plan untouched (and is logged), it does not abort the
     # cycle.
+    dropped_for_existing_note: list[dict] = []
     try:
         plan_md_path = pipeline_dir / "research-plan.md"
         if plan_md_path.is_file() and scout_report.is_file():
@@ -478,7 +479,7 @@ def _phase(ctx: CycleContext) -> int:
                 ResearchPlan as _RP,
             )
             from ..research_plan import (
-                merge_scout_topics as _merge_scout_topics,
+                merge_scout_topics_detailed as _merge_scout_topics,
             )
 
             existing_text = plan_md_path.read_text(encoding="utf-8")
@@ -487,7 +488,9 @@ def _phase(ctx: CycleContext) -> int:
                 existing_plan,
                 priority_queue=sc._parse_priority_queue_from_plan_md(existing_text),
             )
-            merged_plan = _merge_scout_topics(existing_plan, scout_report)
+            merge = _merge_scout_topics(existing_plan, scout_report)
+            merged_plan = merge.plan
+            dropped_for_existing_note = merge.existing_note_rows
             added = sum(
                 1 for t in merged_plan.priority_queue if t.provenance == _SCOUT_PROV
             )
@@ -510,6 +513,26 @@ def _phase(ctx: CycleContext) -> int:
         _LOG.warning(
             f"[plan] WARN: merge_scout_topics failed: {exc} — using original plan"
         )
+
+    # --- Step 2.6: the scout reports on notes the vault already has ---
+    # `topics_found.updates` rows, and `new` rows the merge dropped because
+    # they match an existing note, become `new_material` update entries in the
+    # backlog (spec 087 FR-001/FR-002). Best-effort, like the merge above.
+    try:
+        if spec_for_gates is not None and scout_report.is_file():
+            from ..currency import record_scout_updates
+
+            queued = record_scout_updates(
+                vault_dir,
+                spec_for_gates,
+                scout_report,
+                dropped_for_existing_note,
+                cycle=cycle_num,
+            )
+            if queued:
+                _LOG.info(f"[currency] {queued} note(s) queued for update by the scout")
+    except Exception as exc:
+        _LOG.warning(f"[currency] WARN: recording scout updates failed: {exc}")
     return __exit
 
 

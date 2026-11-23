@@ -388,13 +388,16 @@ def render_scout_prompt(
     spec: SpecConfig,
     vault_dir: Path,
     target_topics: list[str] | None = None,
-    exclude_topics: list[str] | None = None,
+    existing_notes: list[str] | None = None,
+    rejected_topics: list[str] | None = None,
     templates_dir: Path | None = None,
 ) -> Path:
     """Re-render just `_pipeline/prompts/scout-prompt.md` with resume context.
 
     Used by the orchestrator on `--resume` cycles so the scout prompt includes
-    the unmet expected filenames (target) and the already-covered set (exclude).
+    the unmet expected filenames (target), the notes the vault already has
+    (``existing_notes``: report new material about them, never a second note)
+    and the operator's persistent rejects (``rejected_topics``: skipped).
     """
     src = templates_dir or _templates_src()
     env = _env(src)
@@ -404,7 +407,8 @@ def render_scout_prompt(
         env.get_template("prompts/scout-prompt.md.j2").render(
             spec=spec,
             target_topics=target_topics or [],
-            exclude_topics=exclude_topics or [],
+            existing_notes=existing_notes or [],
+            rejected_topics=rejected_topics or [],
             forbidden_prefixes=resolve_forbidden_filename_prefixes(spec, vault_dir)
             or [],
         ),
@@ -436,7 +440,8 @@ def render_stage_prompt(
     return env.get_template(f"prompts/{name}.j2").render(
         spec=spec,
         target_topics=[],
-        exclude_topics=[],
+        existing_notes=[],
+        rejected_topics=[],
         forbidden_prefixes=resolve_forbidden_filename_prefixes(spec, vault_dir) or [],
     )
 
@@ -446,13 +451,15 @@ def render_all(
     vault_dir: Path,
     templates_dir: Path | None = None,
     target_topics: list[str] | None = None,
-    exclude_topics: list[str] | None = None,
+    existing_notes: list[str] | None = None,
+    rejected_topics: list[str] | None = None,
 ) -> None:
     """Render all vault templates into `vault_dir` using `spec`.
 
-    `target_topics` and `exclude_topics` are feature-002 resume-mode aids: they
-    feed into the scout prompt template so a `--resume` cycle scouts only the
-    unmet expected filenames and knows what to skip.
+    `target_topics`, `existing_notes` and `rejected_topics` are resume-mode
+    aids: they feed into the scout prompt template so a `--resume` cycle scouts
+    only the unmet expected filenames, reports new material about the notes the
+    vault already has, and skips what the operator rejected.
     """
     src = templates_dir or _templates_src()
     if not src.exists():
@@ -462,7 +469,8 @@ def render_all(
     prompt_ctx = {
         "spec": spec,
         "target_topics": target_topics or [],
-        "exclude_topics": exclude_topics or [],
+        "existing_notes": existing_notes or [],
+        "rejected_topics": rejected_topics or [],
         # A vault that switched the gates off is not told about prefixes it
         # will never be graded on.
         "forbidden_prefixes": resolve_forbidden_filename_prefixes(spec, vault_dir)

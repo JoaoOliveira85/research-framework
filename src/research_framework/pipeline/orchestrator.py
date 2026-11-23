@@ -613,7 +613,7 @@ def run_single_cycle(
 
     When `resume=True` and `spec` is provided, the scout prompt is re-rendered
     with `target_topics` (unmet expected filenames from repo-scan.json) and
-    `exclude_topics` (existing note filenames) so the scout focuses on gaps
+    `existing_notes` (existing note filenames) so the scout focuses on gaps
     rather than rediscovering covered topics (feature 002, FR-015).
 
     ``budget_cap=None`` / ``max_cycles=None`` resolve through the spec-061
@@ -1528,7 +1528,10 @@ def _render_cycle_scout_prompt(
 ) -> None:
     """Re-render the scout prompt for ``cycle_num`` with the current
     target/exclude lists, merging Phase 2 auto-promoted proposals into
-    ``target_topics`` and persistent rejects into ``exclude_topics``.
+    ``target_topics``. The notes the vault already has (``existing_notes``) and
+    the operator's persistent rejects (``rejected_topics``) are passed as two
+    separate lists: the scout reports new material about the first and skips
+    the second.
 
     When ``target_topics`` is supplied (e.g. from ``--target-topics`` CLI),
     those entries are prepended before the coverage-gap and proposal lists.
@@ -1563,7 +1566,7 @@ def _render_cycle_scout_prompt(
             seen.add(t.casefold())
 
     existing = set(existing_vault_filenames(vault_dir))
-    existing.update(_persistent_reject_titles(vault_dir))
+    rejected = set(_persistent_reject_titles(vault_dir))
 
     # Enrich spec sources with active discovered sources from the sources database.
     # Falls back to spec.data_sources unchanged when the sources database doesn't exist.
@@ -1582,7 +1585,8 @@ def _render_cycle_scout_prompt(
             enriched_spec,
             vault_dir,
             target_topics=computed_topics,
-            exclude_topics=sorted(existing),
+            existing_notes=sorted(existing - rejected),
+            rejected_topics=sorted(rejected),
         )
     except Exception as e:
         # Render failure is non-fatal — fall back to the generate-time prompt.

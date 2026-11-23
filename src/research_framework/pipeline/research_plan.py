@@ -804,13 +804,30 @@ at least one cycle. Capping at ``1.0`` keeps the existing
 ``[0.0, 1.0]`` priority-score contract intact."""
 
 
-def merge_scout_topics(
+@dataclass(frozen=True)
+class ScoutMerge:
+    """The result of :func:`merge_scout_topics_detailed`."""
+
+    plan: ResearchPlan
+    existing_note_rows: list[dict[str, Any]]
+    """``new`` rows the merge dropped because they match an existing note:
+    ``{"title", "key", "source_urls"}`` where ``key`` is the matched exclusion
+    slug (resolve it to a note stem with ``currency.resolve_note_stem``)."""
+
+
+def merge_scout_topics_detailed(
     plan: ResearchPlan,
     scout_report_path: Path,
     *,
     exclude_existing_titles: bool = True,
-) -> ResearchPlan:
-    """Return a new ``ResearchPlan`` with scout-discovered topics prepended.
+) -> ScoutMerge:
+    """Merge scout topics into the plan and report what the merge dropped.
+
+    Returns a :class:`ScoutMerge`: the new ``ResearchPlan`` plus the ``new`` rows
+    dropped because they match a note the vault already has (spec 087 FR-002).
+    Rows dropped as persistent rejects or out-of-scope are not reported.
+
+    The plan is a new ``ResearchPlan`` with scout-discovered topics prepended.
 
     Reads ``cycle-NNN-scout.json`` and converts every entry in
     ``topics_found.new`` into a :class:`PrioritizedTopic` carrying
@@ -833,11 +850,12 @@ def merge_scout_topics(
     ``exclude_existing_titles=False`` only when the caller has its own
     dedup pass downstream.
     """
+    existing: list[dict[str, Any]] = []
     if not scout_report_path.is_file():
         _LOG.info(
             "merge_scout_topics: %s not present — plan unchanged", scout_report_path
         )
-        return plan
+        return ScoutMerge(plan, existing)
 
     try:
         doc = json.loads(scout_report_path.read_text(encoding="utf-8"))
@@ -847,21 +865,21 @@ def merge_scout_topics(
             scout_report_path,
             exc,
         )
-        return plan
+        return ScoutMerge(plan, existing)
 
     if not isinstance(doc, dict):
         _LOG.warning(
             "merge_scout_topics: %s did not parse to a dict — plan unchanged",
             scout_report_path,
         )
-        return plan
+        return ScoutMerge(plan, existing)
 
     found = doc.get("topics_found")
     if not isinstance(found, dict):
-        return plan
+        return ScoutMerge(plan, existing)
     raw_new = found.get("new") or []
     if not isinstance(raw_new, list):
-        return plan
+        return ScoutMerge(plan, existing)
 
     seen_titles: set[str] = (
         {t.title.strip().casefold() for t in plan.priority_queue if t.title.strip()}
@@ -870,6 +888,11 @@ def merge_scout_topics(
     )
     excluded_keys = {_exclusion_slug(e.split(": ", 1)[-1]) for e in plan.exclusions}
 
+    covered_keys = {
+        _exclusion_slug(e.split(": ", 1)[-1])
+        for e in plan.exclusions
+        if e.startswith("already-covered:")
+    }
     scout_topics: list[PrioritizedTopic] = []
     for entry in raw_new:
         # normalise_topic_row (shared with gates_step._topics_found_new_rows)
@@ -897,6 +920,17 @@ def merge_scout_topics(
         proposed = str(entry.get("proposed_filename") or "")
         check_key = _exclusion_slug(proposed) or _exclusion_slug(title)
         if check_key and check_key in excluded_keys:
+            if check_key in covered_keys:
+                urls = entry.get("source_urls")
+                existing.append(
+                    {
+                        "title": title,
+                        "key": check_key,
+                        "source_urls": [str(u) for u in urls if str(u).strip()]
+                        if isinstance(urls, list)
+                        else [],
+                    }
+                )
             continue
         source_hints: list[str] = []
         for key in ("source_code_topic_ids", "source_intent_ids", "source_urls"):
@@ -916,14 +950,30 @@ def merge_scout_topics(
         seen_titles.add(cf)
 
     if not scout_topics:
-        return plan
+        return ScoutMerge(plan, existing)
 
     merged_queue = scout_topics + list(plan.priority_queue)
     merged_queue.sort(key=lambda t: (-t.priority_score, t.category, t.title))
 
     import dataclasses as _dc
 
-    return _dc.replace(plan, priority_queue=merged_queue)
+    return ScoutMerge(_dc.replace(plan, priority_queue=merged_queue), existing)
+
+
+def merge_scout_topics(
+    plan: ResearchPlan,
+    scout_report_path: Path,
+    *,
+    exclude_existing_titles: bool = True,
+) -> ResearchPlan:
+    """Return a new ``ResearchPlan`` with scout-discovered topics prepended.
+
+    See :func:`merge_scout_topics_detailed`, which also reports the rows it
+    dropped for matching an existing note; this returns the plan alone.
+    """
+    return merge_scout_topics_detailed(
+        plan, scout_report_path, exclude_existing_titles=exclude_existing_titles
+    ).plan
 
 
 def _pick_orphan_category(coverage_state: list[CategoryFillState]) -> str:

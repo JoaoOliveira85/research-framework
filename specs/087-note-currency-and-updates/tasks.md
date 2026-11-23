@@ -95,7 +95,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
 ## Phase 2: The scout reports, the settings exist
 
-- [ ] T005 The scout prompt renders existing notes as "already have a note"
+- [x] T005 The scout prompt renders existing notes as "already have a note"
       and persistent rejects as a separate skip list; the scout report
       accepts `topics_found.updates`; after the merge, `updates` rows and
       `new` rows that match an existing note become `new_material` entries;

@@ -471,6 +471,27 @@ def _filename_collision_errors(report: dict, vault_dir: Path | None) -> list[str
     return errors
 
 
+def _updates_shape_errors(report: dict) -> list[str]:
+    """``topics_found.updates`` is optional; when present it is a list of objects
+    each naming an existing ``note`` (spec 087 FR-001)."""
+    topics_found = report.get("topics_found")
+    if not isinstance(topics_found, dict) or "updates" not in topics_found:
+        return []
+    updates = topics_found["updates"]
+    if not isinstance(updates, list):
+        return ["topics_found.updates must be a list"]
+    errors: list[str] = []
+    for index, row in enumerate(updates):
+        if not isinstance(row, dict):
+            errors.append(f"topics_found.updates[{index}] must be an object")
+        elif not (isinstance(row.get("note"), str) and row["note"].strip()):
+            errors.append(
+                f"topics_found.updates[{index}] needs a non-empty 'note' "
+                "(the existing note's filename or stem)"
+            )
+    return errors
+
+
 def validate_report_structure(report: dict) -> list[str]:
     errors: list[str] = []
     for field in REQUIRED_REPORT_FIELDS:
@@ -479,6 +500,7 @@ def validate_report_structure(report: dict) -> list[str]:
     phase = report.get("phase")
     if phase not in ("scout", "research"):
         errors.append(f"invalid phase: {phase!r} (must be 'scout' or 'research')")
+    errors.extend(_updates_shape_errors(report))
     return errors
 
 
@@ -937,6 +959,7 @@ def validate_report_structure_v2(report: dict) -> list[str]:
             + ", ".join(BUDGET_FIELDS_V2_RESEARCH)
             + " must be present"
         )
+    errors.extend(_updates_shape_errors(report))
     return errors
 
 

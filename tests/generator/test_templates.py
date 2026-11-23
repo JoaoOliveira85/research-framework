@@ -406,8 +406,8 @@ def test_scout_prompt_instructs_generalize_step_and_topics_found(
 
     # Template version must be bumped so the migrator knows to re-render vaults
     # scaffolded against an older template: v1 omitted topics_found, v2 the
-    # research-plan rules (#12).
-    assert "_template_version: 4" in prompt
+    # research-plan rules (#12), v5 reports on existing notes (spec 087).
+    assert "_template_version: 5" in prompt
 
 
 def test_scout_prompt_renders_target_topics_when_supplied(tmp_path: Path) -> None:
@@ -424,14 +424,17 @@ def test_scout_prompt_renders_target_topics_when_supplied(tmp_path: Path) -> Non
         spec,
         vault,
         target_topics=["OMS (Order Management Service).md", "Root Variant.md"],
-        exclude_topics=["OEHK (Order Engine Housekeeper).md"],
+        existing_notes=["OEHK (Order Engine Housekeeper).md"],
+        rejected_topics=["Perpetual Motion"],
     )
     prompt = (vault / "_pipeline" / "prompts" / "scout-prompt.md").read_text()
     assert "## Resume-run targets" in prompt
     assert "OMS (Order Management Service).md" in prompt
     assert "Root Variant.md" in prompt
-    assert "## Already covered — skip these" in prompt
+    assert "## Already have a note" in prompt
     assert "OEHK (Order Engine Housekeeper).md" in prompt
+    assert "## Rejected by the operator — skip these" in prompt
+    assert "Perpetual Motion" in prompt
 
 
 def test_scout_prompt_skips_resume_sections_when_empty(tmp_path: Path) -> None:
@@ -439,7 +442,8 @@ def test_scout_prompt_skips_resume_sections_when_empty(tmp_path: Path) -> None:
     _, vault = _render_cf(tmp_path)
     prompt = (vault / "_pipeline" / "prompts" / "scout-prompt.md").read_text()
     assert "## Resume-run targets" not in prompt
-    assert "## Already covered" not in prompt
+    assert "## Already have a note" not in prompt
+    assert "## Rejected by the operator" not in prompt
 
 
 def test_ask_command_template_rendered(tmp_path: Path) -> None:
@@ -560,7 +564,7 @@ def test_render_scout_prompt_standalone_updates_only_the_prompt(
         spec,
         vault,
         target_topics=["X.md", "Y.md"],
-        exclude_topics=["Z.md"],
+        existing_notes=["Z.md"],
     )
     prompt = (vault / "_pipeline" / "prompts" / "scout-prompt.md").read_text()
     assert "## Resume-run targets" in prompt
