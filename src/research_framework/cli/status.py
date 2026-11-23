@@ -263,6 +263,16 @@ def _update_outcomes(vault_dir: Path) -> dict[str, object] | None:
     return counts
 
 
+def _set_aside_count(vault_dir: Path) -> int:
+    """Update entries set aside after repeated failed attempts (spec 087)."""
+    from ..pipeline import backlog
+
+    try:
+        return len(backlog.set_aside_updates(vault_dir))
+    except Exception:  # noqa: BLE001 - status never fails
+        return 0
+
+
 def _outcomes_line(outcomes: dict[str, object]) -> str:
     kinds = (*_OUTCOME_KINDS, "failed")
     body = ", ".join(f"{kind} {outcomes[kind]}" for kind in kinds)
@@ -304,6 +314,9 @@ def render_inactive(vault_dir: Path) -> str:
     outcomes = _update_outcomes(vault_dir)
     if outcomes is not None:
         lines.append(_outcomes_line(outcomes))
+    aside = _set_aside_count(vault_dir)
+    if aside:
+        lines.append(f"  updates set aside after repeated failures: {aside}")
     return "\n".join(lines)
 
 
@@ -359,6 +372,7 @@ def build_status_json(vault_dir: Path) -> dict[str, object]:
     """
     doc = _build_status_json(vault_dir)
     doc["update_outcomes"] = _update_outcomes(vault_dir)
+    doc["update_set_aside"] = _set_aside_count(vault_dir)
     if state_layout.is_legacy_layout(vault_dir):
         doc["legacy_layout"] = _LEGACY_NOTICE
     return doc

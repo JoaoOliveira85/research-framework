@@ -67,6 +67,22 @@ def test_status_shows_the_last_cycles_outcomes(
     assert json.loads(capsys.readouterr().out)["update_outcomes"]["failed"] == 1
 
 
+def test_status_counts_updates_set_aside(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from research_framework.pipeline import backlog
+
+    vault = _vault(tmp_path, RESULTS)
+    assert build_status_json(vault)["update_set_aside"] == 0
+    backlog.observe_update(vault, "review", stem="stuck", reason="review_due")
+    for cycle in (1, 2):
+        backlog.record_update_failure(vault, "stuck", "x", cycle=cycle)
+
+    assert build_status_json(vault)["update_set_aside"] == 1
+    main(["status", "--vault", str(vault)])
+    assert "updates set aside after repeated failures: 1" in capsys.readouterr().out
+
+
 def test_status_has_no_outcomes_line_for_a_cycle_without_updates(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

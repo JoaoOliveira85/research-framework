@@ -205,6 +205,10 @@ pipeline:
     new: 60
     updates: 30
     discovery: 10
+  # After this many failed attempts (an outcome that did not hold against git,
+  # or that the verifier rejected) an update entry is set aside instead of
+  # retried every cycle. New material for the note gives it another try.
+  update_max_attempts: 2
 
   # ---------------------------------------------------------------------
   # Feature 017 — vault quality fix.

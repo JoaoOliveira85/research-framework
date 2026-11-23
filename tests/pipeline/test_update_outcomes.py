@@ -194,6 +194,14 @@ def test_a_failed_outcome_restores_the_note_and_leaves_the_entry_open(
     assert (vault / topics[1].path).read_bytes() != original  # the honest one stands
     assert _entry(vault, "lies")["status"] == "open"
     assert "outcome" not in _entry(vault, "lies")
+    # the failed attempt is counted and its reason remembered (it will be set
+    # aside after pipeline.update_max_attempts of them)
+    assert _entry(vault, "lies")["attempts"] == 1
+    assert (
+        "no source_urls entry was added"
+        in _entry(vault, "lies")["last_failure"]["reason"]
+    )
+    assert "attempts" not in _entry(vault, "honest")
     closed = _entry(vault, "honest")
     assert (closed["status"], closed["outcome"], closed["outcome_cycle"]) == (
         "resolved",

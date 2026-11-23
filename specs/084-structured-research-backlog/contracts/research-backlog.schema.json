@@ -72,6 +72,20 @@
           "description": "update entries (1.1): how the worked update ended. Cleared into outcome_history when the entry reopens."
         },
         "outcome_cycle": { "type": "integer", "minimum": 1 },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "update entries (1.1): failed attempts since the last passing outcome or new prompting source. At pipeline.update_max_attempts the entry is set aside (still open, no longer queued)."
+        },
+        "last_failure": {
+          "type": "object",
+          "required": ["reason"],
+          "properties": {
+            "reason": { "type": "string" },
+            "cycle": { "type": "integer", "minimum": 1 }
+          },
+          "description": "update entries (1.1): why the last attempt failed."
+        },
         "outcome_history": {
           "type": "array",
           "items": { "type": "object" },

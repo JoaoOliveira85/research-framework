@@ -21,6 +21,10 @@ the operator; **never parsed by code** (FR-016).
 
 - **<stem>** — <reason> · as of <date or "unknown"> · <n> prompting source(s)
 
+### Set aside after <N> failed attempts
+
+- **<stem>** — <reason> · as of <date or "unknown"> · <n> prompting source(s) · last failure (cycle <c>): <why>
+
 ## Flagged by the researcher
 
 - **<title>** — <detail> · first seen cycle <a>
@@ -59,7 +63,9 @@ _<R> resolved and <D> dropped entries are kept in the JSON file._
    are always present.
 2. Only `open` entries are listed. "Notes to update" lists `update` entries in
    `update_topics()` order (`new_material` first, then oldest `as_of`, missing
-   last, then store order); every other section is ordered as follows. Within a section, entries are ordered by
+   last, then store order); entries at `pipeline.update_max_attempts` failed attempts are
+   listed after them under the `### Set aside after <N> failed attempts` sub-heading
+   (omitted when none), each with its last failure; every other section is ordered as follows. Within a section, entries are ordered by
    `first_seen_cycle` (nulls last), then store order.
 3. A topic entry is listed under the section of its `origin`, except that an
    entry with `citation_count >= 1` is listed under "Follow-on topics"

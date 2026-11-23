@@ -28,6 +28,8 @@ _DEFAULT_ESTIMATOR_CALIBRATION: dict[str, float] = {
 }
 _BUDGET_USD_ALIAS_WARNED = False
 
+DEFAULT_UPDATE_MAX_ATTEMPTS = 2
+
 DefaultAgent = Literal["claude", "codex", "cursor-agent", "ollama", "opencode"]
 
 _VALID_AGENTS = frozenset({"claude", "codex", "cursor-agent", "ollama", "opencode"})
@@ -38,6 +40,7 @@ _PIPELINE_TYPED_KEYS = frozenset(
         "budget_usd",
         "backlog_promotion_threshold",
         "cycle_split",
+        "update_max_attempts",
     }
 )
 # Stages whose source-module manifest may supply a `default_tier` when the
@@ -252,6 +255,9 @@ class VaultSettings:
     cycles_per_run: int | None = None
     # pipeline.cycle_split (spec 087 FR-015); 60/30/10 when absent.
     cycle_split: CycleSplit = field(default_factory=CycleSplit)
+    # pipeline.update_max_attempts (spec 087): failed attempts after which an
+    # update entry is set aside instead of retried.
+    update_max_attempts: int = 2
     stages: dict[str, StageSettings] = field(default_factory=dict)
     dimensions: list[str] = field(default_factory=list)
     default_agent: DefaultAgent = "claude"
@@ -397,6 +403,13 @@ def load_vault_settings(vault_dir: Path) -> VaultSettings:
             pipeline.get("cycle_split"), vault_dir=vault_dir
         )
 
+        update_max_attempts = _require_positive_int(
+            pipeline.get("update_max_attempts", DEFAULT_UPDATE_MAX_ATTEMPTS),
+            key="pipeline.update_max_attempts",
+            vault_dir=vault_dir,
+            label="update_max_attempts must be an integer >= 1",
+        )
+
         threshold_raw = pipeline.get("backlog_promotion_threshold", 2)
         backlog_promotion_threshold = _require_positive_int(
             threshold_raw,
@@ -470,6 +483,7 @@ def load_vault_settings(vault_dir: Path) -> VaultSettings:
         max_cycles=max_cycles,
         cycles_per_run=cycles_per_run,
         cycle_split=cycle_split,
+        update_max_attempts=update_max_attempts,
         budget_usd=budget_usd,
         backlog_promotion_threshold=backlog_promotion_threshold,
         stages=stages,
@@ -1490,6 +1504,7 @@ _PIPELINE_FIELDS = frozenset(
         "max_cycles",
         "cycles_per_run",  # issue #33
         "cycle_split",  # spec 087
+        "update_max_attempts",  # spec 087
         "budget_usd",
         "backlog_promotion_threshold",
         "coverage_growth",

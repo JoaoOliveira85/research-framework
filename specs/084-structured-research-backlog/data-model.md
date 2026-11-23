@@ -39,6 +39,7 @@ Anything else at the top level is preserved and ignored.
 | `relation`, `parent_note`, `scope_warn` | propose | Phase 2 tangent metadata |
 | `stem`, `kind` | quarantine sweep | `kind` ∈ `rewrite`, `retry` |
 | `stem`, `reason`, `prompted_by`, `as_of` | scout, review, research (`update` entries, 1.1) | `reason` ∈ `new_material`, `operator`, `review_due`, strongest first, only ever replaced by a stronger one; `prompted_by` accumulates source URLs, deduplicated; `as_of` is the note's date when last seen |
+| `attempts`, `last_failure` | research (`record_update_failure`, `reopen_update`, 1.1) | `attempts` counts failed attempts (an outcome that did not hold against git, or that the verifier rejected); reset to 0 by a passing outcome (`close_update`) or by a sighting that adds a prompting source not yet recorded, never by a re-sighting that adds none. `last_failure` is `{reason, cycle?}`. At `pipeline.update_max_attempts` (default 2) the entry stays `open` but `update_topics()` no longer returns it; `set_aside_updates()` does |
 | `outcome`, `outcome_cycle` | research (`close_update`, 1.1) | `outcome` ∈ `confirmed`, `revised`, `superseded`, `retracted`; a later sighting that reopens the entry moves them to `outcome_history` (`[{outcome, cycle?, rejected?}]`, oldest first; `rejected` is the verifier's reason when the outcome was reopened by `reopen_update`, spec 087 FR-013) |
 | `updated` | every writer | date of the last module write to this entry |
 

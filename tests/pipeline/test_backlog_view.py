@@ -452,3 +452,38 @@ def test_view_lists_notes_to_update(tmp_path: Path) -> None:
         "- **unstamped** — review_due · as of unknown · 0 prompting sources",
     ]
     assert "done" not in section
+
+    # an entry that failed pipeline.update_max_attempts (2) times is listed
+    # apart, with its last failure, and no longer among the queued ones
+    _seed(
+        tmp_path,
+        [
+            _entry(
+                "update:stuck",
+                "stuck",
+                "update",
+                stem="stuck",
+                reason="new_material",
+                as_of="2025-01-01",
+                prompted_by=["https://a.example"],
+                attempts=2,
+                last_failure={"reason": "commentary only", "cycle": 7},
+            ),
+            _entry(
+                "update:fine",
+                "fine",
+                "update",
+                stem="fine",
+                reason="review_due",
+                as_of="2025-02-02",
+            ),
+        ],
+    )
+    text = _render(tmp_path)
+    block = text.split("## Notes to update\n\n")[1].split("\n\n## ")[0]
+    queued, _, aside = block.partition("### Set aside after 2 failed attempts")
+    assert "**fine**" in queued and "stuck" not in queued
+    assert (
+        "- **stuck** — new_material · as of 2025-01-01 · 1 prompting source · "
+        "last failure (cycle 7): commentary only"
+    ) in aside

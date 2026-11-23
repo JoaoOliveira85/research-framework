@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -99,9 +100,33 @@ def test_health_lists_notes_past_review_per_category(vh: Any, tmp_path: Path) ->
     assert f"- {category}: 1 past review, 1 superseded or retracted" in text
     assert "- past review: `data_vault/01 - Concepts/stale.md`" in text
     assert report.supersession_links == []  # symmetric
+    assert report.set_aside == []
     assert before == {
         p: p.read_bytes() for p in (vault / "data_vault").rglob("*.md")
     }  # read-only
+
+
+def test_health_lists_updates_set_aside_with_their_reason(
+    vh: Any, tmp_path: Path
+) -> None:
+    from research_framework.pipeline import backlog
+
+    vault, category = _vault(tmp_path)
+    _note(vault, "stuck", category, as_of="2020-01-01", currency="current")
+    backlog.observe_update(vault, "review", stem="stuck", reason="review_due")
+    for cycle in (1, 2):
+        backlog.record_update_failure(vault, "stuck", "commentary only", cycle=cycle)
+
+    report = vh.run(vault, offline=True)
+    text = (vault / "_pipeline" / "health-report.md").read_text(encoding="utf-8")
+
+    assert [(s.stem, s.attempts, s.last_failure) for s in report.set_aside] == [
+        ("stuck", 2, "commentary only")
+    ]
+    assert "### updates set aside after 2 failed attempts (1)" in text
+    assert "- stuck: review_due; last failure (cycle 2): commentary only" in text
+    # advisory: it needs a person, and does not flip the exit code
+    assert report.unresolved_count == replace(report, set_aside=[]).unresolved_count
 
 
 def test_health_reports_a_link_that_never_became_symmetric(

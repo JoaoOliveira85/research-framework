@@ -322,7 +322,13 @@ def apply_batch(
             backlog.close_update(
                 vault_dir, verdict.stem, verdict.outcome or "", cycle=cycle
             )
-        elif verdict.path and restore_note(vault_dir, verdict.path):
+            continue
+        # a failed attempt: counted, so a note that cannot be settled is set
+        # aside after pipeline.update_max_attempts rather than retried forever
+        backlog.record_update_failure(
+            vault_dir, verdict.stem, verdict.reason, cycle=cycle
+        )
+        if verdict.path and restore_note(vault_dir, verdict.path):
             _LOG.warning(
                 "[update_outcomes] %s: %s; restored from HEAD, entry left open",
                 verdict.stem,

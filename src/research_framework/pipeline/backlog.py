@@ -131,6 +131,9 @@ class UpdateRef:
     prompted_by: tuple[str, ...]
     first_seen_cycle: int | None
     last_seen_cycle: int | None
+    attempts: int = 0
+    last_failure: str | None = None
+    last_failure_cycle: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +267,18 @@ def _validate_entry(entry: Any, index: int, *, lenient_enums: bool) -> str | Non
         and all(isinstance(p, str) for p in entry["prompted_by"])
     ):
         return f"{where}.prompted_by must be an array of strings"
+    if "attempts" in entry and not (
+        _is_int(entry["attempts"]) and entry["attempts"] >= 0
+    ):
+        return f"{where}.attempts must be an integer >= 0"
+    if "last_failure" in entry:
+        failure = entry["last_failure"]
+        if not (
+            isinstance(failure, dict)
+            and isinstance(failure.get("reason"), str)
+            and (failure.get("cycle") is None or _is_int(failure["cycle"]))
+        ):
+            return f"{where}.last_failure must be {{reason: string, cycle?: integer}}"
     if "outcome_history" in entry and not (
         isinstance(entry["outcome_history"], list)
         and all(isinstance(h, dict) for h in entry["outcome_history"])
@@ -657,10 +672,13 @@ class Transaction:
             entry.setdefault("reason", reason)
             entry["stem"] = stem
         known = list(entry.get("prompted_by", []))
-        for source in sources:
-            if source not in known:
-                known.append(source)
+        fresh = [s for s in dict.fromkeys(sources) if s not in known]
+        known.extend(fresh)
         entry["prompted_by"] = known
+        if fresh and entry.get("attempts"):
+            # New material is a reason to try again; a re-sighting that adds no
+            # source (a review that came due again) is not.
+            entry["attempts"] = 0
         self._set(entry, "as_of", as_of)
 
     def close_update(self, stem: str, outcome: str, cycle: int | None = None) -> bool:
@@ -681,6 +699,31 @@ class Transaction:
             entry["outcome_cycle"] = cycle
         else:
             entry.pop("outcome_cycle", None)
+        entry.pop("attempts", None)  # a passing outcome settles the note
+        entry.pop("last_failure", None)
+        return True
+
+    def record_update_failure(
+        self, stem: str, reason: str, cycle: int | None = None
+    ) -> bool:
+        """Count one failed attempt on an update entry and remember why.
+
+        A dispatched update that did not pass UG-001 (or that the verifier
+        rejected) used up an attempt; at ``pipeline.update_max_attempts`` the
+        entry is set aside (:func:`update_topics`). Returns ``False`` when
+        there is no such entry.
+        """
+        if self._writer not in _UPDATE_CLOSERS:
+            raise ValueError(f"writer {self._writer!r} does not record failures")
+        entry = self._find(update_id(stem))
+        if entry is None:
+            return False
+        entry["attempts"] = int(entry.get("attempts", 0)) + 1
+        failure: dict[str, Any] = {"reason": reason}
+        if cycle is not None:
+            failure["cycle"] = cycle
+        entry["last_failure"] = failure
+        entry["updated"] = self._today
         return True
 
     def reopen_update(self, stem: str, reason: str, cycle: int | None = None) -> bool:
@@ -704,6 +747,12 @@ class Transaction:
         record["rejected"] = reason
         entry.setdefault("outcome_history", []).append(record)
         entry["updated"] = self._today
+        # a rejected outcome is a failed attempt too
+        entry["attempts"] = int(entry.get("attempts", 0)) + 1
+        failure = {"reason": reason}
+        if entry_cycle is not None:
+            failure["cycle"] = entry_cycle
+        entry["last_failure"] = failure
         return True
 
     def resolve_covered(self, existing_stems: Iterable[str]) -> int:
@@ -910,6 +959,19 @@ def reopen_update(
     return applied and bool(reopened and reopened[0])
 
 
+def record_update_failure(
+    vault_dir: Path, stem: str, reason: str, *, cycle: int | None = None
+) -> bool:
+    """Count a failed attempt on one update entry as the ``research`` writer."""
+    recorded: list[bool] = []
+    applied = update(
+        vault_dir,
+        "research",
+        lambda tx: recorded.append(tx.record_update_failure(stem, reason, cycle)),
+    )
+    return applied and bool(recorded and recorded[0])
+
+
 def resolve_covered(vault_dir: Path, existing_stems: Iterable[str]) -> bool:
     stems = list(existing_stems)
     return update(vault_dir, "harvest", lambda tx: tx.resolve_covered(stems))
@@ -978,30 +1040,71 @@ def _update_sort_key(item: tuple[int, dict[str, Any]]) -> tuple[int, int, str, i
     )
 
 
-def update_topics(vault_dir: Path) -> list[UpdateRef]:
-    """Open ``update`` entries: ``new_material`` first, then oldest ``as_of``.
+def max_update_attempts(vault_dir: Path) -> int:
+    """``pipeline.update_max_attempts`` of the vault (the default when unreadable)."""
+    from .settings import (
+        DEFAULT_UPDATE_MAX_ATTEMPTS,
+        SettingsError,
+        load_vault_settings,
+    )
 
-    A missing ``as_of`` sorts last within its reason group; ties keep store
-    order.
-    """
+    try:
+        return load_vault_settings(vault_dir).update_max_attempts
+    except SettingsError:
+        return DEFAULT_UPDATE_MAX_ATTEMPTS
+
+
+def _update_ref(e: dict[str, Any]) -> UpdateRef:
+    failure = e.get("last_failure") if isinstance(e.get("last_failure"), dict) else {}
+    return UpdateRef(
+        id=e["id"],
+        stem=e["stem"],
+        reason=e["reason"],
+        as_of=e.get("as_of") or None,
+        prompted_by=tuple(e.get("prompted_by", ())),
+        first_seen_cycle=e.get("first_seen_cycle"),
+        last_seen_cycle=e.get("last_seen_cycle"),
+        attempts=int(e.get("attempts", 0)),
+        last_failure=failure.get("reason") if failure else None,
+        last_failure_cycle=failure.get("cycle") if failure else None,
+    )
+
+
+def _open_updates(
+    vault_dir: Path, *, set_aside: bool, max_attempts: int | None
+) -> list[UpdateRef]:
+    limit = max_update_attempts(vault_dir) if max_attempts is None else max_attempts
     queued = [
         (index, entry)
         for index, entry in enumerate(_read_for_query(vault_dir))
-        if entry["status"] == "open" and entry["origin"] == "update"
+        if entry["status"] == "open"
+        and entry["origin"] == "update"
+        and (int(entry.get("attempts", 0)) >= limit) is set_aside
     ]
     queued.sort(key=_update_sort_key)
-    return [
-        UpdateRef(
-            id=e["id"],
-            stem=e["stem"],
-            reason=e["reason"],
-            as_of=e.get("as_of") or None,
-            prompted_by=tuple(e.get("prompted_by", ())),
-            first_seen_cycle=e.get("first_seen_cycle"),
-            last_seen_cycle=e.get("last_seen_cycle"),
-        )
-        for _, e in queued
-    ]
+    return [_update_ref(e) for _, e in queued]
+
+
+def update_topics(
+    vault_dir: Path, *, max_attempts: int | None = None
+) -> list[UpdateRef]:
+    """Open ``update`` entries: ``new_material`` first, then oldest ``as_of``.
+
+    A missing ``as_of`` sorts last within its reason group; ties keep store
+    order. An entry that has failed ``max_attempts`` times (default
+    ``pipeline.update_max_attempts``) is set aside: still ``open`` in the store
+    and listed by :func:`set_aside_updates`, but never queued again until new
+    material arrives.
+    """
+    return _open_updates(vault_dir, set_aside=False, max_attempts=max_attempts)
+
+
+def set_aside_updates(
+    vault_dir: Path, *, max_attempts: int | None = None
+) -> list[UpdateRef]:
+    """Open update entries set aside after repeated failed attempts, in the
+    order :func:`update_topics` would have queued them."""
+    return _open_updates(vault_dir, set_aside=True, max_attempts=max_attempts)
 
 
 def all_titles(vault_dir: Path) -> list[TitleRef]:
@@ -1096,6 +1199,17 @@ def _update_line(entry: dict[str, Any]) -> str:
     )
 
 
+def _set_aside_line(entry: dict[str, Any]) -> str:
+    failure = (
+        entry.get("last_failure") if isinstance(entry.get("last_failure"), dict) else {}
+    )
+    where = f" (cycle {failure['cycle']})" if failure.get("cycle") is not None else ""
+    return (
+        f"{_update_line(entry)} · last failure{where}: "
+        f"{_one_line(failure.get('reason', 'unknown'))}"
+    )
+
+
 def _migrated_line(entry: dict[str, Any]) -> str:
     return f"- {entry.get('detail', entry['title']).replace(chr(10), ' ')}"
 
@@ -1120,6 +1234,23 @@ def _coverage_lines(vault_dir: Path) -> list[str]:
     return lines
 
 
+def _update_section_lines(
+    vault_dir: Path, update_entries: list[tuple[int, dict[str, Any]]]
+) -> list[str]:
+    limit = max_update_attempts(vault_dir)
+    active = [e for _, e in update_entries if int(e.get("attempts", 0)) < limit]
+    aside = [e for _, e in update_entries if int(e.get("attempts", 0)) >= limit]
+    lines = [_update_line(e) for e in active]
+    if aside:
+        lines += [
+            "",
+            f"### Set aside after {limit} failed attempts",
+            "",
+            *(_set_aside_line(e) for e in aside),
+        ]
+    return lines
+
+
 def _render_text(vault_dir: Path, entries: list[dict[str, Any]]) -> str:
     open_entries = [(i, e) for i, e in enumerate(entries) if e["status"] == "open"]
     open_entries.sort(key=_first_seen_sort_key)
@@ -1134,7 +1265,7 @@ def _render_text(vault_dir: Path, entries: list[dict[str, Any]]) -> str:
         "operator": [],
         "proposal": [],
         "migrated": [],
-        "update": [_update_line(e) for _, e in update_entries],
+        "update": _update_section_lines(vault_dir, update_entries),
     }
     for _, entry in open_entries:
         origin = entry["origin"]

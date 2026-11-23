@@ -179,10 +179,23 @@ class SupersessionLink:
 
 
 @dataclass
+class SetAsideUpdate:
+    """An update entry set aside after repeated failed attempts (spec 087)."""
+
+    stem: str
+    reason: str
+    attempts: int
+    last_failure: str
+    last_failure_cycle: int | None
+
+
+@dataclass
 class HealthReport:
     wikilinks: list[WikilinkIssue] = field(default_factory=list)
     currency: list[CurrencyRow] = field(default_factory=list)
     supersession_links: list[SupersessionLink] = field(default_factory=list)
+    set_aside: list[SetAsideUpdate] = field(default_factory=list)
+    update_max_attempts: int = 2
     urls: list[UrlIssue] = field(default_factory=list)
     template_versions: list[tuple[Path, str, str, str]] = field(default_factory=list)
     control_file_tracking: list[ControlFileTrackingWarning] = field(
@@ -809,6 +822,29 @@ def scan_currency(vault: Path) -> list[CurrencyRow]:
     ]
 
 
+def _max_update_attempts(vault: Path) -> int:
+    from research_framework.pipeline import backlog
+
+    return backlog.max_update_attempts(vault)
+
+
+def scan_set_aside_updates(vault: Path) -> list[SetAsideUpdate]:
+    """Update entries set aside after ``pipeline.update_max_attempts`` failed
+    attempts: they need a human, or new material (read-only)."""
+    from research_framework.pipeline import backlog
+
+    return [
+        SetAsideUpdate(
+            stem=ref.stem,
+            reason=ref.reason,
+            attempts=ref.attempts,
+            last_failure=ref.last_failure or "unknown",
+            last_failure_cycle=ref.last_failure_cycle,
+        )
+        for ref in backlog.set_aside_updates(vault)
+    ]
+
+
 def scan_supersession_links(vault: Path) -> list[SupersessionLink]:
     """Supersession links that are not symmetric, across every note.
 
@@ -962,6 +998,23 @@ def render_report(report: HealthReport, vault: Path) -> str:
     lines.append("")
 
     # Spec 058 — control-file git tracking (advisory; contract §5).
+    if report.set_aside:
+        lines.append(
+            f"### updates set aside after {report.update_max_attempts} failed attempts "
+            f"({len(report.set_aside)})"
+        )
+        for item in report.set_aside:
+            where = (
+                f" (cycle {item.last_failure_cycle})"
+                if item.last_failure_cycle is not None
+                else ""
+            )
+            lines.append(
+                f"- {item.stem}: {item.reason}; last failure{where}: {item.last_failure}"
+            )
+        lines.append("  they need a person, or new material about the note")
+    lines.append("")
+
     lines.append("## Control-file git tracking")
     if not report.control_files_git_backed:
         lines.append("skipped (not a git work tree)")
@@ -1007,10 +1060,13 @@ def run(
     control_file_tracking = scan_control_file_git_tracking(vault)
     currency = scan_currency(vault)
     supersession_links = scan_supersession_links(vault)
+    set_aside = scan_set_aside_updates(vault)
 
     report = HealthReport(
         currency=currency,
         supersession_links=supersession_links,
+        set_aside=set_aside,
+        update_max_attempts=_max_update_attempts(vault),
         wikilinks=wikilinks,
         urls=urls,
         template_versions=template_versions,
