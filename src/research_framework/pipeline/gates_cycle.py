@@ -25,6 +25,67 @@ def _planned_new_topics(vault_dir: Path) -> int | None:
     return int(plan.new_quota or 0) if plan.plans_updates else None
 
 
+# Spec 087: a cycle that also revises existing notes has less new-topic work to
+# judge. Below this share of the plan's work the new-topic coverage gates cannot
+# fail the cycle: a few new notes (all, say, in the one category the scout could
+# ground) are not a fair test of diversity or per-category velocity. At or above
+# it, and with no update work planned, they judge as they always did.
+SMALL_NEW_SHARE = 0.5
+
+
+def new_topic_share(vault_dir: Path) -> float | None:
+    """The plan's new-topic share of its work (``new / (new + update)``), or
+    ``None`` when it planned no update work (all new topics: judged in full)."""
+    from .research_plan import ResearchPlan
+
+    plan_path = vault_dir / "_pipeline" / "research-plan.md"
+    try:
+        plan = ResearchPlan.from_markdown(plan_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not plan.plans_updates:
+        return None
+    new, upd = int(plan.new_quota or 0), int(plan.update_quota)
+    return new / float(new + upd) if new + upd else None
+
+
+def scale_to_new_share(result: GateResult, new_share: float | None) -> GateResult:
+    """Judge a new-topic coverage gate by the new-topic work the plan had.
+
+    ``None`` or a share of :data:`SMALL_NEW_SHARE` and up: unchanged. No new
+    topics planned: PASS (nothing to judge). A small share: a FAIL becomes a WARN.
+    """
+    if new_share is None or new_share >= SMALL_NEW_SHARE:
+        return result
+    pct = f"{new_share:.0%}"
+    if new_share <= 0:
+        return GateResult(
+            gate_id=result.gate_id,
+            status="PASS",
+            metric_name=result.metric_name,
+            metric_value=result.metric_value,
+            threshold=result.threshold,
+            message=(
+                "the plan asked for no new topics this cycle (its work is "
+                f"updates to existing notes); not judged. Was: {result.message}"
+            ),
+        )
+    if result.status != "FAIL":
+        return result
+    return GateResult(
+        gate_id=result.gate_id,
+        status="WARN",
+        metric_name=result.metric_name,
+        metric_value=result.metric_value,
+        threshold=result.threshold,
+        message=(
+            f"{result.message} (new topics are {pct} of this cycle's plan, below "
+            f"{SMALL_NEW_SHARE:.0%}: reported, not failed)"
+        ),
+        correction_hint=result.correction_hint,
+    )
+
+
 def CG001_min_cycle_yield(
     vault_dir: Path,
     report: dict,
@@ -301,7 +362,12 @@ def CG004_avg_word_count(
     after: dict,
     expected_per_cycle: int,
     categories: list[str],
+    *,
+    new_share: float | None = None,
 ) -> GateResult:
+    if new_share is not None and 0 < new_share < 1:
+        # velocity is owed only for the new-topic part of the cycle
+        expected_per_cycle = max(1, round(expected_per_cycle * new_share))
     if expected_per_cycle < 1:
         raise ValueError("expected_per_cycle must be >= 1")
     if not categories:

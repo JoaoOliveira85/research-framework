@@ -175,3 +175,29 @@ def test_a_due_note_ends_in_exactly_one_outcome(
     # a confirmed outcome is content nowhere
     if scenario == "confirmed":
         assert _report(vault)["notes_updated"] == []
+
+
+def test_the_research_report_lists_every_new_note_whatever_batch_wrote_last(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Update batches interleave with new ones and an agent rewrites the shared
+    report on each batch; the cycle's notes_created must still be every new note
+    (it fed the headline's "N notes drafted": 0 with six notes written)."""
+    monkeypatch.setenv("FAKE_AGENT_SCENARIO", "happy")
+    monkeypatch.setenv(fake_agent.UPDATE_SCENARIO_ENV, "confirmed")
+    monkeypatch.setenv(fake_agent.REPORT_REWRITE_ENV, "1")
+    monkeypatch.setenv(
+        fake_agent.SCOUT_UPDATES_ENV,
+        json.dumps([{"note": "kafka-retries.md", "source_urls": ["https://e.org/x"]}]),
+    )
+    vault, spec, _ = _vault(tmp_path)
+
+    run_single_cycle(vault, cycle_num=1, budget_cap=10.0, max_cycles=1, spec=spec)
+
+    written: list[str] = []
+    for batch in sorted((vault / "_pipeline/cycles").glob("cycle-001-batch-*.json")):
+        written += json.loads(batch.read_text(encoding="utf-8")).get(
+            "notes_written", []
+        )
+    assert written, "the cycle wrote new notes"
+    assert sorted(_report(vault)["notes_created"]) == sorted(set(written))

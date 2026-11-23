@@ -192,6 +192,8 @@ def health_header(
     errors: int | None,
     warnings: int | None,
     gate_fail: bool = False,
+    updated: int | None = None,
+    confirmed: int | None = None,
 ) -> str:
     """Pure FR-013 one-line header (also consumed by ``vault status`` + spec 035)."""
     status = _derive_status(
@@ -204,8 +206,12 @@ def health_header(
     elapsed = _format_elapsed(elapsed_s)
     er = "?" if errors is None else str(errors)
     wr = "?" if warnings is None else str(warnings)
+    work = f"{nd} notes drafted, {vp} verifier-passed"
+    if updated is not None or confirmed is not None:
+        # Spec 087: update work is work. Counted only when the cycle had some.
+        work += f", {updated or 0} updated, {confirmed or 0} confirmed"
     return (
-        f"CYCLE {cycle_n}: {status} | {nd} notes drafted, {vp} verifier-passed | "
+        f"CYCLE {cycle_n}: {status} | {work} | "
         f"{sp} spent, {bd} budget | {elapsed} elapsed | {er} errors, {wr} warnings"
     )
 
@@ -293,7 +299,19 @@ def _collect_health_inputs(
     errors = gate_counts.get("FAIL", 0) + incident_errors
     warnings = gate_warn + len(capture_groups) + degraded_count
 
+    updated: int | None = None
+    confirmed: int | None = None
+    rows = [
+        r
+        for r in research.get("update_outcome_results") or []
+        if isinstance(r, dict) and r.get("status") == "passed"
+    ]
+    if rows:
+        confirmed = sum(1 for r in rows if r.get("outcome") == "confirmed")
+        updated = len(rows) - confirmed
     return {
+        "updated": updated,
+        "confirmed": confirmed,
         "exit_code": exit_code,
         "notes_drafted": notes_drafted,
         "verifier_passed": verifier_passed,

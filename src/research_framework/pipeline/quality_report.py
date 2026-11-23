@@ -26,6 +26,8 @@ from research_framework.pipeline.gates_cycle import (
     CG005_cumulative_coverage_trajectory,
     CG006_word_count_compliance,
     CG007_orphan_link_pct,
+    new_topic_share,
+    scale_to_new_share,
 )
 from research_framework.pipeline.settings import (
     effective_max_cycles,
@@ -552,6 +554,9 @@ def write_report(vault_dir: Path, cycle_number: int) -> Path:
     floor = _min_note_word_floor(spec)
 
     cg_gates: dict[str, GateResult] = {}
+    # Spec 087: the new-topic coverage gates judge the plan's new-topic work.
+    new_share = new_topic_share(vault_dir)
+    scaled = {"CG-002", "CG-004", "CG-005"}
     for fn, args, kw in (
         (
             CG001_min_cycle_yield,
@@ -567,7 +572,7 @@ def write_report(vault_dir: Path, cycle_number: int) -> Path:
         (
             CG004_avg_word_count,
             (before, after, exp_vel, velocity_cats),
-            {},
+            {"new_share": new_share},
         ),
         (
             CG005_cumulative_coverage_trajectory,
@@ -578,6 +583,8 @@ def write_report(vault_dir: Path, cycle_number: int) -> Path:
         (CG007_orphan_link_pct, (0, 0), {}),
     ):
         gr = run_gate(fn, *args, **kw)
+        if gr.gate_id in scaled:
+            gr = scale_to_new_share(gr, new_share)
         cg_gates[gr.gate_id] = gr
 
     # FR1 (spec 051): surface the CG-001 yield breakdown in the report and

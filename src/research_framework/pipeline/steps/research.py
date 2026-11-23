@@ -137,6 +137,10 @@ def _phase(ctx: CycleContext) -> int:
         cap_tripped = False
         new_ordinal = 0  # position among the NEW-topic batches (updates interleave)
         new_history: list[tuple[object, BatchResult]] = []
+        # Every note a batch of THIS cycle wrote. An agent rewrites the shared
+        # report on each batch, so a later (update) batch's report drops the
+        # earlier batches' notes_created; they are merged back after every batch.
+        cycle_written: list[str] = []
 
         for i, assignment in enumerate(assignments):
             runtime_state = ctx.runtime_state
@@ -259,8 +263,9 @@ def _phase(ctx: CycleContext) -> int:
             new_paths = st._discover_new_markdown_files(data_vault, seen_before)
             note_paths = sorted(new_paths, key=lambda p: p.as_posix())
             note_names = [p.relative_to(vault_dir).as_posix() for p in note_paths]
-            if note_names:
-                st._merge_research_notes(research_report, note_names)
+            cycle_written.extend(n for n in note_names if n not in cycle_written)
+            if cycle_written:
+                st._merge_research_notes(research_report, cycle_written)
             # B.2 (post-mortem 2026-05-30): backfill the framework-owned
             # `lifecycle.created_at_cycle` field so orchestrator's
             # "what did this cycle produce?" queries work. Idempotent;

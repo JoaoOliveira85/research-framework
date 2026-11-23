@@ -716,6 +716,9 @@ def _parse_update_topics(prompt_text: str) -> list[dict] | None:
 
 
 UPDATE_SCENARIO_ENV = "FAKE_AGENT_UPDATE_SCENARIO"
+# A real agent writes its whole report on each batch, so an update batch's report
+# replaces what earlier batches wrote. Set to "1" to do the same here.
+REPORT_REWRITE_ENV = "FAKE_AGENT_REPORT_REWRITE"
 """Which outcome the fake reports for every note of an update batch (spec 087).
 
 The honest ones do what they say; each ``*_lie`` reports the same outcome
@@ -866,6 +869,8 @@ def process_update_batch(
     research_report = (
         vault_dir / "_pipeline" / "cycles" / f"cycle-{cycle:03d}-research.json"
     )
+    if os.environ.get(REPORT_REWRITE_ENV) == "1":
+        research_report.unlink(missing_ok=True)
     _write_research_report(
         research_report,
         cycle=cycle,
