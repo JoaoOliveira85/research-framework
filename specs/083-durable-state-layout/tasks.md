@@ -203,7 +203,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
 ## Phase 3: Existing vaults
 
-- [ ] T010 `pipeline/layout_migration.py` with `MIGRATION_STEPS` and the
+- [x] T010 `pipeline/layout_migration.py` with `MIGRATION_STEPS` and the
       `move_state_into_state_dir` step; the CLI verb `migrate-layout
       <vault> [--dry-run] [--force]`; the shim verb and `./vault help`; the
       row in the `077` contract table (FR-007, FR-009, FR-011…FR-014,

@@ -1064,8 +1064,12 @@ def commit_framework_change(
     *,
     title: str,
     body: str = "",
+    paths: list[str] | None = None,
 ) -> CommitResult:
     """Commit a framework upgrade / scaffold refresh directly on the base branch.
+
+    ``paths`` limits the commit to those pathspecs (the layout migration commits
+    only what it moved); by default everything in the tree is staged.
 
     Called twice around destructive upgrades: once to capture the
     pre-upgrade state (idempotent if clean), once after. Both calls are
@@ -1081,6 +1085,7 @@ def commit_framework_change(
         vault_dir,
         message=message,
         sidecar_label="framework",
+        paths=paths,
     )
 
 
@@ -1186,9 +1191,12 @@ def _stage_and_commit(
     commit idempotency path.
     """
     pathspec = ["--", *paths] if paths else []
+    # A path that is gone from disk and already staged as a deletion (a
+    # ``git mv`` source) cannot be re-added, but it still belongs in the commit.
+    addspec = ["--", *(p for p in paths if (vault_dir / p).exists())] if paths else []
     _checkpoint_sources_db(vault_dir)
     try:
-        _git(vault_dir, "add", "-A", *pathspec)
+        _git(vault_dir, "add", "-A", *addspec)
     except subprocess.CalledProcessError as exc:
         err = _short_err(exc)
         _emit_sidecar(vault_dir, sidecar_label, stage="stage", error=err)
