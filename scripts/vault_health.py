@@ -36,8 +36,7 @@ Sub-checks
 
 4. **Control-file git tracking** (spec 058) — for the four critical control
    files (``research.spec.md``, ``settings.yaml``,
-   ``_pipeline/research-backlog.md``, the coverage targets under
-   ``_pipeline/state/``),
+   the backlog store, the coverage targets under ``_pipeline/state/``),
    warn when a *present* file is untracked or git-ignored in a git-backed
    vault. Advisory only — never counted in ``unresolved_count`` and never
    flips the exit code; silent on non-git vaults.
@@ -91,10 +90,10 @@ _STUB_TITLE_RE = re.compile(r"^[A-Z][A-Za-z0-9 \-'&]{2,80}$")
 CONTROL_FILE_PATHS = (
     "research.spec.md",
     "settings.yaml",
-    "_pipeline/research-backlog.md",
     # Spec 083 FR-017: the state directory, not individual files — everything a
     # later run depends on lives there, and one untracked directory is the
-    # whole failure.
+    # whole failure. The research backlog's store is one of those files since
+    # spec 084; its Markdown view is rendered and deliberately ignored.
     state_layout.STATE_DIR,
 )
 

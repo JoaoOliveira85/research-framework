@@ -77,11 +77,12 @@ def _write_note(
 # ---------------------------------------------------------------------------
 
 _COVERAGE_TARGETS = L.coverage_targets_path(Path()).as_posix()
+_BACKLOG_STORE = L.research_backlog_path(Path()).as_posix()
 
 _ALL_CONTROL = (
     "research.spec.md",
     "settings.yaml",
-    "_pipeline/research-backlog.md",
+    _BACKLOG_STORE,
     _COVERAGE_TARGETS,
 )
 
@@ -451,7 +452,7 @@ class TestControlFileGitTracking:
         _git_add(
             vault,
             "settings.yaml",
-            "_pipeline/research-backlog.md",
+            _BACKLOG_STORE,
             _COVERAGE_TARGETS,
         )
         warnings = vh.scan_control_file_git_tracking(vault)
@@ -466,7 +467,7 @@ class TestControlFileGitTracking:
         _git_add(
             vault,
             "research.spec.md",
-            "_pipeline/research-backlog.md",
+            _BACKLOG_STORE,
             _COVERAGE_TARGETS,
         )
         warnings = vh.scan_control_file_git_tracking(vault)
@@ -510,7 +511,7 @@ class TestControlFileGitTracking:
         # Track backlog + coverage; settings ignored; research.spec untracked.
         _git_add(
             vault,
-            "_pipeline/research-backlog.md",
+            _BACKLOG_STORE,
             _COVERAGE_TARGETS,
         )
         warnings = vh.scan_control_file_git_tracking(vault)
@@ -559,7 +560,7 @@ class TestControlFileGitTracking:
         (vault / ".gitignore").write_text("settings.yaml\n", encoding="utf-8")
         _git_add(
             vault,
-            "_pipeline/research-backlog.md",
+            _BACKLOG_STORE,
             _COVERAGE_TARGETS,
         )
         vh.run(vault, apply=False, offline=True)

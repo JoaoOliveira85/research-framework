@@ -83,8 +83,8 @@ def _render_vault_gitignore(corpus: str) -> str:
     file whose parent directory is excluded: un-ignore the directory, re-exclude
     its contents, then un-exclude ``state/``. No file under ``_pipeline/`` is
     named, so the stanza does not change when a durable file is added (spec 083
-    FR-003) — with one transitional exception, the Markdown backlog, which
-    stays tracked at its old path until spec 084 converts it (FR-019).
+    FR-003). The backlog's JSON store lives under ``state/`` and is tracked;
+    its Markdown view is rendered from it and falls under ``_pipeline/*`` (spec 084 FR-024).
     """
     return (
         f"# research-framework: track {corpus}/ + the control files; "
@@ -107,8 +107,6 @@ def _render_vault_gitignore(corpus: str) -> str:
         "# SQLite sidecars of a tracked database are never tracked.\n"
         f"{STATE_DIR}/*.db-wal\n"
         f"{STATE_DIR}/*.db-shm\n"
-        "# Transitional until spec 084 converts the backlog; 084 removes this line.\n"
-        "!_pipeline/research-backlog.md\n"
     )
 
 

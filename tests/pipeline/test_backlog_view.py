@@ -355,14 +355,11 @@ def test_a_skipped_write_does_not_touch_the_view(tmp_path: Path) -> None:
 # ENTRY here when it lands (T004 harvest, T005 propose, T006 orchestrator
 # quarantine sweep, T007 planner, T008 re-grade, T009 scaffold). The list must
 # end empty; ``test_the_allowlist_has_no_stale_entries`` fails on a leftover.
-_NOT_YET_MIGRATED = {
-    "src/research_framework/generator/scaffold.py",
-}
+_NOT_YET_MIGRATED: set[str] = set()
 # These only *name* the path (a registry row, a control-file list, a manifest
 # pattern); none opens it. Their wording changes are scaffold/layout work.
 _NAMES_THE_PATH_ONLY = {
     "src/research_framework/pipeline/state_layout.py",
-    "scripts/vault_health.py",
     "scripts/build_scaffold_manifest.py",
 }
 _VIEW_NAME = "research-backlog" + ".md"

@@ -1,7 +1,7 @@
 """The scaffold's `.gitignore` must not hide the files spec 058 warns about.
 
 `scaffold.py` wrote `/*` plus a re-include for the corpus only, so
-`research.spec.md`, `settings.yaml`, `_pipeline/research-backlog.md` and
+`research.spec.md`, `settings.yaml`, the backlog store and
 `_pipeline/coverage-targets.json` (now under `_pipeline/state/`) were all git-ignored — the exact set
 `vault_health.scan_control_file_git_tracking` (spec 058) then warns about. The
 framework was generating the condition it warns about, and on all five of the
@@ -26,7 +26,7 @@ from research_framework.pipeline import state_layout as L
 CONTROL_FILES = (
     "research.spec.md",
     "settings.yaml",
-    "_pipeline/research-backlog.md",
+    L.research_backlog_path(Path()).as_posix(),
     L.coverage_targets_path(Path()).as_posix(),
 )
 
@@ -34,6 +34,7 @@ STILL_IGNORED = (
     "scripts/agent_call.py",
     "_pipeline/sources.db",
     "_pipeline/coverage-targets.json",
+    "_pipeline/research-backlog.md",
     "_pipeline/cycles/cycle-001-scout.json",
     "raw_data/2026/01/page.html",
     "update_vault.py",

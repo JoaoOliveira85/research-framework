@@ -214,7 +214,7 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
 
   **TDD discipline**: required.
 
-- [ ] T009 Scaffold, `.gitignore`, health, manifest: the scaffold seeds an
+- [x] T009 Scaffold, `.gitignore`, health, manifest: the scaffold seeds an
       empty store and its view; `083`'s transitional
       `!_pipeline/research-backlog.md` line is deleted; the spec-058 list
       and the scaffold manifest name the JSON file (FR-024).
@@ -229,8 +229,8 @@ Throughout: `B` is `src/research_framework/pipeline/backlog.py`.
     - Tier: 3
 
   The scaffold-seed half landed with the writers' move (commit
-  "scaffold seeds the backlog store"); this box stays open for the
-  `.gitignore` line, the control-file list and the manifest.
+  "scaffold seeds the backlog store"); the `.gitignore` line, the
+  control-file list and the manifest followed in the T009 commit.
 
   **TDD discipline**: required.
 

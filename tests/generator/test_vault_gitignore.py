@@ -25,7 +25,7 @@ def _pipeline_lines(body: str) -> list[str]:
     ]
 
 
-def test_pipeline_stanza_names_no_file_but_the_transitional_backlog() -> None:
+def test_pipeline_stanza_names_no_file() -> None:
     body = _render_vault_gitignore("data_vault")
     assert _pipeline_lines(body) == [
         "!_pipeline/",
@@ -33,10 +33,7 @@ def test_pipeline_stanza_names_no_file_but_the_transitional_backlog() -> None:
         f"!{L.STATE_DIR}/",
         f"{L.STATE_DIR}/*.db-wal",
         f"{L.STATE_DIR}/*.db-shm",
-        "!_pipeline/research-backlog.md",
     ]
-    backlog_at = body.splitlines().index("!_pipeline/research-backlog.md")
-    assert "spec 084" in body.splitlines()[backlog_at - 1]
 
 
 @pytest.fixture
@@ -62,7 +59,7 @@ def _ignored(repo: Path, rel: str) -> bool:
         "_pipeline/state/sources.db",
         "_pipeline/state/quarantine/x.md",
         "_pipeline/state/sources/rss/facts-schema.json",
-        "_pipeline/research-backlog.md",
+        "_pipeline/state/research-backlog.json",
     ],
 )
 def test_git_tracks_state(repo: Path, rel: str) -> None:
@@ -74,6 +71,8 @@ def test_git_tracks_state(repo: Path, rel: str) -> None:
     [
         "_pipeline/cycles/cycle-001-scout.json",
         "_pipeline/spec-parse.json",
+        "_pipeline/research-backlog.md",
+        "_pipeline/research-backlog.md.overwritten",
         "_pipeline/coverage-targets.json",
         "_pipeline/sources.db",
         "_pipeline/state/sources.db-wal",
@@ -82,3 +81,19 @@ def test_git_tracks_state(repo: Path, rel: str) -> None:
 )
 def test_git_ignores_the_rest(repo: Path, rel: str) -> None:
     assert _ignored(repo, rel), f"{rel} is not ignored"
+
+
+def test_git_tracks_the_backlog_store_and_ignores_its_view(repo: Path) -> None:
+    """Spec 084 acceptance 11, with real ``git check-ignore``."""
+    from research_framework.pipeline import backlog
+
+    store = L.research_backlog_path(Path()).as_posix()
+    assert backlog.create_empty(repo)
+    assert _git(repo, "check-ignore", "-q", "--", store).returncode != 0
+    view = backlog.view_path(repo).relative_to(repo).as_posix()
+    assert (repo / view).is_file()
+    assert _git(repo, "check-ignore", "-q", "--", view).returncode == 0
+    _git(repo, "add", "-A")
+    staged = set(_git(repo, "diff", "--cached", "--name-only").stdout.split())
+    assert store in staged
+    assert view not in staged

@@ -172,13 +172,6 @@
       "is_user_owned_after_first_write": false
     },
     {
-      "path": "_pipeline/research-backlog.md",
-      "kind": "markdown",
-      "template_version": 1,
-      "rendered_sha256": "24363007c28eea212c3301a31f920f9653e23b2ac80c5032b14c17c2fd86663e",
-      "is_user_owned_after_first_write": true
-    },
-    {
       "path": "_pipeline/spec-parse.json",
       "kind": "json",
       "template_version": 1,
@@ -189,7 +182,7 @@
       "path": "_pipeline/state/.tmpl-versions.json",
       "kind": "json",
       "template_version": 1,
-      "rendered_sha256": "6a1d702e178eec27d314085f9ea98b55c4fe6115f86f72037ed1f18f69722a5c",
+      "rendered_sha256": "3b57a5d698d84f96a760bbf1c5313a02fdc811573f8f7f594109e15ea62918f2",
       "is_user_owned_after_first_write": true
     },
     {
@@ -197,6 +190,13 @@
       "kind": "json",
       "template_version": 1,
       "rendered_sha256": "812cd2df0b747920145f3dd3b4ea2ec1f4192fbd02614967e463847561cd69e0",
+      "is_user_owned_after_first_write": true
+    },
+    {
+      "path": "_pipeline/state/research-backlog.json",
+      "kind": "json",
+      "template_version": 1,
+      "rendered_sha256": "2e127b8ca192b0f5a087109156d9ff604aa4cdd7a1b48b0af031d71b33eef429",
       "is_user_owned_after_first_write": true
     },
     {
