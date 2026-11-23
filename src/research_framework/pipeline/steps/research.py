@@ -97,7 +97,27 @@ def _phase(ctx: CycleContext) -> int:
             _LOG.error(f"ERROR: could not load research plan: {exc}")
             return 2
         eff_bs = ss._effective_note_writer_batch_size(vault_dir, plan)
-        assignments = slice_topics_into_batches(plan, eff_bs)
+        # Spec 087: the plan's update queue is shared with new topics against
+        # the queue as it is NOW (the scout has merged its topics since the
+        # plan was written). No update queue: exactly the pre-087 slicing.
+        new_cap: int | None = None
+        update_cap = 0
+        if plan.update_queue:
+            from ..currency import cycle_mode, cycle_split_shares, split_quota
+            from ..research_plan import is_placeholder_topic
+
+            new_cap, update_cap = split_quota(
+                int(plan.cycle_quota),
+                cycle_split_shares(vault_dir),
+                mode=cycle_mode(vault_dir),
+                new_available=sum(
+                    1 for t in plan.priority_queue if not is_placeholder_topic(t)
+                ),
+                updates_available=len(plan.update_queue),
+            )
+        assignments = slice_topics_into_batches(
+            plan, eff_bs, new_count=new_cap, update_count=update_cap
+        )
         max_batches_cfg = ss._max_batches_per_cycle(vault_dir)
         data_vault = vault_dir / "data_vault"
         data_vault.mkdir(parents=True, exist_ok=True)
@@ -107,8 +127,13 @@ def _phase(ctx: CycleContext) -> int:
         cumulative_notes = 0
         note_writer_invocations = 0
         cycle_quota = max(1, int(plan.cycle_quota))
-        n_batches_total = len(assignments)
+        if update_cap and new_cap is not None:
+            cycle_quota = max(1, new_cap)  # the new-topic share only
+        updates_worked = 0
+        # The synthetic mid-batch check counts new-topic batches only.
+        n_batches_total = sum(1 for a in assignments if a.kind != "update")
         cap_tripped = False
+        previous_was_update = False
 
         for i, assignment in enumerate(assignments):
             runtime_state = ctx.runtime_state
@@ -118,8 +143,12 @@ def _phase(ctx: CycleContext) -> int:
                     "degradation threshold tripped"
                 )
                 return 2
-            if cumulative_notes >= cycle_quota:
-                break
+            is_update = assignment.kind == "update"
+            if is_update:
+                if updates_worked >= update_cap:
+                    continue
+            elif cumulative_notes >= cycle_quota:
+                continue
             if note_writer_invocations >= max_batches_cfg:
                 cap_tripped = True
                 if runtime_state is not None:
@@ -131,8 +160,13 @@ def _phase(ctx: CycleContext) -> int:
                 )
                 break
 
+            if is_update and not previous_was_update:
+                # a new-topic batch's correction ("write notes, do not edit
+                # existing ones") must not reach a batch that edits them
+                correction_text = ""
+            previous_was_update = is_update
             incoming_gate_correction = correction_text
-            if i > 0:
+            if i > 0 and not is_update:
                 pace_ph = st._empty_batch_result_for_pace(
                     cycle_num, assignment.batch_number
                 )
@@ -160,6 +194,7 @@ def _phase(ctx: CycleContext) -> int:
                 batch_topics=assignment.topics,
                 correction_directive=prompt_correction,
                 exclusions=plan.exclusions,
+                update_topics=assignment.updates if is_update else None,
             )
 
             seen_before: set[str] = set()
@@ -180,7 +215,9 @@ def _phase(ctx: CycleContext) -> int:
             # correction batches (``incoming_gate_correction`` is non-empty),
             # so the normal happy path pays only the directory walk we were
             # already doing one block above.
-            is_correction_batch = bool(incoming_gate_correction.strip())
+            is_correction_batch = bool(incoming_gate_correction.strip()) and (
+                not is_update
+            )
             body_snapshot_before = (
                 cc._snapshot_note_bodies(data_vault) if is_correction_batch else {}
             )
@@ -227,11 +264,17 @@ def _phase(ctx: CycleContext) -> int:
             sg4 = run_gate(SG004_validate_vault_wrapper, vault_dir)
             sg5 = run_gate(SG005_frontmatter_completeness, note_paths)
             sg_results: list[GateResult] = [sg4, sg5]
-            syn = cc._synthetic_mid_batch_empty_sg005(
-                assignment.batch_number,
-                n_batches_total,
-                note_paths,
-                len(assignment.topics),
+            # An update batch is judged on the notes it was assigned, not on new
+            # files: it is never failed for writing none.
+            syn = (
+                None
+                if is_update
+                else cc._synthetic_mid_batch_empty_sg005(
+                    assignment.batch_number,
+                    n_batches_total,
+                    note_paths,
+                    len(assignment.topics),
+                )
             )
             if syn is not None:
                 sg_results.append(syn)
@@ -253,6 +296,7 @@ def _phase(ctx: CycleContext) -> int:
                 sg_gate_results=sg_results,
                 topics=assignment.topics,
                 correction_directive_in=incoming_gate_correction,
+                kind=assignment.kind,
             )
             bout = (
                 cycles_dir / f"cycle-{cycle_3}-batch-{assignment.batch_number:03d}.json"
@@ -263,7 +307,10 @@ def _phase(ctx: CycleContext) -> int:
             )
             bundled_history.append((assignment, batch_result))
 
-            cumulative_notes += len(note_names)
+            if is_update:
+                updates_worked += len(assignment.updates)
+            else:
+                cumulative_notes += len(note_names)
             if batch_result.accepted:
                 correction_text = ""
             else:
@@ -274,6 +321,7 @@ def _phase(ctx: CycleContext) -> int:
                         failing,
                         cycle=cycle_num,
                         batch=assignment.batch_number,
+                        update_batch=is_update,
                     )
 
         research_report.parent.mkdir(parents=True, exist_ok=True)

@@ -156,7 +156,7 @@ done. `083` and `084` land first; this branch is rebased onto `084`.
 
 ## Phase 3: Updates are dispatched and judged
 
-- [ ] T007 The plan's update queue and `_split_quota`; `BatchAssignment.kind`;
+- [x] T007 The plan's update queue and `_split_quota`; `BatchAssignment.kind`;
       the batch loop cuts and counts update batches; the update batch prompt
       (`## Update topics (JSON)`, exclusions exempt the assigned notes, no
       synthetic "no new file" failure, no "do not edit existing notes" hint)

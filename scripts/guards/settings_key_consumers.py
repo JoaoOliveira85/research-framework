@@ -47,9 +47,7 @@ _THIS_FILE = Path(__file__).resolve()
 
 #: Pipeline keys that are read by name but never as a Python identifier or a
 #: string key, keyed by key with the reason. An entry here is a debt, and ``stale_allowlist`` goes red once it has a reader.
-ALLOWLIST: dict[str, str] = {
-    "cycle_split": "read by the plan generator in spec 087 T007; T006 only declares it",
-}
+ALLOWLIST: dict[str, str] = {}
 
 
 @dataclass

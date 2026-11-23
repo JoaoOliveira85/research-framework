@@ -45,6 +45,12 @@ BATCH_BLOCK_RE = re.compile(
     re.DOTALL,
 )
 
+# An update batch (spec 087) lists existing notes instead of new topics.
+UPDATE_BLOCK_RE = re.compile(
+    r"## Update topics \(JSON\)\s*```json\s*(\[.*?\])\s*```",
+    re.DOTALL,
+)
+
 DEFAULT_TIMESTAMP_FMT = "2026-05-17T00:00:{cycle:02d}Z"
 DEFAULT_TEMPLATE_VERSION = "1.0"
 
@@ -666,6 +672,41 @@ def _write_research_report(
     _atomic_write(research_report, json.dumps(out, indent=2) + "\n")
 
 
+def _parse_update_topics(prompt_text: str) -> list[dict] | None:
+    """The notes of an update batch, or ``None`` when this is not one."""
+    m = UPDATE_BLOCK_RE.search(prompt_text)
+    if not m:
+        return None
+    try:
+        rows = json.loads(m.group(1))
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"fake_agent: malformed JSON inside `## Update topics (JSON)`: {exc}"
+        ) from exc
+    return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+
+
+def process_update_batch(
+    vault_dir: Path, notes: list[dict], cycle: int, *, spec_parse: dict
+) -> list[Path]:
+    """Handle an update batch: the default fake does not touch the notes.
+
+    (Spec 087 T008 adds a scenario per outcome. Writing no new file is exactly
+    what an update batch that finds nothing changed does.)
+    """
+    research_report = (
+        vault_dir / "_pipeline" / "cycles" / (f"cycle-{cycle:03d}-research.json")
+    )
+    _write_research_report(
+        research_report,
+        cycle=cycle,
+        spec_parse=spec_parse,
+        notes_created=[],
+        skipped=[],
+    )
+    return []
+
+
 def process_batch(
     vault_dir: Path,
     prompt_file: Path,
@@ -677,6 +718,11 @@ def process_batch(
     spec_parse = _load_spec_parse(vault_dir)
     note_type = _note_type_from_spec(spec_parse)
     prompt_text = prompt_file.read_text(encoding="utf-8")
+    update_notes = _parse_update_topics(prompt_text)
+    if update_notes is not None:
+        return process_update_batch(
+            vault_dir, update_notes, cycle, spec_parse=spec_parse
+        )
     topics = _parse_batch_topics(prompt_text)
     cycles_dir = vault_dir / "_pipeline" / "cycles"
     research_report = cycles_dir / f"cycle-{cycle:03d}-research.json"

@@ -26,7 +26,8 @@ from research_framework.vault.note_currency import effective, is_due
 
 from ..spec.schema import SpecConfig
 from . import backlog
-from .research_plan import _exclusion_slug
+from .research_plan import UpdateTopic, _exclusion_slug
+from .settings import CycleSplit, SettingsError, load_vault_settings
 
 _LOG = logging.getLogger(__name__)
 
@@ -241,3 +242,66 @@ def split_quota(
         new_n = new_available
         update_n += min(spare, updates_available - update_n) if update_weight else 0
     return new_n, update_n
+
+
+def note_path(vault_dir: Path, spec: SpecConfig, stem: str) -> Path | None:
+    """The corpus note whose stem matches ``stem`` (normalised), if any."""
+    return _corpus_notes(vault_dir, spec).get(_exclusion_slug(stem))
+
+
+def cycle_split_shares(vault_dir: Path) -> CycleSplit:
+    """``pipeline.cycle_split`` of the vault; the default when unreadable."""
+    try:
+        return load_vault_settings(vault_dir).cycle_split
+    except SettingsError:
+        return CycleSplit()
+
+
+def cycle_mode(vault_dir: Path, spec: SpecConfig | None = None) -> str:
+    """The vault's ``research_mode`` (``expand`` when it cannot be read)."""
+    if spec is not None:
+        return spec.research_mode or "expand"
+    from research_framework.spec.parsed import ParsedSpecError, load_parsed_spec
+
+    try:
+        return str(load_parsed_spec(vault_dir).get("research_mode") or "expand")
+    except ParsedSpecError:
+        return "expand"
+
+
+def plan_updates(
+    vault_dir: Path, spec: SpecConfig, quota: int, new_available: int
+) -> tuple[list[UpdateTopic], int | None, int]:
+    """The update queue and the ``(new, update)`` split of a cycle's quota.
+
+    Returns ``([], None, 0)`` when no update work is planned (share 0, the
+    ``bootstrap`` mode, or no open update entries), so the plan is exactly what
+    it was before spec 087. At planning time scouted topics are not yet merged
+    into the queue, so new topics are treated as plentiful
+    (``max(new_available, quota)``); the batch loop re-splits against the
+    merged queue.
+    """
+    refs = backlog.update_topics(vault_dir)
+    new_n, update_n = split_quota(
+        quota,
+        cycle_split_shares(vault_dir),
+        mode=cycle_mode(vault_dir, spec),
+        new_available=max(new_available, quota),
+        updates_available=len(refs),
+    )
+    if update_n <= 0:
+        return [], None, 0
+    notes = _corpus_notes(vault_dir, spec)
+    queue = []
+    for ref in refs[: max(quota, update_n)]:
+        found = notes.get(_exclusion_slug(ref.stem))
+        queue.append(
+            UpdateTopic(
+                stem=ref.stem,
+                path=found.relative_to(vault_dir).as_posix() if found else "",
+                reason=ref.reason,
+                as_of=ref.as_of,
+                prompted_by=ref.prompted_by,
+            )
+        )
+    return queue, new_n, update_n
