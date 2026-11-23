@@ -1,6 +1,52 @@
 <!--
 Sync Impact Report
 ==================
+Version change:    1.6.0 → 1.6.1
+Bump rationale:    PATCH — the document's account of where the coverage targets
+                   live is corrected. Spec 083 moves a vault's durable state
+                   under `_pipeline/state/`, the one part of `_pipeline/` git
+                   tracks; `coverage-targets.json` is one of those files. No
+                   principle, gate, enforcer or architecture decision changes,
+                   and no Enforcement Register row changes status.
+
+Modified principles: none.
+Modified architecture sections: none. The Immutable Architecture Decisions
+                                section is untouched, so no ADR is required
+                                (`CONTRIBUTING.md` §7.1).
+
+Modified text:
+  - Principle I gate table, "Coverage targets" row — the file is named by its
+    path, `_pipeline/state/coverage-targets.json` (was the bare name).
+  - "Coverage Targets as Phase Completion Gate" — says the file lives under
+    `_pipeline/state/` and that state is tracked, so it survives a clean of
+    the git-ignored scratch under `_pipeline/`.
+  - Boundary System, Always Do — the bare file name is replaced by the path.
+  The other mentions of the file (the 1.5.0 → 1.6.0 reports below, Principle
+  II, the failure table, "Ask First") name it without a directory and stay.
+
+Enforcement Register re-verified (rule 4): no row cites a state path. Row II's
+  gate ("coverage-targets via `cli/research_phase3.py`") reads the file through
+  `pipeline/state_layout.py` and is unchanged in status.
+
+Cross-repo obligations (rule 5): none changed. The vault layout is not a
+  Cross-Repo Obligations row; the sibling repo's copy is unaffected.
+
+Templates reviewed:
+  .specify/templates/plan-template.md   — UPDATED ✅ Version pointer
+      1.6.0 → 1.6.1. No gate row changes.
+  .specify/templates/spec-template.md   — No structural update needed ✅
+  .specify/templates/tasks-template.md  — No structural update needed ✅
+
+Propagated (non-template):
+  README.md, CLAUDE.md — constitution pointer v1.6.0 → v1.6.1 (guarded by
+                     `tests/docs/test_one_source_per_fact.py`)
+  CHANGELOG.md     — `[Unreleased]` entry.
+
+Deferred items: none.
+
+============================================================
+Earlier Sync Impact Report (preserved for history)
+============================================================
 Version change:    1.5.0 → 1.6.0
 Bump rationale:    MINOR — two principles added, one enforcement
                    downgrade, and a re-verification of the Enforcement
@@ -614,7 +660,7 @@ fails**. It is a description of the tree, not of the design intent. Three effect
 | Duplicate notes (SG-004, `duplicate` class) | `pipeline/gates_step.py::SG004_validate_vault_wrapper` over `scripts/validate_vault.py` | After DFS | **Blocking for the `duplicate` class** — mapped to FAIL and fed to the correction loop since #293 (`validate_vault.DUPLICATE_FIELD`). Every other `validate_vault.py` finding still maps to WARN |
 | Minimum cycle yield (CG-001) | `pipeline/gates_cycle.py::CG001_min_cycle_yield`, run from `pipeline/orchestrator.py` | End of each cycle | **Blocking after three attempts.** FAIL builds a correction directive and re-runs the cycle; the third FAIL returns 2. CG-002..CG-007 are computed only by `pipeline/quality_report.py` — **Report-only** |
 | Post-cycle snapshot | `scripts/vault_metrics.py` | End of each cycle | **None** — same script, same guarantee |
-| Coverage targets | `coverage-targets.json` via `cli/research_phase3.py` | Before Phase 3 | **Blocking.** Unmet targets print the missing categories and return 1; Phase 3 does not run |
+| Coverage targets | `_pipeline/state/coverage-targets.json` via `cli/research_phase3.py` | Before Phase 3 | **Blocking.** Unmet targets print the missing categories and return 1; Phase 3 does not run |
 
 The weekly pipeline runner (spec 075, `pipeline/runner.py`) is a second path with its own
 gates. They are listed because the 2026-09-01 run (F10) is what happens when they are absent:
@@ -1052,7 +1098,7 @@ These actions require no approval. Apply whenever relevant.
   The automatic gate (`cli/_common._run_phase1_gate`) runs this only from a source
   checkout — from an installed wheel it skips, so there the obligation is the operator's
 - Add `--dry-run` flag to every script that modifies vault files
-- Update `coverage-targets.json` after every research cycle
+- Update `_pipeline/state/coverage-targets.json` after every research cycle
 - Check for existing notes before creating new ones
 - Read the template from `_templates/{type}.md` before writing any note
 - Use the `proposed_filenames` field from scout JSON to prevent naming conflicts
@@ -1160,8 +1206,10 @@ and competitive context is incomplete regardless of how many internal notes it h
 
 ### Coverage Targets as Phase Completion Gate
 
-`coverage-targets.json` is written at Phase 1 from the spec and updated after every
-research cycle. Phase 3 MUST NOT begin until all targets are met. If cycles terminate with
+`_pipeline/state/coverage-targets.json` is written at Phase 1 from the spec and updated
+after every research cycle. It lives under `_pipeline/state/`, the part of `_pipeline/`
+git tracks (spec 083), so a clean of the git-ignored scratch beside it does not reset the
+gate. Phase 3 MUST NOT begin until all targets are met. If cycles terminate with
 unmet targets, the generator re-enters Phase 2 with a targeted prompt for the missing
 categories.
 
@@ -1421,4 +1469,4 @@ constitution before any spec, plan, or implementation. Plan compliance is verifi
 the Constitution Check step in `.specify/templates/plan-template.md`, which carries one
 gate per principle.
 
-**Version**: 1.6.0 | **Ratified**: 2026-04-16 | **Last Amended**: 2026-09-08
+**Version**: 1.6.1 | **Ratified**: 2026-04-16 | **Last Amended**: 2026-11-23

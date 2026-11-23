@@ -236,7 +236,7 @@ thinking instead of re-reading the same source on every cycle.
 |------|---------|
 | `<vault>/modules/<name>/manifest.yaml` | Module identity, triggers, entry point |
 | `<vault>/modules/<name>/extractor.py` | Subprocess entry; stdin/stdout JSON contract |
-| `<vault>/_pipeline/sources/<module>/facts-schema.json` | Per-(vault, module) JSON Schema generated from `research.spec.md` |
+| `<vault>/_pipeline/state/sources/<module>/facts-schema.json` | Per-(vault, module) JSON Schema generated from `research.spec.md` |
 | `<vault>/_pipeline/sources/<module>/watermarks.json` | Per-source cache index |
 | `<vault>/_pipeline/sources/<module>/signals/<source-stem>-<version>.json` | Per-extraction cache payload |
 | `<vault>/_pipeline/sources/<module>/consensus/<source>-cycle-NNN.json` | Per-cycle consensus audit |
@@ -481,14 +481,20 @@ What every vault contains. Generated at install; preserved across
 │   ├── _index.md              # Generated; do not edit
 │   ├── _concepts.md           # Generated
 │   └── _graph.md              # Generated
-├── _pipeline/                 # Pipeline state; not for end-user editing
+├── _pipeline/                 # Pipeline files; only state/ (and, until spec 084, research-backlog.md) is tracked by git
+│   ├── state/                 # (spec 083) Durable state: tracked, survives a clean of the rest
+│   │   ├── coverage-targets.json
+│   │   ├── sources.db         # SQLite source-quality DB (WAL checkpointed before each commit)
+│   │   ├── propose-rejects.md
+│   │   ├── archive-snapshots.json
+│   │   ├── approval-decisions.json
+│   │   ├── cycle-ledger.json  # one row per closed cycle: next cycle, lifetime spend, last finish
+│   │   ├── quarantine/        # notes moved out of the corpus; `re-grade` reinstates from here
+│   │   └── sources/<module>/facts-schema.json
 │   ├── research-plan.md
-│   ├── coverage-targets.json
-│   ├── research-backlog.md
-│   ├── sources.db             # SQLite source-quality DB
+│   ├── research-backlog.md    # tracked until spec 084 converts it into state/
 │   ├── sources/               # (spec 020) Per-module caches + signals
 │   │   └── <module>/
-│   │       ├── facts-schema.json
 │   │       ├── watermarks.json
 │   │       ├── signals/
 │   │       └── consensus/

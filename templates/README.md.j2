@@ -17,7 +17,7 @@ Organization: {{ spec.scope.organization }}
 - `CLAUDE.md` — agent conventions, note schema, quality bar
 - `data_vault/` — Layer 2 notes organized by type
 - `_templates/` — per-type note templates
-- `_pipeline/` — generation artifacts (coverage targets, cycle reports, budget log)
+- `_pipeline/` — generation artifacts (cycle reports, budget log); `_pipeline/state/` (coverage targets, sources database, cycle ledger) is tracked by git and holds what a later run depends on
 - `scripts/` — vault validation scripts
 
 ## Commands

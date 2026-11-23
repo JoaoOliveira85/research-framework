@@ -229,6 +229,13 @@ cd ~/vaults/<vault>
 3. Downloads the matching release archive and re-executes the bundled
    `install.sh` against the vault, which re-scaffolds framework-owned files
    — including `<vault>/scripts/` — and leaves user-owned ones alone.
+4. Migrates a vault still in the pre-083 `_pipeline/` layout (spec 083): the
+   post-upgrade hook `sync_vault_scripts` moves durable state under
+   `_pipeline/state/` and lands it as one `framework: migrate _pipeline layout`
+   commit, before the `framework: upgrade to …` commit. A failed migration
+   (for example a state file that exists at both paths with different content)
+   is reported at ERROR and fails the update. The same step runs standalone as
+   `./vault migrate-layout [--dry-run] [--force]`.
 
 What it still does not do: pin or diff versions (no "before → after"
 report), short-circuit when nothing changed, run offline, or rewrite a

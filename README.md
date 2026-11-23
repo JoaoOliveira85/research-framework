@@ -104,7 +104,7 @@ my-vault/
 │   ├── 02 - Companies/
 │   ├── _index.md          # Auto-rebuilt route to everything
 │   └── ...
-├── _pipeline/             # Pipeline state (sources DB, cycle reports, etc.)
+├── _pipeline/             # Pipeline files; `state/` (sources DB, coverage targets, cycle ledger…) is tracked by git, the rest is scratch
 ├── _templates/            # The note shape this vault enforces
 ├── modules/               # Pluggable source extractors (shipped: code, github, atlassian, oreilly, reddit, rss, youtube)
 ├── AGENTS.md              # How agents should query this vault
@@ -243,7 +243,7 @@ authenticated separately.
 
 ### Sources have value ratings, not just URLs
 
-`_pipeline/sources.db` tracks per-cycle yield for every source. Sources
+`_pipeline/state/sources.db` tracks per-cycle yield for every source. Sources
 that consistently produce useful, well-cited notes earn rating points;
 sources that produce nothing get marked for archival. Spec-declared
 sources are locked (never auto-archived); auto-discovered sources can
@@ -465,7 +465,7 @@ After that, you're current.
 - [`docs/TODO.md`](./docs/TODO.md) — scratchpad for un-triaged ideas (often empty)
 - [`docs/testing-strategy.md`](./docs/testing-strategy.md) — the seven-tier test pyramid (ADR-0008) + tier decision flow
 - [`dist-templates/README.md`](./dist-templates/README.md) — end-user bundle documentation
-- [`.specify/memory/constitution.md`](./.specify/memory/constitution.md) — immutable project constraints (v1.6.0)
+- [`.specify/memory/constitution.md`](./.specify/memory/constitution.md) — immutable project constraints (v1.6.1)
 - [`CHANGELOG.md`](./CHANGELOG.md) — release-by-release notes (current stable: **2.0.0**)
 - Example spec: [`examples/research.spec.md`](./examples/research.spec.md) (+ [`examples/settings.yml`](./examples/settings.yml)); [`examples/detailed-vault-spec.md`](./examples/detailed-vault-spec.md) is a detailed-format example
 

@@ -92,7 +92,10 @@ CONTROL_FILE_PATHS = (
     "research.spec.md",
     "settings.yaml",
     "_pipeline/research-backlog.md",
-    state_layout.coverage_targets_path(Path()).as_posix(),
+    # Spec 083 FR-017: the state directory, not individual files — everything a
+    # later run depends on lives there, and one untracked directory is the
+    # whole failure.
+    state_layout.STATE_DIR,
 )
 
 

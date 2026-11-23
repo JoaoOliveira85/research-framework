@@ -304,7 +304,7 @@ Throughout: `L` is `src/research_framework/pipeline/state_layout.py`.
 
   **TDD discipline**: required.
 
-- [ ] T014 Everything that names the paths in prose or data:
+- [x] T014 Everything that names the paths in prose or data:
       `scripts/vault_health.py::CONTROL_FILE_PATHS` and the spec-058 check
       (FR-017); `scripts/build_scaffold_manifest.py` and the regenerated
       `dist-templates/scaffold-manifest.json`; the constitution's
