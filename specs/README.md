@@ -115,6 +115,7 @@ shipped-task ledger.
 | [`083-durable-state-layout`](083-durable-state-layout/spec.md) | Durable vault state lives in `_pipeline/state/` | planned |
 | [`084-structured-research-backlog`](084-structured-research-backlog/spec.md) | The research backlog as structured state | planned |
 | [`087-note-currency-and-updates`](087-note-currency-and-updates/spec.md) | Note currency and updates — an existing topic is researched again | planned |
+| [`088-outside-in-discovery`](088-outside-in-discovery/spec.md) | Outside-in discovery — a pass that starts from the field, not from the vault | planned |
 
 ## Archived corpus
 
