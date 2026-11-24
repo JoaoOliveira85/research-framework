@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-11-24
+
 ### Changed
 
 - Every shipped settings profile (`settings.yaml`, the codex, cursor, cursor-claude, opencode and ollama peers) and `examples/settings.yml` now carries `approval_gates: []` with a comment on what it does, so the per-stage approval gate is discoverable without reading the code (#55). Existing vaults' `settings.yaml` are user-owned and are not rewritten by `./vault update`; add the key by hand to use it.

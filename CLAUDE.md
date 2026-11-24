@@ -1,7 +1,7 @@
 # research-framework Development Guidelines
 
 Auto-generated from all feature plans; hand-corrected 2026-10-30 to the
-**v2.1.0** release of the public line. `CHANGELOG.md` is the record of what
+**v2.1.1** release of the public line. `CHANGELOG.md` is the record of what
 shipped and `docs/ROADMAP.md` the record of what comes next; the "Active
 Technologies" bullets below are the spec-kit agent-context digest of each
 shipped plan and read as a ledger, oldest first. Where this file and a
@@ -416,7 +416,7 @@ catch stale references.
 - `docs/TODO.md` — scratchpad. Often empty. Triage to ROADMAP.
 - `CHANGELOG.md` — every user-visible change. Read [1.0.0] for the public
   release's scope, [1.0.1] for the first patch and [2.0.0] for the breaking
-  release and its migration notes; [2.0.1] is its patch, and [2.1.0] for durable state, the structured backlog, note updates and outside-in discovery. `[Unreleased]` is where in-flight work lands.
+  release and its migration notes; [2.0.1] is its patch, [2.1.0] for durable state, the structured backlog, note updates and outside-in discovery, and [2.1.1] is its patch. `[Unreleased]` is where in-flight work lands.
 - `docs/RELEASE.md` — release process (version tags and `workflow_dispatch`
   only; heading date = tag date; the Migration-notes rule;
   what `./vault update` does and does not rewrite).
@@ -433,7 +433,7 @@ catch stale references.
 
 Every shipped change is recorded in `CHANGELOG.md`.
 
-### Unreleased (fixes after 2.1.0)
+### 2.1.1 (2026-11-24)
 
 - Fixed: the scaffold writes each coverage category from `CoverageCategory.to_dict()`, so a
   spec `priority` and `expected_filenames` reach `_pipeline/state/coverage-targets.json`;
