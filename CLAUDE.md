@@ -433,6 +433,14 @@ catch stale references.
 
 Every shipped change is recorded in `CHANGELOG.md`.
 
+### Unreleased (fixes after 2.1.0)
+
+- Fixed: the scaffold writes each coverage category from `CoverageCategory.to_dict()`, so a
+  spec `priority` and `expected_filenames` reach `_pipeline/state/coverage-targets.json`;
+  a re-scaffold keeps `cycle_number`, recomputes `met_count` from disk and keeps a hand-set
+  JSON priority where the spec leaves it at 0 (#54, PR #62). Every shipped settings profile
+  documents `approval_gates: []` (#55, PR #61).
+
 ### 2.1.0 (2026-11-23)
 
 - Added: durable vault state under a tracked `_pipeline/state/` (`pipeline/state_layout.py` is
