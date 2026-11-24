@@ -499,7 +499,7 @@ After that, you're current.
 - [`docs/testing-strategy.md`](./docs/testing-strategy.md) — the seven-tier test pyramid (ADR-0008) + tier decision flow
 - [`dist-templates/README.md`](./dist-templates/README.md) — end-user bundle documentation
 - [`.specify/memory/constitution.md`](./.specify/memory/constitution.md) — immutable project constraints (v1.6.2)
-- [`CHANGELOG.md`](./CHANGELOG.md) — release-by-release notes (current stable: **2.0.0**)
+- [`CHANGELOG.md`](./CHANGELOG.md) — release-by-release notes (current stable: **2.1.0**)
 - Example spec: [`examples/research.spec.md`](./examples/research.spec.md) (+ [`examples/settings.yml`](./examples/settings.yml)); [`examples/detailed-vault-spec.md`](./examples/detailed-vault-spec.md) is a detailed-format example
 
 ---
