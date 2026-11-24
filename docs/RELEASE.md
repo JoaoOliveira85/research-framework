@@ -180,9 +180,9 @@ Python package.
 
 ```bash
 # Current stable is v2.1.0 (2026-11-23); check the Releases page for newer
-curl -L https://github.com/JoaoOliveira85/research-framework/releases/download/v2.1.0/research-framework-2.1.0.tar.gz \
+curl -L https://github.com/JoaoOliveira85/research-framework/releases/download/v2.1.1/research-framework-2.1.1.tar.gz \
   | tar -xzf - -C /tmp
-cd /tmp/research-framework-2.1.0
+cd /tmp/research-framework-2.1.1
 ./install.sh ~/vaults/my-vault
 ```
 
@@ -198,7 +198,7 @@ overwrite your edits). The bundle carries all six settings profiles
 
 ```bash
 pip install \
-  https://github.com/JoaoOliveira85/research-framework/releases/download/v2.1.0/research_framework-2.1.0-py3-none-any.whl
+  https://github.com/JoaoOliveira85/research-framework/releases/download/v2.1.1/research_framework-2.1.1-py3-none-any.whl
 ```
 
 Or directly from the repo (always-latest):

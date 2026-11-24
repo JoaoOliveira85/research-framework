@@ -57,10 +57,10 @@ roadmap). Install from GitHub Releases — the bundle tarball carries
 spec:
 
 ```bash
-# Current stable is v2.1.0 (2026-11-23); check the Releases page for newer
-curl -L https://github.com/JoaoOliveira85/research-framework/releases/download/v2.1.0/research-framework-2.1.0.tar.gz \
+# Current stable is v2.1.1 (2026-11-24); check the Releases page for newer
+curl -L https://github.com/JoaoOliveira85/research-framework/releases/download/v2.1.1/research-framework-2.1.1.tar.gz \
   | tar -xzf - -C /tmp
-cd /tmp/research-framework-2.1.0
+cd /tmp/research-framework-2.1.1
 ./install.sh ~/vaults/my-vault          # scaffolds + installs the framework
 ```
 
@@ -499,7 +499,7 @@ After that, you're current.
 - [`docs/testing-strategy.md`](./docs/testing-strategy.md) — the seven-tier test pyramid (ADR-0008) + tier decision flow
 - [`dist-templates/README.md`](./dist-templates/README.md) — end-user bundle documentation
 - [`.specify/memory/constitution.md`](./.specify/memory/constitution.md) — immutable project constraints (v1.6.2)
-- [`CHANGELOG.md`](./CHANGELOG.md) — release-by-release notes (current stable: **2.1.0**)
+- [`CHANGELOG.md`](./CHANGELOG.md) — release-by-release notes (current stable: **2.1.1**)
 - Example spec: [`examples/research.spec.md`](./examples/research.spec.md) (+ [`examples/settings.yml`](./examples/settings.yml)); [`examples/detailed-vault-spec.md`](./examples/detailed-vault-spec.md) is a detailed-format example
 
 ---
