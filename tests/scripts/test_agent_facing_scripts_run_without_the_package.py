@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -85,9 +86,22 @@ def test_an_agent_facing_script_does_not_die_on_the_import(
 
 @pytest.mark.parametrize("script", NEEDS_THE_PACKAGE)
 def test_a_script_that_needs_the_package_says_so_instead_of_a_traceback(
-    script: str, broken_package: dict[str, str]
+    script: str, broken_package: dict[str, str], tmp_path: Path
 ) -> None:
-    result = _run(script, broken_package, "--help")
+    # Run a copy from outside the checkout: in place, the script puts the
+    # checkout's src/ first on sys.path, so the stub can never hide the
+    # package. A vault's scripts/ has no sibling src/.
+    vault_scripts = tmp_path / "vault" / "scripts"
+    vault_scripts.mkdir(parents=True)
+    shutil.copy2(SCRIPTS / script, vault_scripts / script)
+    result = subprocess.run(
+        [sys.executable, str(vault_scripts / script), "--help"],
+        capture_output=True,
+        text=True,
+        env=broken_package,
+        timeout=60,
+        check=False,
+    )
 
     assert result.returncode != 0
     assert "Traceback" not in result.stderr
